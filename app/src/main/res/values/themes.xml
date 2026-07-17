@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AnyDrop" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorBackground">#FF0D0D0D</item>
+        <item name="android:statusBarColor">#FF0D0D0D</item>
+        <item name="android:navigationBarColor">#FF0D0D0D</item>
+        <item name="android:windowBackground">@color/tape_black</item>
+    </style>
+
+    <!-- Translucent theme for our overlay bottom sheet share dialog -->
+    <style name="Theme.AnyDrop.ShareDialog" parent="android:Theme.Material.NoActionBar">
+        <!-- Make the window background transparent so the source app is visible behind us -->
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+    </style>
+</resources>

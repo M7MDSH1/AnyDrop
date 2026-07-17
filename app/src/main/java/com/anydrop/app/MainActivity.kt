@@ -1,0 +1,278 @@
+package com.anydrop.app
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.MutableSharedFlow
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.anydrop.app.ui.navigation.AnyDropNavGraph
+import com.anydrop.app.ui.navigation.Routes
+import com.anydrop.app.ui.theme.Amber
+import com.anydrop.app.ui.theme.Black
+import com.anydrop.app.ui.theme.DarkGray
+import com.anydrop.app.ui.theme.MediumGray
+import com.anydrop.app.ui.theme.White
+import com.anydrop.app.ui.theme.AnyDropTheme
+import dagger.hilt.android.AndroidEntryPoint
+
+/**
+ * Bridge so the active video player can tell MainActivity to enter PiP when — and
+ * ONLY when — the user genuinely leaves the app (Home / recents). The player
+ * registers a callback while a video is playing and clears it otherwise.
+ */
+object PipLeaveHandler {
+    var onUserLeave: (() -> Unit)? = null
+}
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+
+    private var navController: NavController? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        extractUrlFromIntent(intent)?.let { pendingSharedUrl = it }
+
+        setContent {
+            AnyDropTheme {
+                AnyDropMainScreen(
+                    onNavControllerReady = { navController = it }
+                )
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Fires ONLY on genuine user-leave (Home/recents), NOT on back-press or
+        // in-app navigation — so it won't trigger on skip or Back.
+        PipLeaveHandler.onUserLeave?.invoke()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        extractUrlFromIntent(intent)?.let { url ->
+            pendingSharedUrl = url
+            // Notify the running deck ViewModel so it pastes the URL immediately.
+            sharedUrlFlow.value = url
+            navController?.navigate(Routes.TAPE_DECK) {
+                popUpTo(0) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
+    private fun extractUrlFromIntent(intent: Intent?): String? {
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            return intent.getStringExtra(Intent.EXTRA_TEXT)?.let { text ->
+                text.extractUrl()
+            }
+        }
+        return null
+    }
+
+    private fun String.extractUrl(): String {
+        return Regex("https?://[^\\s]+").find(this)?.value ?: this
+    }
+}
+
+@Composable
+private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DarkGray)
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "ANYDROP",
+            style = MaterialTheme.typography.displayLarge,
+            color = Amber,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            "AnyDrop needs access to all files to save videos to\n/storage/emulated/0/AnyDrop",
+            color = White.copy(alpha = 0.7f),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:${context.packageName}")
+                context.startActivity(intent)
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Amber)
+        ) {
+            Text("OPEN SETTINGS", color = Black, fontFamily = FontFamily.Monospace)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        TextButton(onClick = onSkipped) {
+            Text(
+                "Skip (downloads may fail)",
+                color = White.copy(alpha = 0.4f),
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+private data class BottomNavItem(val route: String, val label: String, val icon: ImageVector)
+
+private val bottomNavItems = listOf(
+    BottomNavItem(Routes.TAPE_DECK, "DECK", Icons.Filled.Videocam),
+    BottomNavItem(Routes.LIBRARY, "LIBRARY", Icons.Filled.LibraryMusic),
+    BottomNavItem(Routes.AUDIO, "AUDIO", Icons.Filled.MusicNote),
+    BottomNavItem(Routes.SETTINGS, "SETTINGS", Icons.Filled.Settings)
+)
+
+@Composable
+fun AnyDropMainScreen(
+    onNavControllerReady: (NavController) -> Unit = {}
+) {
+    val context = LocalContext.current
+    // Downloads now save to app-specific external storage (getExternalFilesDir),
+    // which needs NO storage permission on any Android version. The old
+    // "All files access" gate is therefore no longer required.
+    var showPermissionGate by rememberSaveable { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+                showPermissionGate = false
+            }
+        }
+    }
+
+    if (showPermissionGate) {
+        PermissionGate(
+            onGranted = { showPermissionGate = false },
+            onSkipped = { showPermissionGate = false }
+        )
+        return
+    }
+
+    val navController = rememberNavController()
+    val scrollToTopFlow = remember { MutableSharedFlow<String>(extraBufferCapacity = 1) }
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+
+    LaunchedEffect(Unit) {
+        onNavControllerReady(navController)
+    }
+    val currentDestination = navBackStackEntry?.destination
+
+    val showBottomBar = currentDestination?.route in bottomNavItems.map { it.route }
+
+    Scaffold(
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar(containerColor = Black, contentColor = White) {
+                    bottomNavItems.forEach { item ->
+                        val selected = currentDestination?.hierarchy?.any {
+                            it.route == item.route
+                        } == true
+
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                if (selected) {
+                                    scrollToTopFlow.tryEmit(item.route)
+                                } else {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
+                            label = { Text(text = item.label, fontFamily = FontFamily.Monospace, fontSize = 9.sp) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Amber,
+                                selectedTextColor = Amber,
+                                unselectedIconColor = White.copy(alpha = 0.4f),
+                                unselectedTextColor = White.copy(alpha = 0.4f),
+                                indicatorColor = MediumGray
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(DarkGray)
+                .padding(innerPadding)
+        ) {
+            AnyDropNavGraph(
+                navController = navController,
+                modifier = Modifier.fillMaxSize(),
+                scrollToTopFlow = scrollToTopFlow
+            )
+        }
+    }
+}

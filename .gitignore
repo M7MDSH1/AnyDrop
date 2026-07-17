@@ -1,0 +1,51 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (SDK path, etc.) — machine-specific, do NOT commit
+local.properties
+
+# Log/OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore / signing — NEVER commit these
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# Kotlin
+.kotlin/
+
+# Misc
+*.hprof
+
+# Private internal design doc — keep out of the public repo
+ARCHITECTURE.md

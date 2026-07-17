@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tape_amber">#FFFFB000</color>
+    <color name="tape_amber_dim">#FFCC8800</color>
+    <color name="tape_amber_bright">#FFFFD740</color>
+    <color name="tape_black">#FF0D0D0D</color>
+    <color name="tape_dark_gray">#FF1A1A1A</color>
+    <color name="tape_medium_gray">#FF2D2D2D</color>
+    <color name="tape_light_gray">#FF3A3A3A</color>
+    <color name="tape_white">#FFE0E0E0</color>
+    <color name="led_red">#FFFF1744</color>
+    <color name="led_green">#FF00E676</color>
+    <color name="led_blue">#FF448AFF</color>
+    <color name="vu_meter_green">#FF76FF03</color>
+    <color name="vu_meter_yellow">#FFFFEA00</color>
+    <color name="vu_meter_red">#FFFF1744</color>
+</resources>

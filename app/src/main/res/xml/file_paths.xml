@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- App-specific external files dir (where downloads live). -->
+    <external-files-path name="anydrop_downloads" path="AnyDrop/" />
+    <external-files-path name="anydrop_root" path="." />
+    <!-- Fallback internal files. -->
+    <files-path name="internal" path="." />
+    <!-- Public collections we export to. -->
+    <external-path name="external_public" path="." />
+</paths>
