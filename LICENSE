@@ -1,0 +1,41 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+AnyDrop
+Copyright (C) 2026 M7MDSH
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+The full text of the GNU General Public License version 3 is available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+-------------------------------------------------------------------------------
+This project ("AnyDrop") was created and is maintained by M7MDSH.
+
+It builds on the following third-party open-source components, whose own
+licenses continue to apply to those components:
+
+  - yt-dlp (youtubedl-android, io.github.junkfood02.youtubedl-android)
+      License: The Unlicense / yt-dlp is public domain-like; the
+      youtubedl-android wrapper is licensed under GPL-3.0.
+  - AndroidX Media3 / ExoPlayer .......... Apache License 2.0
+  - Coil ................................. Apache License 2.0
+  - Jetpack Compose / AndroidX ........... Apache License 2.0
+  - Hilt / Dagger ........................ Apache License 2.0
+  - Apache Commons Compress .............. Apache License 2.0
+  - FFmpeg (bundled binaries) ............ LGPL/GPL (see FFmpeg licensing)
+
+Because AnyDrop links against youtubedl-android (GPL-3.0) and bundles FFmpeg,
+the combined work is distributed under GPL-3.0. See NOTICE for details.
+-------------------------------------------------------------------------------
