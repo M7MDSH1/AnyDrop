@@ -23,6 +23,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Shown when the same video (by source URL) is downloaded again. */
+data class DuplicatePrompt(
+    val title: String,
+    val copyCount: Int
+)
+
 @HiltViewModel
 class TapeDeckViewModel @Inject constructor(
     application: Application,
@@ -77,6 +83,8 @@ class TapeDeckViewModel @Inject constructor(
         _downloadState.value = DownloadState.Idle
         _selectedFormat.value = null
         _availableFormats.value = emptyList()
+        _duplicatePrompt.value = null
+        pendingSuffixPath = null
         searchJob?.cancel()
         if (newUrl.isNotBlank()) {
             searchJob = viewModelScope.launch {
@@ -90,23 +98,36 @@ class TapeDeckViewModel @Inject constructor(
         _selectedFormat.value = format
     }
 
-    // Non-null when a same title+quality video already exists; UI shows a
-    // "download again & replace?" dialog. Holds the video's display title.
-    private val _duplicatePrompt = MutableStateFlow<String?>(null)
-    val duplicatePrompt: StateFlow<String?> = _duplicatePrompt.asStateFlow()
+    // Non-null when the same video is already downloaded; UI shows the
+    // REPLACE / DOWNLOAD ANYWAY / CANCEL dialog. Holds the video's display title.
+    private val _duplicatePrompt = MutableStateFlow<DuplicatePrompt?>(null)
+    val duplicatePrompt: StateFlow<DuplicatePrompt?> = _duplicatePrompt.asStateFlow()
 
     private var _forceReplace = false
+    private var pendingSuffixPath: String? = null
 
-    /** User tapped "Yes, replace" — re-run the download, overwriting the old file. */
+    /** User tapped "Replace" — delete the oldest copy, re-download to the base name. */
     fun confirmReplaceDownload() {
         _duplicatePrompt.value = null
         _forceReplace = true
         startDownload()
     }
 
+    /** User tapped "Download anyway" — save as a numbered copy (Title_1, Title_2, ...). */
+    fun confirmDownloadAnyway() {
+        val urlValue = _url.value.trim()
+        val title = downloadRepository.lastFetchedTitle()
+        val quality = _selectedFormat.value?.resolution?.ifBlank { "video" } ?: "video"
+        val copies = libraryRepository.findVideoCopies(urlValue, title, quality)
+        pendingSuffixPath = libraryRepository.getSuffixedVideoOutputPath(urlValue, title, quality, copies)
+        _duplicatePrompt.value = null
+        startDownload()
+    }
+
     fun dismissDuplicatePrompt() {
         _duplicatePrompt.value = null
         _forceReplace = false
+        pendingSuffixPath = null
     }
 
     fun startDownload() {
@@ -193,20 +214,40 @@ class TapeDeckViewModel @Inject constructor(
 
         val quality = format.resolution.ifBlank { "video" }
 
-        // Duplicate check: same title + same quality already downloaded?
-        if (libraryRepository.videoExists(urlValue, title, quality) && !_forceReplace) {
-            _duplicatePrompt.value = title.ifBlank { "this video" }
-            return
+        // Resolve what to do about pre-existing files that share this name.
+        // Identity is decided by the source URL (sidecar), NOT the filename —
+        // platforms that report a generic creator-level title would otherwise
+        // mistake different videos for duplicates.
+        val copies = libraryRepository.findVideoCopies(urlValue, title, quality)
+        val sameVideo = libraryRepository.isSameVideo(copies, urlValue)
+
+        var outputPath: String? = null
+        when {
+            pendingSuffixPath != null -> {
+                outputPath = pendingSuffixPath
+                pendingSuffixPath = null
+            }
+            _forceReplace -> {
+                // Replace: drop the oldest copy, re-download at the plain base name.
+                libraryRepository.deleteOldestVideoCopy(urlValue, title, quality)
+            }
+            copies.isNotEmpty() && sameVideo -> {
+                _duplicatePrompt.value = DuplicatePrompt(title.ifBlank { "this video" }, copies.size)
+                return
+            }
+            copies.isNotEmpty() -> {
+                // Different video already holds this name — keep both, no prompt.
+                outputPath = libraryRepository.getSuffixedVideoOutputPath(urlValue, title, quality, copies)
+            }
         }
         _forceReplace = false
-        // Replacing: remove the existing same-name file(s) first.
-        libraryRepository.deleteVideoByName(urlValue, title, quality)
+        val resolvedPath = outputPath ?: libraryRepository.getOutputPath(urlValue, title, quality)
 
         val hasAudio = format.acodec.isNotEmpty() && format.acodec != "none"
         val flow = if (hasAudio) {
             downloadRepository.download(
                 url = urlValue,
-                outputPath = libraryRepository.getOutputPath(urlValue, title, quality),
+                outputPath = resolvedPath,
                 formatId = format.id,
                 cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
             )
@@ -214,7 +255,7 @@ class TapeDeckViewModel @Inject constructor(
             val height = YtDlpFormatParser.extractHeight(format.resolution).takeIf { it > 0 } ?: 1080
             downloadRepository.downloadWithMerge(
                 url = urlValue,
-                outputPath = libraryRepository.getOutputPath(urlValue, title, quality),
+                outputPath = resolvedPath,
                 formatId = format.id,
                 height = height,
                 cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
@@ -294,6 +335,8 @@ class TapeDeckViewModel @Inject constructor(
         _downloadState.value = DownloadState.Idle
         _selectedFormat.value = null
         _availableFormats.value = emptyList()
+        _duplicatePrompt.value = null
+        pendingSuffixPath = null
         searchJob?.cancel()
         viewModelScope.launch {
             delay(200)

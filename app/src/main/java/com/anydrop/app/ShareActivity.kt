@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
+import com.anydrop.app.ui.components.DuplicatePromptDialog
 import com.anydrop.app.ui.tape_deck.TapeDeckViewModel
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AnyDropTheme
@@ -104,6 +105,7 @@ private fun ShareSheet(
     val isLoading by viewModel.isLoadingFormats.collectAsState()
     val formats by viewModel.availableFormats.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
+    val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
 
     // Kick off the fetch in the background as soon as the sheet appears.
     androidx.compose.runtime.LaunchedEffect(sharedUrl) {
@@ -195,6 +197,18 @@ private fun ShareSheet(
                 }
             }
         }
+    }
+
+    // Same-video duplicate prompt, rendered over the sheet (the sheet previously
+    // had no UI for this, so RECORD silently did nothing on a duplicate).
+    duplicatePrompt?.let { prompt ->
+        DuplicatePromptDialog(
+            title = prompt.title,
+            copyCount = prompt.copyCount,
+            onReplace = { viewModel.confirmReplaceDownload() },
+            onDownloadAnyway = { viewModel.confirmDownloadAnyway() },
+            onCancel = { viewModel.dismissDuplicatePrompt() }
+        )
     }
 }
 

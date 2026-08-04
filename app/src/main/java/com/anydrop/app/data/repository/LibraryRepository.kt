@@ -503,42 +503,52 @@ class LibraryRepository(private val context: Context) {
     }
 
     /**
-     * True if a download with this title+quality already exists (video). Titled
-     * files are named "Title [quality].ext" with no timestamp, so re-downloading the
-     * same title+quality collides — we detect it to offer a replace prompt.
+     * All PRIVATE copies of a video with this title+quality: files whose base
+     * name is "Title [quality]" or "Title [quality]_N". Public MediaStore twins
+     * mirror the private names, so they don't need a separate scan. Untitled
+     * media has no stable base name and never collides.
      */
-    fun videoExists(url: String, title: String, quality: String): Boolean {
-        val name = File(buildFileName(title, url, quality, "mp4")).nameWithoutExtension
-        // Untitled files include a unique id, so they never "exist" as duplicates.
-        if (sanitizeTitle(title).isBlank()) return false
-        val dirs = listOf(getVideoDir(), getDownloadDir())
-        val local = dirs.any { d -> d.listFiles()?.any { it.nameWithoutExtension == name } == true }
-        if (local) return true
-        // Also check the public MediaStore export folder via a name match.
-        return _mediaItems.value.any { !it.isImage && !it.isAudio && File(it.title).nameWithoutExtension == name }
+    fun findVideoCopies(url: String, title: String, quality: String): List<File> {
+        if (sanitizeTitle(title).isBlank()) return emptyList()
+        val base = File(buildFileName(title, url, quality, "mp4")).nameWithoutExtension
+        return listOf(getVideoDir(), getDownloadDir())
+            .flatMap { dir -> dir.listFiles()?.filter { it.isFile } ?: emptyList() }
+            .filter { FileNameHelper.matchesCopyBase(it.nameWithoutExtension, base) }
+            .sortedBy { it.lastModified() } // oldest first
     }
 
-    /** Delete existing video files (private + public) matching this title+quality. */
-    fun deleteVideoByName(url: String, title: String, quality: String) {
-        if (sanitizeTitle(title).isBlank()) return
-        val name = File(buildFileName(title, url, quality, "mp4")).nameWithoutExtension
-        // Private folder copies + sidecars.
-        listOf(getVideoDir(), getDownloadDir()).forEach { dir ->
-            dir.listFiles()?.forEach { f ->
-                if (f.isFile && f.nameWithoutExtension == name) {
-                    f.delete()
-                    File("${f.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
-                }
-            }
-        }
-        // Public MediaStore copy.
+    /**
+     * True when any of these copies is the SAME media as `url`, decided by the
+     * `<file>.meta.json` sidecar (written at download time). Files without a
+     * sidecar (legacy / still downloading) are treated as different media, so we
+     * never wrongly prompt to replace them.
+     */
+    fun isSameVideo(copies: List<File>, url: String): Boolean =
+        copies.any { readMetadata(it.absolutePath)?.optString("url") == url }
+
+    /**
+     * Output path for a "download anyway" copy: the next free
+     * "Title [quality]_N.mp4" so repeated downloads of the same video coexist.
+     */
+    fun getSuffixedVideoOutputPath(url: String, title: String, quality: String, copies: List<File>): String {
+        val base = File(buildFileName(title, url, quality, "mp4")).nameWithoutExtension
+        val next = FileNameHelper.nextFreeBase(base, copies.map { it.nameWithoutExtension })
+        return File(getVideoDir(), "$next.mp4").absolutePath
+    }
+
+    /** Delete the OLDEST copy of this video (private + sidecar + public twin). */
+    fun deleteOldestVideoCopy(url: String, title: String, quality: String) {
+        val oldest = findVideoCopies(url, title, quality).minByOrNull { it.lastModified() } ?: return
+        val baseName = oldest.nameWithoutExtension
+        oldest.delete()
+        File("${oldest.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
+        // Public MediaStore twin (same display name).
         _mediaItems.value.firstOrNull {
-            !it.isImage && !it.isAudio && File(it.title).nameWithoutExtension == name
+            !it.isImage && !it.isAudio && File(it.title).nameWithoutExtension == baseName
         }?.let { existing ->
-            (existing.localUri?.toString() ?: existing.localFilePath).let { u ->
-                if (u.startsWith("content://")) {
-                    runCatching { context.contentResolver.delete(android.net.Uri.parse(u), null, null) }
-                }
+            val u = existing.localUri?.toString() ?: existing.localFilePath
+            if (u.startsWith("content://")) {
+                runCatching { context.contentResolver.delete(android.net.Uri.parse(u), null, null) }
             }
         }
     }
