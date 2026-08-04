@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
+import com.anydrop.app.ui.components.DuplicatePromptDialog
 import com.anydrop.app.ui.tape_deck.components.DeckControls
 import com.anydrop.app.ui.tape_deck.components.LEDIndicator
 import com.anydrop.app.ui.tape_deck.components.ReelAnimation
@@ -102,30 +103,14 @@ fun TapeDeckScreen(
         }
     }
 
-    // "Download again & replace?" dialog when a same title+quality video exists.
-    duplicatePrompt?.let { titleName ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { viewModel.dismissDuplicatePrompt() },
-            containerColor = com.anydrop.app.ui.theme.MediumGray,
-            title = { Text("ALREADY DOWNLOADED", color = Amber, fontFamily = FontFamily.Monospace) },
-            text = {
-                Text(
-                    "You already downloaded \"$titleName\" at this quality. Download it again and replace the old one?",
-                    color = White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp
-                )
-            },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = { viewModel.confirmReplaceDownload() }) {
-                    Text("YES, REPLACE", color = Amber, fontFamily = FontFamily.Monospace)
-                }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { viewModel.dismissDuplicatePrompt() }) {
-                    Text("CANCEL", color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
-                }
-            }
+    // "Already downloaded" dialog when the same video is re-downloaded.
+    duplicatePrompt?.let { prompt ->
+        DuplicatePromptDialog(
+            title = prompt.title,
+            copyCount = prompt.copyCount,
+            onReplace = { viewModel.confirmReplaceDownload() },
+            onDownloadAnyway = { viewModel.confirmDownloadAnyway() },
+            onCancel = { viewModel.dismissDuplicatePrompt() }
         )
     }
 
