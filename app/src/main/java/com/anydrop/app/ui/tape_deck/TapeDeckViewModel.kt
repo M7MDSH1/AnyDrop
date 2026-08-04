@@ -8,7 +8,9 @@ import com.anydrop.app.pendingSharedUrl
 import com.anydrop.app.data.repository.CookieRepository
 import com.anydrop.app.data.repository.DownloadRepository
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
+import com.anydrop.app.engine.YtDlpFormatParser
 import com.anydrop.app.service.DownloadService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -26,7 +28,8 @@ class TapeDeckViewModel @Inject constructor(
     application: Application,
     private val downloadRepository: DownloadRepository,
     private val libraryRepository: LibraryRepository,
-    private val cookieRepository: CookieRepository
+    private val cookieRepository: CookieRepository,
+    private val settingsRepository: SettingsRepository
 ) : AndroidViewModel(application) {
 
     private val _url = MutableStateFlow("")
@@ -43,6 +46,9 @@ class TapeDeckViewModel @Inject constructor(
 
     private val _isLoadingFormats = MutableStateFlow(false)
     val isLoadingFormats: StateFlow<Boolean> = _isLoadingFormats.asStateFlow()
+
+    private val _autoDetectLinks = MutableStateFlow(settingsRepository.autoDetectLinks)
+    val autoDetectLinks: StateFlow<Boolean> = _autoDetectLinks.asStateFlow()
 
     val isCookieImported = cookieRepository.isImported
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -205,7 +211,7 @@ class TapeDeckViewModel @Inject constructor(
                 cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
             )
         } else {
-            val height = Regex("(\\d+)").find(format.resolution)?.value?.toIntOrNull() ?: 1080
+            val height = YtDlpFormatParser.extractHeight(format.resolution).takeIf { it > 0 } ?: 1080
             downloadRepository.downloadWithMerge(
                 url = urlValue,
                 outputPath = libraryRepository.getOutputPath(urlValue, title, quality),
@@ -305,7 +311,7 @@ class TapeDeckViewModel @Inject constructor(
                 url = urlValue,
                 cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
             )
-            _availableFormats.value = formats
+            _availableFormats.value = capByMaxQuality(formats)
             if (formats.isEmpty()) {
                 _downloadState.value = DownloadState.Error("No downloadable media found for this link.")
             }
@@ -319,6 +325,23 @@ class TapeDeckViewModel @Inject constructor(
         } finally {
             _isLoadingFormats.value = false
         }
+    }
+
+    /**
+     * Apply the "Maximum quality" setting: drop video formats above the chosen
+     * height. Audio and image entries are never capped. If the cap would remove
+     * everything (e.g. only 4K exists and the user chose 480p), keep the original
+     * list so there is still something to download.
+     */
+    private fun capByMaxQuality(formats: List<FormatInfo>): List<FormatInfo> {
+        val max = settingsRepository.maxQualityHeight
+        if (max >= SettingsRepository.MAX_QUALITY_BEST) return formats
+        val capped = formats.mapNotNull { f ->
+            if (f.isAudioOnly || f.isImage) f
+            else if (YtDlpFormatParser.extractHeight(f.resolution) <= max) f
+            else null
+        }
+        return if (capped.isEmpty()) formats else capped
     }
 
 }

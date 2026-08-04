@@ -19,6 +19,12 @@ class SettingsViewModel @Inject constructor(
     private val _apiKey = MutableStateFlow(settingsRepository.apiKey)
     val apiKey: StateFlow<String> = _apiKey.asStateFlow()
 
+    private val _maxQualityHeight = MutableStateFlow(settingsRepository.maxQualityHeight)
+    val maxQualityHeight: StateFlow<Int> = _maxQualityHeight.asStateFlow()
+
+    private val _autoDetectLinks = MutableStateFlow(settingsRepository.autoDetectLinks)
+    val autoDetectLinks: StateFlow<Boolean> = _autoDetectLinks.asStateFlow()
+
     fun updatePotServerUrl(url: String) {
         settingsRepository.potServerUrl = url
         _potServerUrl.value = url
@@ -27,5 +33,16 @@ class SettingsViewModel @Inject constructor(
     fun updateApiKey(key: String) {
         settingsRepository.apiKey = key
         _apiKey.value = key
+    }
+
+    fun updateMaxQualityHeight(height: Int) {
+        settingsRepository.maxQualityHeight = height
+        _maxQualityHeight.value = height
+    }
+
+    fun toggleAutoDetectLinks() {
+        val next = !settingsRepository.autoDetectLinks
+        settingsRepository.autoDetectLinks = next
+        _autoDetectLinks.value = next
     }
 }

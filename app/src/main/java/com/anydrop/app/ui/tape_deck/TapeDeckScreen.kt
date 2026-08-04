@@ -26,12 +26,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +50,7 @@ import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.ui.tape_deck.components.DeckControls
 import com.anydrop.app.ui.tape_deck.components.LEDIndicator
 import com.anydrop.app.ui.tape_deck.components.ReelAnimation
+import com.anydrop.app.util.Constants
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import com.anydrop.app.ui.theme.Amber
@@ -61,6 +65,7 @@ import com.anydrop.app.ui.theme.VuGreen
 import com.anydrop.app.ui.theme.VuRed
 import com.anydrop.app.ui.theme.VuYellow
 import com.anydrop.app.ui.theme.White
+import kotlinx.coroutines.delay
 
 @Composable
 fun TapeDeckScreen(
@@ -73,7 +78,29 @@ fun TapeDeckScreen(
     val selectedFormat by viewModel.selectedFormat.collectAsState()
     val isLoadingFormats by viewModel.isLoadingFormats.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
+    val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
     val context = LocalContext.current
+
+    // Foreground-only clipboard monitoring: while the deck is on screen, poll the
+    // clipboard and offer any new link (Android forbids background clipboard reads
+    // since API 29, so this only works while the app is visible — which is honest).
+    var detectedLink by remember { mutableStateOf<String?>(null) }
+    var lastSeenClip by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(autoDetectLinks) {
+        if (!autoDetectLinks) return@LaunchedEffect
+        while (true) {
+            delay(1500)
+            val clip = runCatching {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.primaryClip?.getItemAt(0)?.text?.toString()?.trim().orEmpty()
+            }.getOrDefault("")
+            if (clip.isBlank() || clip == lastSeenClip || clip == viewModel.url.value) continue
+            if (clip.isLinkLike()) {
+                lastSeenClip = clip
+                detectedLink = clip
+            }
+        }
+    }
 
     // "Download again & replace?" dialog when a same title+quality video exists.
     duplicatePrompt?.let { titleName ->
@@ -242,6 +269,45 @@ fun TapeDeckScreen(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        detectedLink?.let { link ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Black)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "LINK DETECTED",
+                        color = LedGreen,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        text = link,
+                        color = White.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                TextButton(onClick = {
+                    viewModel.onUrlChange(link)
+                    detectedLink = null
+                }) {
+                    Text("LOAD", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                }
+                TextButton(onClick = { detectedLink = null }) {
+                    Text("✕", color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         DeckControls(
             url = url,
@@ -429,6 +495,13 @@ private fun formatFileSize(bytes: Long): String {
         bytes > 1_000_000 -> "${"%.0f".format(bytes / 1_000_000f)}MB"
         else -> "${"%.0f".format(bytes / 1000f)}KB"
     }
+}
+
+/** Loose link heuristic for clipboard auto-detect: http(s) URL or a known platform domain. */
+private fun String.isLinkLike(): Boolean {
+    val c = lowercase()
+    return c.startsWith("http://") || c.startsWith("https://") ||
+        Constants.SUPPORTED_DOMAINS.any { c.contains(it) }
 }
 
 @Composable

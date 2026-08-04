@@ -189,7 +189,7 @@ class YtDlpEngine(
                             )
                         }
                         .distinctBy { it.resolution }
-                        .sortedByDescending { extractHeight(it.resolution) }
+                        .sortedByDescending { YtDlpFormatParser.extractHeight(it.resolution) }
 
                     // Audio-only formats (video codec none, has an audio codec). Present
                     // them as selectable "Audio • Nkbps" entries alongside the video ones.
@@ -235,7 +235,7 @@ class YtDlpEngine(
                                 isImage = true
                             )
                         }
-                        .sortedByDescending { extractHeight(it.resolution) }
+                        .sortedByDescending { YtDlpFormatParser.extractHeight(it.resolution) }
 
                     // If there were no real formats but the post has a thumbnail/image,
                     // derive an image entry from it (Instagram/TikTok photo posts often
@@ -314,7 +314,7 @@ class YtDlpEngine(
             return distinct.mapIndexed { i, u ->
                 FormatInfo(
                     id = "",
-                    extension = imageExtFromUrl(u),
+                    extension = YtDlpFormatParser.imageExtFromUrl(u),
                     resolution = "Image ${i + 1}/${distinct.size}",
                     filesize = 0L,
                     vcodec = "none",
@@ -328,7 +328,7 @@ class YtDlpEngine(
         return listOf(
             FormatInfo(
                 id = "",
-                extension = imageExtFromUrl(best),
+                extension = YtDlpFormatParser.imageExtFromUrl(best),
                 resolution = "Image (photo)",
                 filesize = 0L,
                 vcodec = "none",
@@ -385,68 +385,11 @@ class YtDlpEngine(
             request.addOption("--no-warnings")
             request.addOption("--skip-download")
             val response = YoutubeDL.getInstance().execute(request)
-            val json = org.json.JSONObject(response.out.trim())
-
-            fun bestImageFromNode(node: org.json.JSONObject): String? {
-                // Prefer explicit image url/display_url, else the largest thumbnail.
-                node.optString("url").takeIf { it.startsWith("http") && it.isImageUrl() }?.let { return it }
-                node.optString("display_url").takeIf { it.startsWith("http") }?.let { return it }
-                val thumbs = node.optJSONArray("thumbnails")
-                if (thumbs != null && thumbs.length() > 0) {
-                    // thumbnails are usually ordered small→large; take the last.
-                    for (i in thumbs.length() - 1 downTo 0) {
-                        val u = thumbs.getJSONObject(i).optString("url")
-                        if (u.startsWith("http")) return u
-                    }
-                }
-                node.optString("thumbnail").takeIf { it.startsWith("http") }?.let { return it }
-                return null
-            }
-
-            val urls = mutableListOf<String>()
-            val entries = json.optJSONArray("entries")
-            if (entries != null && entries.length() > 0) {
-                for (i in 0 until entries.length()) {
-                    val entry = entries.optJSONObject(i) ?: continue
-                    bestImageFromNode(entry)?.let { urls.add(it) }
-                }
-            } else {
-                // Not a playlist — single image node.
-                bestImageFromNode(json)?.let { urls.add(it) }
-            }
-
-            val distinct = urls.distinct()
-            distinct.mapIndexed { i, u ->
-                FormatInfo(
-                    id = "",
-                    extension = imageExtFromUrl(u),
-                    resolution = if (distinct.size > 1) "Image ${i + 1}/${distinct.size}" else "Image (photo)",
-                    filesize = 0L,
-                    vcodec = "none",
-                    acodec = "none",
-                    isImage = true,
-                    imageUrl = u
-                )
-            }
+            YtDlpFormatParser.parseCarouselImages(response.out.trim())
         } catch (e: Exception) {
             Log.w("YtDlpEngine", "Carousel JSON parse failed", e)
             emptyList()
         }
-    }
-
-    private fun String.isImageUrl(): Boolean {
-        val c = substringBefore("?").lowercase()
-        return listOf(".jpg", ".jpeg", ".png", ".webp", ".heic").any { c.endsWith(it) } ||
-            contains("cdninstagram") || contains("scontent")
-    }
-
-    private fun imageExtFromUrl(url: String): String {
-        val clean = url.substringBefore("?").lowercase()
-        return listOf("jpg", "jpeg", "png", "webp", "heic", "gif").firstOrNull { clean.endsWith(".$it") } ?: "jpg"
-    }
-
-    private fun extractHeight(resolution: String): Int {
-        return Regex("(\\d+)").find(resolution)?.value?.toIntOrNull() ?: 0
     }
 
     fun download(
@@ -669,7 +612,7 @@ class YtDlpEngine(
         // instead of going through yt-dlp format ids.
         if (directImageUrl.isNotBlank()) {
             try {
-                val ext = imageExtFromUrl(directImageUrl)
+                val ext = YtDlpFormatParser.imageExtFromUrl(directImageUrl)
                 val outFile = File(outputPath.substringBeforeLast(".") + "." + ext)
                 java.net.URL(directImageUrl).openStream().use { input ->
                     outFile.outputStream().use { output -> input.copyTo(output) }
