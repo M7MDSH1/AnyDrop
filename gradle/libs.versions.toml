@@ -15,6 +15,7 @@ coroutines = "1.8.1"
 coreKtx = "1.13.1"
 collectionKtx = "1.4.1"
 youtubedl = "0.18.1"
+junit = "4.13.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -53,6 +54,8 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 
 youtubedl-android = { group = "io.github.junkfood02.youtubedl-android", name = "library", version.ref = "youtubedl" }
 youtubedl-ffmpeg = { group = "io.github.junkfood02.youtubedl-android", name = "ffmpeg", version.ref = "youtubedl" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
