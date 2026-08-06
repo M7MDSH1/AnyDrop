@@ -62,6 +62,7 @@ import com.anydrop.app.ui.theme.LedBlue
 import com.anydrop.app.ui.theme.LedGreen
 import com.anydrop.app.ui.theme.LedRed
 import com.anydrop.app.ui.theme.MediumGray
+import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.VuGreen
 import com.anydrop.app.ui.theme.VuRed
 import com.anydrop.app.ui.theme.VuYellow
@@ -375,7 +376,7 @@ private fun MultiImagePicker(
                     if (isSel) {
                         Text(
                             "✓",
-                            color = Black,
+                            color = OnAccent,
                             fontSize = 14.sp,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)

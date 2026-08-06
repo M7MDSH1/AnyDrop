@@ -66,6 +66,7 @@ import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
 import com.anydrop.app.ui.theme.LedRed
 import com.anydrop.app.ui.theme.MediumGray
+import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.flow.Flow
 
@@ -358,7 +359,7 @@ private fun LibraryCard(
                     ) {
                         Text(
                             text = if (selected) "✓" else "○",
-                            color = if (selected) Black else White,
+                            color = if (selected) OnAccent else White,
                             fontSize = 12.sp
                         )
                     }

@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**.
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.1.0**
 
 ---
 
@@ -19,8 +19,10 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **Library** — browse all device videos & images, filter (All / Videos / Images),
   sort by date or length, multi-select delete, and a per-item menu (Share / Delete / Info).
 - **Audio tab** — plays device audio with background playback + media notification.
-- **Built-in player** — gestures (seek, volume, brightness), speed, PiP with controls,
-  aspect-ratio toggle, and a zoomable image viewer.
+- **Built-in player** — gestures (seek, volume, brightness), playback speed, PiP with
+  controls, aspect-ratio toggle, **swipe left/right to jump between images & videos**,
+  and a zoomable image viewer.
+- **Appearance** — instant dark ↔ light "tape" theme toggle from Settings.
 - **In-app login (cookies)** — sign in to sites (e.g. Instagram) inside the app to
   download content that requires authentication. Add custom platforms too.
 - Downloads are saved to your device and exported to the public gallery (Movies /

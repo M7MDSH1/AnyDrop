@@ -5,7 +5,6 @@ import android.util.Log
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.data.model.MediaSource
-import com.anydrop.app.data.repository.PotRepository
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDLException
@@ -19,8 +18,7 @@ import java.io.File
 import java.util.UUID
 
 class YtDlpEngine(
-    private val context: Context,
-    private val potRepository: PotRepository
+    private val context: Context
 ) {
 
     private var processId: String? = null
@@ -88,18 +86,20 @@ class YtDlpEngine(
     private fun YoutubeDLRequest.applyCommonOptions(
         cookieFile: File?,
         youtubeClient: String? = null,
-        poToken: String? = null,
         isTiktok: Boolean = false
     ) {
         addOption("--no-update")
         if (isTiktok) {
-            // TikTok's extractor rejects the generic Android WebView UA and needs
-            // a desktop browser UA plus its own extractor args and Referer/Origin
-            // headers to resolve playable formats reliably.
-            addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
-            addOption("--extractor-args", "tiktok:api_hostname=api22-normal-c-useast2a.tiktokv.com")
-            addOption("--add-header", "Referer:https://www.tiktok.com/")
-            addOption("--add-header", "Origin:https://www.tiktok.com")
+            // Current yt-dlp TikTok extractor ONLY tries its mobile API (which needs
+            // no TLS impersonation) when a runtime config arg is present; otherwise it
+            // goes straight to the webpage path, which demands curl_cffi
+            // (--impersonate) that youtubedl-android doesn't ship — that's the
+            // "blocks non-browser downloaders" failure. app_info uses the extractor's
+            // own current known-good app build (kept up to date by the nightly update);
+            // on API failure the extractor still falls back to the webpage internally.
+            // No manual UA/Referer/Origin headers here: the API sets its own app UA,
+            // and extraneous headers aimed at the tiktokv.com API can trip its WAF.
+            addOption("--extractor-args", "tiktok:app_info=/musical_ly/35.1.3/2023501030/0")
         } else {
             addOption("--user-agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36")
         }
@@ -109,11 +109,7 @@ class YtDlpEngine(
         // library (initialized in init()) installs a real ffmpeg executable and
         // registers it with yt-dlp automatically, so it's found without a path.
         if (youtubeClient != null) {
-            if (youtubeClient == "web" && poToken != null) {
-                addOption("--extractor-args", "youtube:player_client=web;po_token=web.gvs+$poToken")
-            } else {
-                addOption("--extractor-args", "youtube:player_client=$youtubeClient")
-            }
+            addOption("--extractor-args", "youtube:player_client=$youtubeClient")
             addOption("--extractor-args", "youtube:skip=webpage")
         }
         cookieFile?.let { addOption("--cookies", it.absolutePath) }
@@ -402,11 +398,8 @@ class YtDlpEngine(
 
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
-        // Both YouTube and TikTok benefit from retrying on 403/blocked-client failures.
+        // YouTube and TikTok both benefit from retrying on 403/blocked-client failures.
         val needsResilientRetry = isYt || isTiktok
-        // Fetch PO token once per download call, before any client attempts
-        val poToken = if (isYt) potRepository.fetchPotToken() else null
-        if (poToken != null) trySend(DownloadState.Progress(0, "PO token acquired", ""))
 
         val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
         // If the requested format is a split video+audio combo, add a plain
@@ -428,7 +421,7 @@ class YtDlpEngine(
                 processId = UUID.randomUUID().toString()
 
                 val request = YoutubeDLRequest(url)
-                request.applyCommonOptions(cookieFile, client, poToken, isTiktok = isTiktok)
+                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
                 request.addOption("-f", fmt)
                 request.addOption("-o", outputPath)
 
@@ -510,7 +503,6 @@ class YtDlpEngine(
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
         val needsResilientRetry = isYt || isTiktok
-        val poToken = if (isYt) potRepository.fetchPotToken() else null
 
         val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
         // yt-dlp replaces the extension with the extracted audio format's, so pass
@@ -528,7 +520,7 @@ class YtDlpEngine(
             processId = UUID.randomUUID().toString()
 
             val request = YoutubeDLRequest(url)
-            request.applyCommonOptions(cookieFile, client, poToken, isTiktok = isTiktok)
+            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
             request.addOption("-f", "bestaudio/best")
             request.addOption("-x")                       // extract audio
             request.addOption("--audio-format", "m4a")    // container ffmpeg can produce
@@ -644,7 +636,6 @@ class YtDlpEngine(
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
         val needsResilientRetry = isYt || isTiktok
-        val poToken = if (isYt) potRepository.fetchPotToken() else null
 
         val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
         // Strip only the real trailing extension (titles may contain dots).
@@ -660,7 +651,7 @@ class YtDlpEngine(
             processId = UUID.randomUUID().toString()
 
             val request = YoutubeDLRequest(url)
-            request.applyCommonOptions(cookieFile, client, poToken, isTiktok = isTiktok)
+            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
             request.addOption("-f", formatId.ifBlank { "best" })
             request.addOption("-o", "$outBase.%(ext)s")
 
@@ -732,10 +723,6 @@ class YtDlpEngine(
     ): Flow<DownloadState> = callbackFlow {
         trySend(DownloadState.Progress(0, "Starting...", ""))
 
-        val isYt = isYoutubeUrl(url)
-        val poToken = if (isYt) potRepository.fetchPotToken() else null
-        if (poToken != null) trySend(DownloadState.Progress(1, "PO token acquired", ""))
-
         processId = UUID.randomUUID().toString()
 
         val downloadDir = File(outputPath).parentFile ?: File(outputPath)
@@ -746,11 +733,11 @@ class YtDlpEngine(
         try {
             trySend(DownloadState.Progress(5, "Downloading video...", ""))
             var videoFormat = "bestvideo[height<=$height]"
-            var videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile, poToken)
+            var videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile)
             if (videoFile == null || !videoFile.exists()) {
                 trySend(DownloadState.Progress(5, "Retrying video without height restriction...", ""))
                 videoFormat = "bestvideo"
-                videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile, poToken)
+                videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile)
                 if (videoFile == null || !videoFile.exists()) {
                     trySend(DownloadState.Error("Failed to download video"))
                     close()
@@ -759,7 +746,7 @@ class YtDlpEngine(
             }
             trySend(DownloadState.Progress(45, "Downloading audio...", ""))
 
-            val audioFile = downloadRaw(url, "bestaudio[ext=m4a]", tempAudioPath, cookieFile, poToken)
+            val audioFile = downloadRaw(url, "bestaudio[ext=m4a]", tempAudioPath, cookieFile)
 
             if (audioFile != null && audioFile.exists()) {
                 trySend(DownloadState.Progress(75, "Merging audio...", ""))
@@ -807,8 +794,7 @@ class YtDlpEngine(
         url: String,
         formatId: String,
         outputPath: String,
-        cookieFile: File?,
-        poToken: String? = null
+        cookieFile: File?
     ): File? {
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
@@ -818,7 +804,7 @@ class YtDlpEngine(
         for ((index, client) in clients.withIndex()) {
             try {
                 val request = YoutubeDLRequest(url)
-                request.applyCommonOptions(cookieFile, client, poToken, isTiktok = isTiktok)
+                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
                 request.addOption("-f", formatId)
                 request.addOption("-o", outputPath)
 

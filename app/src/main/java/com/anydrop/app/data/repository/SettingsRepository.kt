@@ -1,7 +1,11 @@
 package com.anydrop.app.data.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,13 +15,24 @@ class SettingsRepository @Inject constructor(
 ) {
     private val prefs = context.getSharedPreferences("anydrop_settings", Context.MODE_PRIVATE)
 
-    var potServerUrl: String
-        get() = prefs.getString(KEY_POT_URL, DEFAULT_POT_URL) ?: DEFAULT_POT_URL
-        set(value) = prefs.edit().putString(KEY_POT_URL, value).apply()
+    private val _darkMode = MutableStateFlow(prefs.getBoolean(KEY_DARK_MODE, true))
 
-    var apiKey: String
-        get() = prefs.getString(KEY_API_KEY, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_API_KEY, value).apply()
+    /**
+     * Live dark-mode state. Backed by a SharedPreferences listener so ANY writer
+     * (any ViewModel/screen) instantly updates every collector — the theme flips
+     * the moment the setting flips, with no restart.
+     */
+    val darkModeFlow: StateFlow<Boolean> = _darkMode.asStateFlow()
+
+    private val darkModeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == KEY_DARK_MODE) {
+            _darkMode.value = prefs.getBoolean(KEY_DARK_MODE, true)
+        }
+    }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(darkModeListener)
+    }
 
     /** Maximum video height the user wants offered, in pixels (0 = best available). */
     var maxQualityHeight: Int
@@ -29,12 +44,15 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_DETECT, value).apply()
 
+    /** Dark mode is the default; false switches the whole UI to the light palette. */
+    var darkMode: Boolean
+        get() = prefs.getBoolean(KEY_DARK_MODE, true)
+        set(value) = prefs.edit().putBoolean(KEY_DARK_MODE, value).apply()
+
     companion object {
-        private const val KEY_POT_URL = "pot_server_url"
-        private const val KEY_API_KEY = "pot_api_key"
         private const val KEY_MAX_QUALITY = "max_quality_height"
         private const val KEY_AUTO_DETECT = "auto_detect_links"
-        const val DEFAULT_POT_URL = "http://127.0.0.1:4416"
+        private const val KEY_DARK_MODE = "dark_mode"
 
         const val MAX_QUALITY_BEST = 4320
         const val MAX_QUALITY_4K = 2160

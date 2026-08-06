@@ -15,8 +15,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,8 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,13 +42,10 @@ fun SettingsScreen(
     onCookieImport: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val potServerUrl by viewModel.potServerUrl.collectAsState()
-    val apiKey by viewModel.apiKey.collectAsState()
     val maxQualityHeight by viewModel.maxQualityHeight.collectAsState()
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
+    val darkMode by viewModel.darkMode.collectAsState()
 
-    var showUrlDialog by remember { mutableStateOf(false) }
-    var showApiKeyDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -75,17 +68,9 @@ fun SettingsScreen(
         SettingsCard(title = "SESSION SIGNAL", subtitle = "Import cookies for restricted content", onClick = onCookieImport)
         Spacer(modifier = Modifier.height(8.dp))
         SettingsCard(
-            title = "PO TOKEN SERVER",
-            subtitle = if (potServerUrl.contains("127.0.0.1")) "Not configured — tap to set"
-                        else potServerUrl,
-            onClick = { showUrlDialog = true }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = "API KEY",
-            subtitle = if (apiKey.isBlank()) "Not configured — tap to set"
-                        else apiKey.take(8) + "…" + apiKey.takeLast(4),
-            onClick = { showApiKeyDialog = true }
+            title = "APPEARANCE",
+            subtitle = if (darkMode) "Dark mode — tap for light" else "Light mode — tap for dark",
+            onClick = { viewModel.toggleDarkMode() }
         )
         Spacer(modifier = Modifier.height(8.dp))
         SettingsCard(
@@ -134,33 +119,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showUrlDialog) {
-        EditTextDialog(
-            title = "PO TOKEN SERVER",
-            currentValue = potServerUrl,
-            hint = "https://pot.example.com",
-            onDismiss = { showUrlDialog = false },
-            onSave = {
-                viewModel.updatePotServerUrl(it)
-                showUrlDialog = false
-            }
-        )
-    }
-
-    if (showApiKeyDialog) {
-        EditTextDialog(
-            title = "API KEY",
-            currentValue = apiKey,
-            hint = "Your shared secret",
-            isPassword = true,
-            onDismiss = { showApiKeyDialog = false },
-            onSave = {
-                viewModel.updateApiKey(it)
-                showApiKeyDialog = false
-            }
-        )
-    }
-
     if (showQualityDialog) {
         AlertDialog(
             containerColor = Black,
@@ -206,51 +164,6 @@ private val qualityOptions = listOf(
 
 private fun maxQualityLabel(height: Int): String {
     return qualityOptions.firstOrNull { it.first == height }?.second ?: "Best available"
-}
-
-@Composable
-private fun EditTextDialog(
-    title: String,
-    currentValue: String,
-    hint: String,
-    isPassword: Boolean = false,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
-) {
-    var text by remember { mutableStateOf(currentValue) }
-    AlertDialog(
-        containerColor = Black,
-        titleContentColor = Amber,
-        textContentColor = White,
-        onDismissRequest = onDismiss,
-        title = { Text(title, fontFamily = FontFamily.Monospace, color = Amber) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text(hint, color = White.copy(alpha = 0.3f)) },
-                singleLine = true,
-                visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = White,
-                    unfocusedTextColor = White,
-                    cursorColor = Amber,
-                    focusedBorderColor = Amber,
-                    unfocusedBorderColor = DarkGray
-                )
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(text.trim()) }) {
-                Text("SAVE", color = Amber, fontFamily = FontFamily.Monospace)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
-            }
-        }
-    )
 }
 
 @Composable

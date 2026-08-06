@@ -18,6 +18,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -72,9 +73,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import coil.compose.AsyncImage
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -127,16 +130,8 @@ fun PlayerScreen(
 
     // Images open in a simple zoomable full-screen viewer, not the video player.
     if (currentMedia!!.isImage) {
-        ImageViewerContent(uri = uri)
-        return
-    }
-
-    // Audio plays through a background MediaSessionService so it keeps going after
-    // the app is exited, with a media notification.
-    if (currentMedia!!.isAudio) {
-        AudioPlayerContent(
+        ImageViewerContent(
             uri = uri,
-            title = currentMedia!!.title,
             hasNext = nextMediaId != null,
             hasPrevious = previousMediaId != null,
             onNext = { nextMediaId?.let(onNavigateToMedia) },
@@ -145,14 +140,42 @@ fun PlayerScreen(
         return
     }
 
-    VideoPlayerContent(
-        uri = uri,
-        activity = activity,
+    // Audio plays through a background MediaSessionService so it keeps going after
+    // the app is exited, with a media notification.
+    if (currentMedia!!.isAudio) {
+        SwipeableContent(
+            hasNext = nextMediaId != null,
+            hasPrevious = previousMediaId != null,
+            onNext = { nextMediaId?.let(onNavigateToMedia) },
+            onPrevious = { previousMediaId?.let(onNavigateToMedia) }
+        ) {
+            AudioPlayerContent(
+                uri = uri,
+                title = currentMedia!!.title,
+                hasNext = nextMediaId != null,
+                hasPrevious = previousMediaId != null,
+                onNext = { nextMediaId?.let(onNavigateToMedia) },
+                onPrevious = { previousMediaId?.let(onNavigateToMedia) }
+            )
+        }
+        return
+    }
+
+    SwipeableContent(
         hasNext = nextMediaId != null,
         hasPrevious = previousMediaId != null,
         onNext = { nextMediaId?.let(onNavigateToMedia) },
         onPrevious = { previousMediaId?.let(onNavigateToMedia) }
-    )
+    ) {
+        VideoPlayerContent(
+            uri = uri,
+            activity = activity,
+            hasNext = nextMediaId != null,
+            hasPrevious = previousMediaId != null,
+            onNext = { nextMediaId?.let(onNavigateToMedia) },
+            onPrevious = { previousMediaId?.let(onNavigateToMedia) }
+        )
+    }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -293,34 +316,49 @@ private fun AudioPlayerContent(
 }
 
 @Composable
-private fun ImageViewerContent(uri: Uri) {
+private fun ImageViewerContent(
+    uri: Uri,
+    hasNext: Boolean = false,
+    hasPrevious: Boolean = false,
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {}
+) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Black)
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 5f)
-                    offset = if (scale > 1f) offset + pan else Offset.Zero
-                }
-            },
-        contentAlignment = Alignment.Center
+    // Swipe navigation only makes sense at 1× zoom — while zoomed the gesture pans.
+    SwipeableContent(
+        hasNext = hasNext,
+        hasPrevious = hasPrevious,
+        onNext = onNext,
+        onPrevious = onPrevious,
+        swipeEnabled = scale <= 1.01f
     ) {
-        AsyncImage(
-            model = uri,
-            contentDescription = "Image",
-            contentScale = ContentScale.Fit,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
-                )
-        )
+                .background(Black)
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 5f)
+                        offset = if (scale > 1f) offset + pan else Offset.Zero
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = uri,
+                contentDescription = "Image",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    )
+            )
+        }
     }
 }
 
@@ -866,6 +904,80 @@ private fun VideoPlayerContent(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeableContent(
+    hasNext: Boolean,
+    hasPrevious: Boolean,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    swipeEnabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    var dragTotal by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val swipeThresholdPx = with(density) { 96.dp.toPx() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                translationX = if (isDragging) dragTotal * 0.35f else 0f
+            }
+            .pointerInput(swipeEnabled, hasNext, hasPrevious) {
+                if (!swipeEnabled) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        isDragging = true
+                        dragTotal = 0f
+                    },
+                    onHorizontalDrag = { _, dragAmount ->
+                        dragTotal += dragAmount
+                    },
+                    onDragEnd = {
+                        when {
+                            dragTotal <= -swipeThresholdPx && hasNext -> onNext()
+                            dragTotal >= swipeThresholdPx && hasPrevious -> onPrevious()
+                        }
+                        dragTotal = 0f
+                        isDragging = false
+                    },
+                    onDragCancel = {
+                        dragTotal = 0f
+                        isDragging = false
+                    }
+                )
+            }
+    ) {
+        content()
+
+        // Affordance hint: show which direction is available while the drag moves.
+        if (isDragging) {
+            val showNext = dragTotal < 0f && hasNext
+            val showPrevious = dragTotal > 0f && hasPrevious
+            if (showNext || showPrevious) {
+                Text(
+                    text = when {
+                        showNext -> "NEXT ▶"
+                        showPrevious -> "◀ PREV"
+                        else -> ""
+                    },
+                    color = Amber,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                )
             }
         }
     }

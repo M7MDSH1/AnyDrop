@@ -13,27 +13,14 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val _potServerUrl = MutableStateFlow(settingsRepository.potServerUrl)
-    val potServerUrl: StateFlow<String> = _potServerUrl.asStateFlow()
-
-    private val _apiKey = MutableStateFlow(settingsRepository.apiKey)
-    val apiKey: StateFlow<String> = _apiKey.asStateFlow()
-
     private val _maxQualityHeight = MutableStateFlow(settingsRepository.maxQualityHeight)
     val maxQualityHeight: StateFlow<Int> = _maxQualityHeight.asStateFlow()
 
     private val _autoDetectLinks = MutableStateFlow(settingsRepository.autoDetectLinks)
     val autoDetectLinks: StateFlow<Boolean> = _autoDetectLinks.asStateFlow()
 
-    fun updatePotServerUrl(url: String) {
-        settingsRepository.potServerUrl = url
-        _potServerUrl.value = url
-    }
-
-    fun updateApiKey(key: String) {
-        settingsRepository.apiKey = key
-        _apiKey.value = key
-    }
+    /** Backed by the repository's prefs listener, so the theme updates instantly. */
+    val darkMode: StateFlow<Boolean> = settingsRepository.darkModeFlow
 
     fun updateMaxQualityHeight(height: Int) {
         settingsRepository.maxQualityHeight = height
@@ -44,5 +31,9 @@ class SettingsViewModel @Inject constructor(
         val next = !settingsRepository.autoDetectLinks
         settingsRepository.autoDetectLinks = next
         _autoDetectLinks.value = next
+    }
+
+    fun toggleDarkMode() {
+        settingsRepository.darkMode = !settingsRepository.darkMode
     }
 }

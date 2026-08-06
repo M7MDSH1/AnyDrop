@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -58,10 +60,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.anydrop.app.ui.navigation.AnyDropNavGraph
 import com.anydrop.app.ui.navigation.Routes
+import com.anydrop.app.ui.settings.AppearanceViewModel
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
 import com.anydrop.app.ui.theme.MediumGray
+import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
 import com.anydrop.app.ui.theme.AnyDropTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -85,7 +89,9 @@ class MainActivity : ComponentActivity() {
         extractUrlFromIntent(intent)?.let { pendingSharedUrl = it }
 
         setContent {
-            AnyDropTheme {
+            val appearanceViewModel: AppearanceViewModel = hiltViewModel()
+            val darkMode by appearanceViewModel.darkMode.collectAsState()
+            AnyDropTheme(darkTheme = darkMode) {
                 AnyDropMainScreen(
                     onNavControllerReady = { navController = it }
                 )
@@ -163,7 +169,7 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
             },
             colors = ButtonDefaults.buttonColors(containerColor = Amber)
         ) {
-            Text("OPEN SETTINGS", color = Black, fontFamily = FontFamily.Monospace)
+            Text("OPEN SETTINGS", color = OnAccent, fontFamily = FontFamily.Monospace)
         }
         Spacer(modifier = Modifier.height(16.dp))
         TextButton(onClick = onSkipped) {
