@@ -75,7 +75,9 @@ class ShareActivity : ComponentActivity() {
         }
 
         setContent {
-            AnyDropTheme {
+            // The share sheet hardcodes the deck's dark palette (like the
+            // player), so it stays dark in both appearance modes.
+            AnyDropTheme(darkTheme = true) {
                 ShareSheet(
                     sharedUrl = sharedUrl,
                     onClose = { finish() }
