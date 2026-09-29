@@ -3,7 +3,9 @@ package com.anydrop.app.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.data.repository.DeletionResult
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.MediaFilter
 import com.anydrop.app.data.repository.SortMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,9 +17,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Media-type filter for the library grid. */
-enum class MediaFilter { ALL, VIDEOS, IMAGES }
-
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository
@@ -25,23 +24,14 @@ class LibraryViewModel @Inject constructor(
 
     private val _allItems = MutableStateFlow<List<MediaItem>>(emptyList())
 
-    private val _filter = MutableStateFlow(MediaFilter.ALL)
-    val filter: StateFlow<MediaFilter> = _filter.asStateFlow()
+    val filter: StateFlow<MediaFilter> = libraryRepository.filterMode
 
     val sortMode: StateFlow<SortMode> = libraryRepository.sortMode
 
     // Visible items = all items with the media-type filter + sort applied.
     val mediaItems: StateFlow<List<MediaItem>> =
-        combine(_allItems, _filter, sortMode) { items, filter, sort ->
-            val filtered = when (filter) {
-                MediaFilter.ALL -> items
-                MediaFilter.VIDEOS -> items.filter { !it.isImage && !it.isAudio }
-                MediaFilter.IMAGES -> items.filter { it.isImage }
-            }
-            when (sort) {
-                SortMode.DURATION -> filtered.sortedByDescending { it.durationMs }
-                SortMode.DATE -> filtered.sortedByDescending { it.downloadedAt }
-            }
+        combine(_allItems, filter, sortMode) { items, filter, sort ->
+            libraryRepository.orderedMedia(items, filter, sort)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _selectedItem = MutableStateFlow<MediaItem?>(null)
@@ -53,11 +43,15 @@ class LibraryViewModel @Inject constructor(
                 _allItems.value = items
             }
         }
+        // Show the cached index instantly, then refresh in the background.
+        viewModelScope.launch {
+            libraryRepository.loadCachedIndex()
+        }
         refresh()
     }
 
     fun setFilter(f: MediaFilter) {
-        _filter.value = f
+        libraryRepository.setFilterMode(f)
     }
 
     fun refresh() {
@@ -75,8 +69,11 @@ class LibraryViewModel @Inject constructor(
         _selectedItem.value = item
     }
 
-    fun deleteItem(item: MediaItem) {
-        libraryRepository.deleteItem(item)
+    fun deleteItem(item: MediaItem): DeletionResult = deleteItems(listOf(item))
+
+    fun deleteItems(items: List<MediaItem>): DeletionResult {
+        val result = libraryRepository.deleteItems(items)
         refresh()
+        return result
     }
 }

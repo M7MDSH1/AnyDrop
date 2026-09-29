@@ -44,10 +44,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.annotation.StringRes
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -58,8 +60,12 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.anydrop.app.R
 import com.anydrop.app.ui.navigation.AnyDropNavGraph
 import com.anydrop.app.ui.navigation.Routes
+import com.anydrop.app.data.repository.DeckSessionRepository
+import com.anydrop.app.data.repository.readAppLanguageSync
+import com.anydrop.app.util.LocaleHelper
 import com.anydrop.app.ui.settings.AppearanceViewModel
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
@@ -69,6 +75,7 @@ import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
 import com.anydrop.app.ui.theme.AnyDropTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Bridge so the active video player can tell MainActivity to enter PiP when — and
@@ -84,16 +91,30 @@ class MainActivity : ComponentActivity() {
 
     private var navController: NavController? = null
 
+    @Inject
+    lateinit var deckSessionRepository: DeckSessionRepository
+
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(
+            LocaleHelper.wrapAppLocale(newBase, readAppLanguageSync(newBase))
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         extractUrlFromIntent(intent)?.let { pendingSharedUrl = it }
+        // Reopen on the tab the user last left, unless a share is pending (force DECK).
+        val startTab = if (pendingSharedUrl != null) Routes.TAPE_DECK
+        else deckSessionRepository.lastTab(Routes.TAPE_DECK)
 
         setContent {
             val appearanceViewModel: AppearanceViewModel = hiltViewModel()
             val darkMode by appearanceViewModel.darkMode.collectAsState()
             AnyDropTheme(darkTheme = darkMode) {
                 AnyDropMainScreen(
-                    onNavControllerReady = { navController = it }
+                    onNavControllerReady = { navController = it },
+                    startDestination = startTab,
+                    deckSessionRepository = deckSessionRepository
                 )
             }
         }
@@ -146,7 +167,7 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            "ANYDROP",
+            stringResource(R.string.brand_wordmark),
             style = MaterialTheme.typography.displayLarge,
             color = Amber,
             modifier = Modifier.fillMaxWidth(),
@@ -154,7 +175,7 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            "AnyDrop needs access to all files to save videos to\n/storage/emulated/0/AnyDrop",
+            stringResource(R.string.permission_message),
             color = White.copy(alpha = 0.7f),
             fontFamily = FontFamily.Monospace,
             fontSize = 14.sp,
@@ -169,12 +190,12 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
             },
             colors = ButtonDefaults.buttonColors(containerColor = Amber)
         ) {
-            Text("OPEN SETTINGS", color = OnAccent, fontFamily = FontFamily.Monospace)
+            Text(stringResource(R.string.open_settings), color = OnAccent, fontFamily = FontFamily.Monospace)
         }
         Spacer(modifier = Modifier.height(16.dp))
         TextButton(onClick = onSkipped) {
             Text(
-                "Skip (downloads may fail)",
+                stringResource(R.string.skip_downloads_may_fail),
                 color = White.copy(alpha = 0.4f),
                 fontFamily = FontFamily.Monospace
             )
@@ -182,18 +203,20 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
     }
 }
 
-private data class BottomNavItem(val route: String, val label: String, val icon: ImageVector)
+private data class BottomNavItem(val route: String, @StringRes val labelRes: Int, val icon: ImageVector)
 
 private val bottomNavItems = listOf(
-    BottomNavItem(Routes.TAPE_DECK, "DECK", Icons.Filled.Videocam),
-    BottomNavItem(Routes.LIBRARY, "LIBRARY", Icons.Filled.LibraryMusic),
-    BottomNavItem(Routes.AUDIO, "AUDIO", Icons.Filled.MusicNote),
-    BottomNavItem(Routes.SETTINGS, "SETTINGS", Icons.Filled.Settings)
+    BottomNavItem(Routes.TAPE_DECK, R.string.nav_deck, Icons.Filled.Videocam),
+    BottomNavItem(Routes.LIBRARY, R.string.nav_library, Icons.Filled.LibraryMusic),
+    BottomNavItem(Routes.AUDIO, R.string.nav_audio, Icons.Filled.MusicNote),
+    BottomNavItem(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings)
 )
 
 @Composable
 fun AnyDropMainScreen(
-    onNavControllerReady: (NavController) -> Unit = {}
+    onNavControllerReady: (NavController) -> Unit = {},
+    startDestination: String = Routes.TAPE_DECK,
+    deckSessionRepository: DeckSessionRepository? = null
 ) {
     val context = LocalContext.current
     // Downloads now save to app-specific external storage (getExternalFilesDir),
@@ -229,6 +252,14 @@ fun AnyDropMainScreen(
 
     val showBottomBar = currentDestination?.route in bottomNavItems.map { it.route }
 
+    // Remember the active bottom tab across restarts.
+    LaunchedEffect(currentDestination?.route) {
+        val route = currentDestination?.route
+        if (route != null && bottomNavItems.any { it.route == route }) {
+            deckSessionRepository?.saveTab(route)
+        }
+    }
+
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
@@ -253,8 +284,8 @@ fun AnyDropMainScreen(
                                     }
                                 }
                             },
-                            icon = { Icon(imageVector = item.icon, contentDescription = item.label) },
-                            label = { Text(text = item.label, fontFamily = FontFamily.Monospace, fontSize = 9.sp) },
+                            icon = { Icon(imageVector = item.icon, contentDescription = stringResource(item.labelRes)) },
+                            label = { Text(text = stringResource(item.labelRes), fontFamily = FontFamily.Monospace, fontSize = 9.sp) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Amber,
                                 selectedTextColor = Amber,
@@ -277,7 +308,8 @@ fun AnyDropMainScreen(
             AnyDropNavGraph(
                 navController = navController,
                 modifier = Modifier.fillMaxSize(),
-                scrollToTopFlow = scrollToTopFlow
+                scrollToTopFlow = scrollToTopFlow,
+                startDestination = startDestination
             )
         }
     }

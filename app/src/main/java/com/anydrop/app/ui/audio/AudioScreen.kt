@@ -3,9 +3,12 @@ package com.anydrop.app.ui.audio
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.anydrop.app.R
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.ui.components.DeleteConfirmDialog
 import com.anydrop.app.ui.components.MediaInfoDialog
@@ -84,13 +88,35 @@ fun AudioScreen(
         selectedIds = if (selectedIds.contains(item.id)) selectedIds - item.id else selectedIds + item.id
     }
 
+    val context = LocalContext.current
+
+    // Launcher for the OS delete-permission flow (MediaStore.createDeleteRequest
+    // on Android 11+, RecoverableSecurityException sender on Android 10). Only
+    // fires when deleting media that belongs to OTHER apps.
+    val deleteConsentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) {
+        viewModel.refresh()
+    }
+
     if (showDeleteConfirm) {
         DeleteConfirmDialog(
             count = selectedIds.size,
             onConfirm = {
-                audioItems.filter { selectedIds.contains(it.id) }.forEach { viewModel.deleteItem(it) }
+                val selected = audioItems.filter { selectedIds.contains(it.id) }
+                val result = viewModel.deleteItems(selected)
                 selectedIds = emptySet()
                 showDeleteConfirm = false
+                if (result.consentUris.isNotEmpty()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val pending = MediaStore.createDeleteRequest(context.contentResolver, result.consentUris)
+                        deleteConsentLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                    } else if (result.consentSender != null) {
+                        deleteConsentLauncher.launch(
+                            IntentSenderRequest.Builder(result.consentSender).build()
+                        )
+                    }
+                }
             },
             onDismiss = { showDeleteConfirm = false }
         )
@@ -108,7 +134,6 @@ fun AudioScreen(
     ) { granted ->
         if (granted) viewModel.refresh()
     }
-    val context = LocalContext.current
     LaunchedEffect(Unit) {
         val alreadyGranted = ContextCompat.checkSelfPermission(context, permission) ==
             PackageManager.PERMISSION_GRANTED
@@ -136,16 +161,16 @@ fun AudioScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = { selectedIds = emptySet() }) {
-                    Text("CANCEL", color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                 }
-                Text("${selectedIds.size} SELECTED", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                Text(stringResource(R.string.selected_count, selectedIds.size), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
                 IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = LedRed)
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_desc), tint = LedRed)
                 }
             }
         } else {
             Text(
-                text = "AUDIO",
+                text = stringResource(R.string.audio_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = Amber,
                 textAlign = TextAlign.Center,
@@ -156,7 +181,7 @@ fun AudioScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "TRACKS: ${audioItems.size}",
+            text = stringResource(R.string.tracks_count, audioItems.size),
             color = White.copy(alpha = 0.4f),
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
@@ -173,7 +198,7 @@ fun AudioScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No audio tracks yet.\nToggle \"AUDIO ONLY\" on the deck to rip audio!",
+                    text = stringResource(R.string.audio_empty),
                     color = White.copy(alpha = 0.3f),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 14.sp,
@@ -263,11 +288,11 @@ private fun AudioRow(
                 )
             } else {
                 IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Amber)
+                    Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.play_desc), tint = Amber)
                 }
                 Box {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = White.copy(alpha = 0.6f))
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.menu_desc), tint = White.copy(alpha = 0.6f))
                     }
                     MediaItemDropdown(
                         item = item,

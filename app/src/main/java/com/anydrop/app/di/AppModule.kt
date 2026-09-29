@@ -3,7 +3,9 @@ package com.anydrop.app.di
 import android.content.Context
 import com.anydrop.app.data.repository.CookieRepository
 import com.anydrop.app.data.repository.DownloadRepository
+import com.anydrop.app.data.repository.DownloadTracker
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.PlaybackProgressRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.engine.YtDlpEngine
 import dagger.Module
@@ -22,9 +24,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideYtDlpEngine(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        settingsRepository: SettingsRepository
     ): YtDlpEngine {
-        val engine = YtDlpEngine(context)
+        val engine = YtDlpEngine(context, settingsRepository)
         engine.init()
         return engine
     }
@@ -54,6 +57,18 @@ object AppModule {
     fun provideSettingsRepository(
         @ApplicationContext context: Context
     ): SettingsRepository = SettingsRepository(context)
+
+    @Provides
+    @Singleton
+    fun providePlaybackProgressRepository(
+        @ApplicationContext context: Context
+    ): PlaybackProgressRepository = PlaybackProgressRepository(context)
+
+    @Provides
+    @Singleton
+    fun provideDownloadTracker(
+        @ApplicationContext context: Context
+    ): DownloadTracker = DownloadTracker(context)
 
     @Provides
     @IoDispatcher

@@ -1,12 +1,15 @@
 package com.anydrop.app.ui.settings
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.anydrop.app.R
 import com.anydrop.app.data.repository.CookieRepository
 import com.anydrop.app.data.repository.LoginPlatform
 import com.anydrop.app.data.repository.LoginPlatformRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,8 +18,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Status line shown under the platform list, with its error styling decided here. */
+data class CookieStatusMessage(val text: String, val isError: Boolean)
+
 @HiltViewModel
 class CookieImportViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val cookieRepository: CookieRepository,
     private val platformRepository: LoginPlatformRepository
 ) : ViewModel() {
@@ -56,23 +63,33 @@ class CookieImportViewModel @Inject constructor(
         refreshLoginStatus()
     }
 
-    private val _statusMessage = MutableStateFlow<String?>(null)
-    val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
+    private val _statusMessage = MutableStateFlow<CookieStatusMessage?>(null)
+    val statusMessage: StateFlow<CookieStatusMessage?> = _statusMessage.asStateFlow()
+
+    private fun errorText(fallbackRes: Int, exception: Throwable?): String =
+        appContext.getString(
+            R.string.error_with_message,
+            exception?.message ?: appContext.getString(fallbackRes)
+        )
 
     fun importCookies(uri: Uri) {
         viewModelScope.launch {
             val result = cookieRepository.importFromUri(uri)
             _statusMessage.value = if (result.isSuccess) {
-                "Cookies imported successfully"
+                CookieStatusMessage(appContext.getString(R.string.cookie_success), isError = false)
             } else {
-                "Error: ${result.exceptionOrNull()?.message ?: "Import failed"}"
+                CookieStatusMessage(
+                    errorText(R.string.cookie_import_failed, result.exceptionOrNull()),
+                    isError = true
+                )
             }
         }
     }
 
     fun clearCookies() {
         cookieRepository.clearCookies()
-        _statusMessage.value = "Cookies cleared"
+        _statusMessage.value =
+            CookieStatusMessage(appContext.getString(R.string.cookies_cleared), isError = false)
     }
 
     /** Save cookies captured from the in-app WebView login. */
@@ -80,9 +97,15 @@ class CookieImportViewModel @Inject constructor(
         viewModelScope.launch {
             val result = cookieRepository.saveCookiesFromWebView(domain, rawCookies, requiredCookie)
             _statusMessage.value = if (result.isSuccess) {
-                "Logged in — cookies saved for $domain"
+                CookieStatusMessage(
+                    appContext.getString(R.string.web_login_saved, domain),
+                    isError = false
+                )
             } else {
-                "Error: ${result.exceptionOrNull()?.message ?: "Login capture failed"}"
+                CookieStatusMessage(
+                    errorText(R.string.web_login_capture_failed, result.exceptionOrNull()),
+                    isError = true
+                )
             }
             refreshLoginStatus()
         }

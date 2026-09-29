@@ -7,6 +7,7 @@ import android.os.Environment
 import android.provider.Settings
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.data.model.MediaSource
 import com.anydrop.app.engine.YtDlpEngine
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -97,6 +98,27 @@ class DownloadRepository(
 
     fun cancelDownload() {
         ytDlpEngine.cancel()
+    }
+
+    /**
+     * Re-export a finished private download into the public MediaStore on a later
+     * launch (the process died before the normal export ran). Returns true when a
+     * complete file was written to the public gallery. [MediaSource] is inferred
+     * from the owning AnyDrop subfolder.
+     */
+    fun reexportToMediaStore(outputPath: String): Boolean {
+        val file = File(outputPath)
+        if (!file.exists() || file.length() <= 0L) return false
+        val parentName = file.parentFile?.name.orEmpty()
+        val item = MediaItem(
+            id = file.nameWithoutExtension,
+            title = file.nameWithoutExtension,
+            localFilePath = file.absolutePath,
+            source = MediaSource.UNKNOWN,
+            isAudio = parentName == "Audio",
+            isImage = parentName == "Images"
+        )
+        return runCatching { indexInMediaStore(item); true }.getOrDefault(false)
     }
 
     /**

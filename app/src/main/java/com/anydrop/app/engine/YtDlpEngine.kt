@@ -2,9 +2,11 @@ package com.anydrop.app.engine
 
 import android.content.Context
 import android.util.Log
+import com.anydrop.app.R
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.data.model.MediaSource
+import com.anydrop.app.data.repository.SettingsRepository
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDLException
@@ -18,11 +20,16 @@ import java.io.File
 import java.util.UUID
 
 class YtDlpEngine(
-    private val context: Context
+    private val context: Context,
+    private val settingsRepository: SettingsRepository
 ) {
 
     private var processId: String? = null
     private var ffmpegDir: File? = null
+
+    private companion object {
+        const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+    }
 
     data class FormatInfo(
         val id: String,
@@ -52,8 +59,16 @@ class YtDlpEngine(
         }
         Thread {
             try {
-                Log.i("YtDlpEngine", "Checking for yt-dlp update...")
-                YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.NIGHTLY)
+                // Only check for a nightly update once a day — keeps cold starts
+                // cheap instead of hitting the network on every launch.
+                val last = settingsRepository.lastYtDlpUpdateCheck()
+                if (System.currentTimeMillis() - last >= UPDATE_CHECK_INTERVAL_MS) {
+                    Log.i("YtDlpEngine", "Checking for yt-dlp update...")
+                    YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.NIGHTLY)
+                    settingsRepository.markYtDlpUpdateCheck()
+                } else {
+                    Log.i("YtDlpEngine", "yt-dlp update check skipped (checked recently)")
+                }
             } catch (e: Exception) {
                 Log.w("YtDlpEngine", "yt-dlp update failed (non-fatal)", e)
             }
@@ -623,11 +638,11 @@ class YtDlpEngine(
                         )
                     )
                 } else {
-                    trySend(DownloadState.Error("Failed to save image"))
+                    trySend(DownloadState.Error(context.getString(R.string.error_save_image)))
                 }
             } catch (e: Exception) {
                 Log.w("YtDlpEngine", "Direct image download failed", e)
-                trySend(DownloadState.Error(e.message ?: "Image download failed"))
+                trySend(DownloadState.Error(e.message ?: context.getString(R.string.error_image_download)))
             }
             close()
             return@callbackFlow
@@ -643,7 +658,7 @@ class YtDlpEngine(
             File(f.parentFile, f.nameWithoutExtension).absolutePath
         }
 
-        var lastError = "Image download failed"
+        var lastError = context.getString(R.string.error_image_download)
         var succeeded = false
 
         for ((index, client) in clients.withIndex()) {
@@ -721,7 +736,7 @@ class YtDlpEngine(
         height: Int,
         cookieFile: File? = null
     ): Flow<DownloadState> = callbackFlow {
-        trySend(DownloadState.Progress(0, "Starting...", ""))
+        trySend(DownloadState.Progress(0, context.getString(R.string.progress_starting), ""))
 
         processId = UUID.randomUUID().toString()
 
@@ -731,30 +746,30 @@ class YtDlpEngine(
         val tempAudioPath = File(downloadDir, ".temp_audio_$timestamp.m4a").absolutePath
 
         try {
-            trySend(DownloadState.Progress(5, "Downloading video...", ""))
+            trySend(DownloadState.Progress(5, context.getString(R.string.progress_downloading_video), ""))
             var videoFormat = "bestvideo[height<=$height]"
             var videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile)
             if (videoFile == null || !videoFile.exists()) {
-                trySend(DownloadState.Progress(5, "Retrying video without height restriction...", ""))
+                trySend(DownloadState.Progress(5, context.getString(R.string.progress_retrying_video), ""))
                 videoFormat = "bestvideo"
                 videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile)
                 if (videoFile == null || !videoFile.exists()) {
-                    trySend(DownloadState.Error("Failed to download video"))
+                    trySend(DownloadState.Error(context.getString(R.string.error_video_download)))
                     close()
                     return@callbackFlow
                 }
             }
-            trySend(DownloadState.Progress(45, "Downloading audio...", ""))
+            trySend(DownloadState.Progress(45, context.getString(R.string.progress_downloading_audio), ""))
 
             val audioFile = downloadRaw(url, "bestaudio[ext=m4a]", tempAudioPath, cookieFile)
 
             if (audioFile != null && audioFile.exists()) {
-                trySend(DownloadState.Progress(75, "Merging audio...", ""))
+                trySend(DownloadState.Progress(75, context.getString(R.string.progress_merging_audio), ""))
                 val muxed = MediaMuxerUtil.mux(videoFile.absolutePath, audioFile.absolutePath, outputPath)
                 videoFile.delete()
                 audioFile.delete()
                 if (!muxed) {
-                    trySend(DownloadState.Error("Failed to merge audio"))
+                    trySend(DownloadState.Error(context.getString(R.string.error_merge_audio)))
                     close()
                     return@callbackFlow
                 }
@@ -772,13 +787,13 @@ class YtDlpEngine(
                     source = url.detectSource()
                 )))
             } else {
-                trySend(DownloadState.Error("Output file not found"))
+                trySend(DownloadState.Error(context.getString(R.string.error_output_not_found)))
             }
         } catch (e: CanceledException) {
             trySend(DownloadState.Cancelled)
         } catch (e: Exception) {
             Log.e("YtDlpEngine", "Download with merge failed", e)
-            trySend(DownloadState.Error(e.message ?: "Download failed"))
+            trySend(DownloadState.Error(e.message ?: context.getString(R.string.error_download_failed)))
         } finally {
             close()
         }

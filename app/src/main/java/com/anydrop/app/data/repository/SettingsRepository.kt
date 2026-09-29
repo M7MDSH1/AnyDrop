@@ -49,10 +49,18 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean(KEY_DARK_MODE, true)
         set(value) = prefs.edit().putBoolean(KEY_DARK_MODE, value).apply()
 
+    /** Last time (epoch millis) a yt-dlp update check was attempted, to throttle it. */
+    fun lastYtDlpUpdateCheck(): Long = prefs.getLong(KEY_YTDLP_LAST_UPDATE, 0L)
+
+    fun markYtDlpUpdateCheck() {
+        prefs.edit().putLong(KEY_YTDLP_LAST_UPDATE, System.currentTimeMillis()).apply()
+    }
+
     companion object {
         private const val KEY_MAX_QUALITY = "max_quality_height"
         private const val KEY_AUTO_DETECT = "auto_detect_links"
         private const val KEY_DARK_MODE = "dark_mode"
+        private const val KEY_YTDLP_LAST_UPDATE = "ytdlp_last_update"
 
         const val MAX_QUALITY_BEST = 4320
         const val MAX_QUALITY_4K = 2160

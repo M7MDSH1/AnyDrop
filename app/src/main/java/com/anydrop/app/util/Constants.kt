@@ -3,7 +3,8 @@ package com.anydrop.app.util
 object Constants {
     const val TAG = "AnyDrop"
 
-    const val DOWNLOAD_NOTIFICATION_ID = 1001
+    const val FOREGROUND_SERVICE_NOTIFICATION_ID = 1
+    const val DOWNLOAD_PROGRESS_NOTIFICATION_ID = 1001
     const val DOWNLOAD_CHANNEL_ID = "anydrop_downloads"
 
     const val COOKIE_FILE_KEY = "cookies.txt"
@@ -11,6 +12,8 @@ object Constants {
 
     const val ACTION_DOWNLOAD_START = "com.anydrop.app.DOWNLOAD_START"
     const val ACTION_DOWNLOAD_CANCEL = "com.anydrop.app.DOWNLOAD_CANCEL"
+    const val ACTION_DOWNLOAD_COMPLETE = "com.anydrop.app.DOWNLOAD_COMPLETE"
+    const val ACTION_DOWNLOAD_FAILED = "com.anydrop.app.DOWNLOAD_FAILED"
     const val ACTION_DOWNLOAD_PROGRESS = "com.anydrop.app.DOWNLOAD_PROGRESS"
 
     val SUPPORTED_DOMAINS = listOf(

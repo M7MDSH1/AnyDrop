@@ -39,11 +39,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.anydrop.app.R
 import com.anydrop.app.data.repository.LoginPlatform
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
@@ -111,18 +113,18 @@ fun CookieImportScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back_desc),
                     tint = Amber
                 )
             }
         }
         Text(
-            text = "SESSION SIGNAL",
+            text = stringResource(R.string.settings_session_signal),
             style = MaterialTheme.typography.headlineMedium,
             color = Amber
         )
         Text(
-            text = "Log in to platforms to download their content",
+            text = stringResource(R.string.session_signal_subtitle),
             color = White.copy(alpha = 0.5f),
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
@@ -156,7 +158,7 @@ fun CookieImportScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Amber),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("+  ADD PLATFORM", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    Text(stringResource(R.string.add_platform_btn), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                 }
             }
         }
@@ -165,8 +167,8 @@ fun CookieImportScreen(
 
         statusMessage?.let {
             Text(
-                text = it,
-                color = if (it.startsWith("Error")) LedRed else LedGreen,
+                text = it.text,
+                color = if (it.isError) LedRed else LedGreen,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center
@@ -177,7 +179,7 @@ fun CookieImportScreen(
 
         // Fallback: import a cookies.txt file.
         Text(
-            text = "— or import a cookies.txt file —",
+            text = stringResource(R.string.cookies_or_import),
             color = White.copy(alpha = 0.35f),
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp
@@ -189,7 +191,7 @@ fun CookieImportScreen(
             colors = ButtonDefaults.outlinedButtonColors(contentColor = White.copy(alpha = 0.6f)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("SELECT cookies.txt", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            Text(stringResource(R.string.btn_select_cookies), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
         }
     }
 }
@@ -222,9 +224,9 @@ private fun PlatformRow(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (loggedIn) {
-                    Text("✓ LOGGED IN", color = LedGreen, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    Text(stringResource(R.string.logged_in), color = LedGreen, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 } else {
-                    Text("LOG IN ›", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    Text(stringResource(R.string.log_in), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 }
                 if (onRemove != null) {
                     Spacer(modifier = Modifier.height(0.dp))
@@ -247,13 +249,13 @@ private fun AddPlatformDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text("ADD PLATFORM", color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.add_platform_title), color = Amber, fontFamily = FontFamily.Monospace) },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name (e.g. Facebook)") },
+                    label = { Text(stringResource(R.string.add_platform_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -261,14 +263,14 @@ private fun AddPlatformDialog(
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("Login URL") },
+                    label = { Text(stringResource(R.string.add_platform_url)) },
                     placeholder = { Text("https://www.facebook.com/login") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "The cookie domain is detected from the URL automatically.",
+                    stringResource(R.string.add_platform_auto_domain),
                     color = White.copy(alpha = 0.4f),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 9.sp
@@ -280,12 +282,12 @@ private fun AddPlatformDialog(
                 onClick = { if (name.isNotBlank() && url.isNotBlank()) onAdd(name, url) },
                 enabled = name.isNotBlank() && url.isNotBlank()
             ) {
-                Text("ADD", color = Amber, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_add), color = Amber, fontFamily = FontFamily.Monospace)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
             }
         }
     )

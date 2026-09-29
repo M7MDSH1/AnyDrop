@@ -21,10 +21,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anydrop.app.R
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AmberDim
@@ -52,7 +54,7 @@ fun DeckControls(
         OutlinedTextField(
             value = url,
             onValueChange = onUrlChange,
-            placeholder = { Text("Paste URL here...", fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+            placeholder = { Text(stringResource(R.string.paste_url_hint), fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(4.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -72,7 +74,7 @@ fun DeckControls(
                     onClick = onPaste,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Amber)
                 ) {
-                    Text("PASTE", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.paste_btn), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                 }
             }
         )
@@ -90,7 +92,7 @@ fun DeckControls(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "● REC",
+                            text = stringResource(R.string.recording_indicator),
                             color = LedRed,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace
@@ -117,14 +119,14 @@ fun DeckControls(
                     ) {
                         // 2nd field carries a phase label ("Starting…") or live speed.
                         Text(
-                            text = state.speed.ifBlank { "downloading" },
+                            text = state.speed.ifBlank { stringResource(R.string.downloading_status) },
                             color = White.copy(alpha = 0.6f),
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
                         )
                         if (state.eta.isNotBlank()) {
                             Text(
-                                text = "ETA ${state.eta}",
+                                text = stringResource(R.string.eta_format, state.eta),
                                 color = White.copy(alpha = 0.6f),
                                 fontSize = 10.sp,
                                 fontFamily = FontFamily.Monospace
@@ -141,12 +143,12 @@ fun DeckControls(
                     ),
                     shape = RoundedCornerShape(4.dp)
                 ) {
-                    Text("■ STOP", fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.btn_stop), fontFamily = FontFamily.Monospace)
                 }
             }
             is DownloadState.Completed -> {
                 Text(
-                    text = "DOWNLOAD COMPLETE",
+                    text = stringResource(R.string.download_complete),
                     color = LedGreen,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
@@ -154,7 +156,7 @@ fun DeckControls(
             }
             is DownloadState.Error -> {
                 Text(
-                    text = "ERROR: ${state.message}",
+                    text = stringResource(R.string.error_with_message, state.message),
                     color = LedRed,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
@@ -172,7 +174,7 @@ fun DeckControls(
                     modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
                     Text(
-                        text = "●  RECORD",
+                        text = stringResource(R.string.btn_record),
                         fontSize = 14.sp,
                         fontFamily = FontFamily.Monospace,
                         letterSpacing = 2.sp

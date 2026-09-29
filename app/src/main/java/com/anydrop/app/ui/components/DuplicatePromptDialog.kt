@@ -5,8 +5,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
+import com.anydrop.app.R
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.MediumGray
 import com.anydrop.app.ui.theme.White
@@ -28,15 +30,13 @@ fun DuplicatePromptDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         containerColor = MediumGray,
-        title = { Text("ALREADY DOWNLOADED", color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.duplicate_title), color = Amber, fontFamily = FontFamily.Monospace) },
         text = {
             Text(
                 text = if (copyCount > 1) {
-                    "\"$title\" is already downloaded $copyCount times. " +
-                        "Replace the oldest copy, download it again as a new file, or cancel?"
+                    stringResource(R.string.duplicate_message_multi, title, copyCount)
                 } else {
-                    "\"$title\" is already downloaded. " +
-                        "Replace the old one, download it again as a new file, or cancel?"
+                    stringResource(R.string.duplicate_message_single, title)
                 },
                 color = White,
                 fontFamily = FontFamily.Monospace,
@@ -45,14 +45,14 @@ fun DuplicatePromptDialog(
         },
         confirmButton = {
             TextButton(onClick = onReplace) {
-                Text("REPLACE", color = Amber, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_replace), color = Amber, fontFamily = FontFamily.Monospace)
             }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = onDownloadAnyway) {
                     Text(
-                        "DOWNLOAD ANYWAY",
+                        stringResource(R.string.btn_download_anyway),
                         color = White,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp
@@ -60,7 +60,7 @@ fun DuplicatePromptDialog(
                 }
                 TextButton(onClick = onCancel) {
                     Text(
-                        "CANCEL",
+                        stringResource(R.string.btn_cancel),
                         color = White.copy(alpha = 0.6f),
                         fontFamily = FontFamily.Monospace
                     )

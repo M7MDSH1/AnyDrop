@@ -16,10 +16,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.anydrop.app.R
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -49,10 +51,10 @@ fun WebLoginScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             TextButton(onClick = onCancel) {
-                Text("CANCEL", color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             }
             Text(
-                "LOG IN, THEN TAP DONE",
+                stringResource(R.string.web_login_hint),
                 color = White.copy(alpha = 0.6f),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
@@ -67,7 +69,7 @@ fun WebLoginScreen(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Amber, contentColor = Black)
             ) {
-                Text("DONE", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                Text(stringResource(R.string.btn_done), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
             }
         }
 

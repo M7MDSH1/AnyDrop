@@ -28,11 +28,12 @@ object Routes {
 fun AnyDropNavGraph(
     navController: NavHostController,
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
-    scrollToTopFlow: Flow<String> = emptyFlow()
+    scrollToTopFlow: Flow<String> = emptyFlow(),
+    startDestination: String = Routes.TAPE_DECK
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.TAPE_DECK,
+        startDestination = startDestination,
         modifier = modifier
     ) {
         composable(Routes.TAPE_DECK) {
@@ -66,7 +67,8 @@ fun AnyDropNavGraph(
                     navController.navigate("player/$targetId") {
                         popUpTo("player/{mediaId}") { inclusive = true }
                     }
-                }
+                },
+                onExit = { navController.popBackStack() }
             )
         }
 

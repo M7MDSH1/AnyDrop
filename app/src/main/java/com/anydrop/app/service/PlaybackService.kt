@@ -1,10 +1,13 @@
 package com.anydrop.app.service
 
+import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.anydrop.app.data.repository.readAppLanguageSync
+import com.anydrop.app.util.LocaleHelper
 
 /**
  * Foreground media service that hosts the ExoPlayer used for AUDIO playback so it
@@ -14,6 +17,12 @@ import androidx.media3.session.MediaSessionService
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(
+            LocaleHelper.wrapAppLocale(newBase, readAppLanguageSync(newBase))
+        )
+    }
 
     override fun onCreate() {
         super.onCreate()

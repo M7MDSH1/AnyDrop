@@ -1,7 +1,12 @@
 package com.anydrop.app.ui.tape_deck
 
+import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
@@ -53,7 +59,9 @@ import com.anydrop.app.ui.tape_deck.components.LEDIndicator
 import com.anydrop.app.ui.tape_deck.components.ReelAnimation
 import com.anydrop.app.util.Constants
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
+import com.anydrop.app.R
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AmberBright
 import com.anydrop.app.ui.theme.Black
@@ -83,6 +91,18 @@ fun TapeDeckScreen(
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
     val context = LocalContext.current
 
+    // One-time POST_NOTIFICATIONS request at the first download attempt (Android
+    // 13+); downloads proceed regardless, in-app feedback is unaffected.
+    val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    fun ensureNotificationPermission(run: () -> Unit) {
+        run()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     // Foreground-only clipboard monitoring: while the deck is on screen, poll the
     // clipboard and offer any new link (Android forbids background clipboard reads
     // since API 29, so this only works while the app is visible — which is honest).
@@ -109,8 +129,8 @@ fun TapeDeckScreen(
         DuplicatePromptDialog(
             title = prompt.title,
             copyCount = prompt.copyCount,
-            onReplace = { viewModel.confirmReplaceDownload() },
-            onDownloadAnyway = { viewModel.confirmDownloadAnyway() },
+            onReplace = { ensureNotificationPermission { viewModel.confirmReplaceDownload() } },
+            onDownloadAnyway = { ensureNotificationPermission { viewModel.confirmDownloadAnyway() } },
             onCancel = { viewModel.dismissDuplicatePrompt() }
         )
     }
@@ -129,7 +149,7 @@ fun TapeDeckScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "ANYDROP",
+            text = stringResource(R.string.brand_wordmark),
             style = MaterialTheme.typography.displayLarge,
             color = Amber,
             modifier = Modifier.fillMaxWidth(),
@@ -137,7 +157,7 @@ fun TapeDeckScreen(
         )
 
         Text(
-            text = "TAPE DECK v1.0",
+            text = stringResource(R.string.tape_deck_version),
             color = White.copy(alpha = 0.5f),
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
@@ -150,10 +170,10 @@ fun TapeDeckScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            LEDIndicator(label = "POWER", isOn = true, onColor = LedGreen)
-            LEDIndicator(label = "REC", isOn = isSpinning, onColor = LedRed, blink = isSpinning)
-            LEDIndicator(label = "SIGNAL", isOn = isCookieImported, onColor = LedBlue)
-            LEDIndicator(label = "LINK", isOn = url.isNotBlank(), onColor = Amber)
+            LEDIndicator(label = stringResource(R.string.led_power), isOn = true, onColor = LedGreen)
+            LEDIndicator(label = stringResource(R.string.led_rec), isOn = isSpinning, onColor = LedRed, blink = isSpinning)
+            LEDIndicator(label = stringResource(R.string.led_signal), isOn = isCookieImported, onColor = LedBlue)
+            LEDIndicator(label = stringResource(R.string.led_link), isOn = url.isNotBlank(), onColor = Amber)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -184,7 +204,7 @@ fun TapeDeckScreen(
         if (multiImage) {
             MultiImagePicker(
                 images = imageEntries,
-                onDownloadSelected = { chosen -> viewModel.downloadImages(chosen) }
+                onDownloadSelected = { chosen -> ensureNotificationPermission { viewModel.downloadImages(chosen) } }
             )
             Spacer(modifier = Modifier.height(12.dp))
         } else if (availableFormats.isNotEmpty()) {
@@ -215,14 +235,14 @@ fun TapeDeckScreen(
                 ) {
                     AsyncImage(
                         model = previewModel,
-                        contentDescription = "Image preview",
+                        contentDescription = stringResource(R.string.preview_image_desc),
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "PREVIEW",
+                    stringResource(R.string.preview_label),
                     color = Amber.copy(alpha = 0.7f),
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
@@ -245,7 +265,7 @@ fun TapeDeckScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "Fetching available qualities...",
+                    stringResource(R.string.fetching_qualities),
                     color = White.copy(alpha = 0.5f),
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
@@ -267,7 +287,7 @@ fun TapeDeckScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "LINK DETECTED",
+                        text = stringResource(R.string.link_detected),
                         color = LedGreen,
                         fontSize = 9.sp,
                         fontFamily = FontFamily.Monospace,
@@ -286,7 +306,7 @@ fun TapeDeckScreen(
                     viewModel.onUrlChange(link)
                     detectedLink = null
                 }) {
-                    Text("LOAD", color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    Text(stringResource(R.string.load_link), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 }
                 TextButton(onClick = { detectedLink = null }) {
                     Text("✕", color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
@@ -300,7 +320,7 @@ fun TapeDeckScreen(
             downloadState = downloadState,
             downloadEnabled = canDownload,
             onUrlChange = viewModel::onUrlChange,
-            onDownload = viewModel::startDownload,
+            onDownload = { ensureNotificationPermission { viewModel.startDownload() } },
             onCancel = viewModel::cancelDownload,
             onPaste = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -327,14 +347,16 @@ private fun MultiImagePicker(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "${images.size} IMAGES · tap to select",
+                stringResource(R.string.deck_images_tap_select, images.size),
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 letterSpacing = 1.sp
             )
             Text(
-                if (selected.size == images.size) "CLEAR ALL" else "SELECT ALL",
+                stringResource(
+                    if (selected.size == images.size) R.string.clear_all else R.string.select_all
+                ),
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
@@ -369,7 +391,7 @@ private fun MultiImagePicker(
                 ) {
                     AsyncImage(
                         model = img.imageUrl,
-                        contentDescription = "Image ${index + 1}",
+                        contentDescription = stringResource(R.string.share_image_number, index + 1),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -398,7 +420,7 @@ private fun MultiImagePicker(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                "DOWNLOAD SELECTED (${selected.size})",
+                stringResource(R.string.download_selected_count, selected.size),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp
             )
@@ -417,7 +439,7 @@ private fun FormatSelector(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "SELECT QUALITY",
+            text = stringResource(R.string.select_quality),
             color = White.copy(alpha = 0.4f),
             fontSize = 9.sp,
             fontFamily = FontFamily.Monospace,
@@ -519,7 +541,7 @@ private fun VUMeter(modifier: Modifier = Modifier, level: Float = 0f) {
             }
         }
         Text(
-            text = "VU METER",
+            text = stringResource(R.string.vu_meter),
             color = White.copy(alpha = 0.3f),
             fontSize = 8.sp,
             fontFamily = FontFamily.Monospace,

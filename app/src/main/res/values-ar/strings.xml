@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AnyDrop</string>
+
+    <!-- Brand / shared -->
+    <string name="brand_wordmark">ANYDROP</string>
+    <string name="btn_cancel">إلغاء</string>
+    <string name="btn_close">إغلاق</string>
+    <string name="btn_add">إضافة</string>
+    <string name="btn_done">تم</string>
+    <string name="btn_retry">إعادة المحاولة</string>
+    <string name="error_with_message">خطأ: %1$s</string>
+    <string name="back_desc">رجوع</string>
+    <string name="menu_desc">القائمة</string>
+    <string name="delete_desc">حذف</string>
+    <string name="play_desc">تشغيل</string>
+    <string name="select_all">تحديد الكل</string>
+    <string name="clear_all">إلغاء التحديد</string>
+    <string name="selected_count">تم تحديد %1$d</string>
+    <string name="downloading_ellipsis">جارٍ التنزيل…</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_deck">الديك</string>
+    <string name="nav_library">المكتبة</string>
+    <string name="nav_audio">الصوتيات</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Permission gate -->
+    <string name="permission_message">يحتاج AnyDrop إلى الوصول إلى جميع الملفات لحفظ الفيديوهات في\n/storage/emulated/0/AnyDrop</string>
+    <string name="open_settings">فتح الإعدادات</string>
+    <string name="skip_downloads_may_fail">تخطّي (قد تفشل التنزيلات)</string>
+
+    <!-- Share sheet -->
+    <string name="share_select_what">اختر ما تريد تنزيله</string>
+    <string name="share_fetching">جارٍ الجلب…</string>
+    <string name="share_images_count">%1$d صورة</string>
+    <string name="share_image_number">الصورة %1$d</string>
+    <string name="share_record">●  تسجيل</string>
+    <string name="share_record_count">●  تسجيل (%1$d)</string>
+
+    <!-- Tape deck -->
+    <string name="tape_deck_version">ديك الشريط v1.0</string>
+    <string name="led_power">الطاقة</string>
+    <string name="led_rec">تسجيل</string>
+    <string name="led_signal">الإشارة</string>
+    <string name="led_link">الرابط</string>
+    <string name="vu_meter">مقياس VU</string>
+    <string name="preview_label">معاينة</string>
+    <string name="preview_image_desc">معاينة الصورة</string>
+    <string name="fetching_qualities">جارٍ جلب الجودات المتاحة…</string>
+    <string name="link_detected">تم اكتشاف رابط</string>
+    <string name="load_link">تحميل</string>
+    <string name="deck_images_tap_select">%1$d صورة · اضغط للاختيار</string>
+    <string name="download_selected_count">تنزيل المحدد (%1$d)</string>
+    <string name="select_quality">اختر الجودة</string>
+    <string name="paste_url_hint">الصق الرابط هنا…</string>
+    <string name="paste_btn">لصق</string>
+    <string name="recording_indicator">● تسجيل</string>
+    <string name="downloading_status">جارٍ التنزيل</string>
+    <string name="eta_format">الوقت المتبقي %1$s</string>
+    <string name="btn_stop">■ إيقاف</string>
+    <string name="btn_record">●  تسجيل</string>
+    <string name="download_complete">اكتمل التنزيل</string>
+
+    <!-- Library -->
+    <string name="library_title">المكتبة</string>
+    <string name="tapes_count">الأشرطة: %1$d</string>
+    <string name="sort_date">التاريخ</string>
+    <string name="sort_length">المدة</string>
+    <string name="filter_all">الكل</string>
+    <string name="filter_videos">الفيديوهات</string>
+    <string name="filter_images">الصور</string>
+    <string name="library_empty">مجموعتك فارغة.\nنزّل شيئًا لتبدأ!</string>
+
+    <!-- Audio -->
+    <string name="audio_title">الصوتيات</string>
+    <string name="tracks_count">المقاطع: %1$d</string>
+    <string name="audio_empty">لا توجد مقاطع صوتية بعد.\nفعّل \"صوت فقط\" في الديك لاستخراج الصوت!</string>
+
+    <!-- Media item actions -->
+    <string name="menu_share">مشاركة</string>
+    <string name="menu_delete">حذف</string>
+    <string name="menu_info">معلومات</string>
+    <string name="share_via">مشاركة عبر</string>
+    <string name="delete_title">حذف</string>
+    <string name="delete_confirm_single">هل أنت متأكد من حذف هذا المحتوى؟</string>
+    <string name="delete_confirm_multi">هل أنت متأكد من حذف هذه العناصر (%1$d)؟</string>
+    <string name="info_title">معلومات</string>
+    <string name="info_title_label">العنوان</string>
+    <string name="info_saved_to">محفوظ في</string>
+    <string name="info_length">المدة</string>
+    <string name="info_creator">المنشئ</string>
+    <string name="info_source">المصدر</string>
+    <string name="info_open_original">فتح الأصل ↗</string>
+    <string name="info_unknown_duration">غير معروف</string>
+
+    <!-- Duplicate prompt -->
+    <string name="duplicate_title">تم تنزيله مسبقًا</string>
+    <string name="duplicate_message_single">\"%1$s\" تم تنزيله من قبل. استبدال القديم، أم تنزيله من جديد كملف جديد، أم إلغاء؟</string>
+    <string name="duplicate_message_multi">\"%1$s\" تم تنزيله %2$d مرات. استبدال أقدم نسخة، أم تنزيله من جديد كملف جديد، أم إلغاء؟</string>
+    <string name="btn_replace">استبدال</string>
+    <string name="btn_download_anyway">تنزيل على أي حال</string>
+
+    <!-- Settings -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_session_signal">إشارة الجلسة</string>
+    <string name="settings_session_signal_sub">استيراد ملفات تعريف الارتباط للمحتوى المقيّد</string>
+    <string name="settings_appearance">المظهر</string>
+    <string name="settings_dark_sub">الوضع الداكن — اضغط للوضع الفاتح</string>
+    <string name="settings_light_sub">الوضع الفاتح — اضغط للوضع الداكن</string>
+    <string name="settings_max_quality">الجودة القصوى</string>
+    <string name="quality_best">الأفضل المتاح</string>
+    <string name="quality_4k">حتى 4K (2160p)</string>
+    <string name="quality_1080">حتى 1080p</string>
+    <string name="quality_720">حتى 720p</string>
+    <string name="quality_480">حتى 480p</string>
+    <string name="settings_auto_detect">اكتشاف الروابط تلقائيًا</string>
+    <string name="auto_detect_on">مفعّل — الروابط المنسوخة تُعرض في الديك</string>
+    <string name="auto_detect_off">معطّل</string>
+    <string name="settings_download_path">موقع التنزيل</string>
+    <string name="settings_download_path_sub">فيديو → Movies/AnyDrop · صور → Pictures/AnyDrop · صوت → Music/AnyDrop</string>
+    <string name="settings_version">ANYDROP v%1$s</string>
+    <string name="settings_tagline">⚡ ناسخ الوسائط العالمي المستوحى من الأشرطة التناظرية</string>
+    <string name="settings_creator">صُنع بواسطة M7MDSH · © 2026</string>
+    <string name="settings_language">اللغة</string>
+    <string name="language_system">لغة النظام</string>
+    <string name="language_english">الإنجليزية</string>
+    <string name="language_arabic">العربية</string>
+
+    <!-- Session signal (cookies) -->
+    <string name="session_signal_subtitle">سجّل الدخول إلى المنصات لتنزيل محتواها</string>
+    <string name="add_platform_btn">+  إضافة منصة</string>
+    <string name="cookies_or_import">— أو استورد ملف cookies.txt —</string>
+    <string name="btn_select_cookies">اختيار cookies.txt</string>
+    <string name="logged_in">✓ مسجّل الدخول</string>
+    <string name="log_in">تسجيل الدخول ›</string>
+    <string name="add_platform_title">إضافة منصة</string>
+    <string name="add_platform_name">الاسم (مثال: Facebook)</string>
+    <string name="add_platform_url">رابط تسجيل الدخول</string>
+    <string name="add_platform_auto_domain">يتم اكتشاف نطاق ملفات تعريف الارتباط من الرابط تلقائيًا.</string>
+    <string name="cookie_success">تم استيراد ملفات تعريف الارتباط بنجاح</string>
+    <string name="cookie_import_failed">فشل الاستيراد</string>
+    <string name="cookies_cleared">تم مسح ملفات تعريف الارتباط</string>
+    <string name="web_login_saved">تم تسجيل الدخول — حُفظت ملفات تعريف الارتباط لـ %1$s</string>
+    <string name="web_login_capture_failed">فشل التقاط تسجيل الدخول</string>
+    <string name="web_login_hint">سجّل الدخول ثم اضغط \"تم\"</string>
+
+    <!-- Player -->
+    <string name="player_no_media">لا توجد وسائط محمّلة</string>
+    <string name="image_viewer_desc">صورة</string>
+    <string name="player_previous">السابق</string>
+    <string name="player_next">التالي</string>
+    <string name="player_play_pause">تشغيل/إيقاف مؤقت</string>
+    <string name="player_aspect_ratio">نسبة العرض</string>
+    <string name="player_rotate">تدوير</string>
+    <string name="player_pip">صورة داخل صورة</string>
+    <string name="player_playback_failed">فشل التشغيل</string>
+    <string name="player_volume">الصوت</string>
+    <string name="player_brightness">السطوع</string>
+    <string name="player_speed">السرعة</string>
+    <string name="player_speed_1x">سرعة 1×</string>
+    <string name="player_speed_normal">عادي (1×)</string>
+    <string name="player_repeat_one">تكرار المقطع</string>
+    <string name="resize_fit">ملاءمة</string>
+    <string name="resize_fill">تمديد</string>
+    <string name="resize_zoom">تكبير</string>
+    <string name="swipe_next">التالي ▶</string>
+    <string name="swipe_prev">◀ السابق</string>
+    <string name="seek_back_feedback">« 10ث</string>
+    <string name="seek_forward_feedback">10ث »</string>
+    <string name="player_error_generic">تعذّر تشغيل هذا الفيديو.</string>
+    <string name="pip_previous">السابق</string>
+    <string name="pip_play">تشغيل</string>
+    <string name="pip_pause">إيقاف مؤقت</string>
+    <string name="pip_next">التالي</string>
+
+    <!-- Downloads / notifications -->
+    <string name="notification_channel_downloads">التنزيلات</string>
+    <string name="notification_download_active">جارٍ التنزيل…</string>
+    <string name="notification_downloading_files">جارٍ التنزيل (%1$d ملفات)</string>
+    <string name="notification_download_interrupted">فشل — انقطع التنزيل</string>
+    <string name="download_progress">جارٍ التنزيل… %1$d٪٪</string>
+    <string name="notification_complete">مكتمل</string>
+    <string name="notification_failed">فشل</string>
+    <string name="notification_cancelled">أُلغي</string>
+
+    <!-- Errors (ViewModel / engine) -->
+    <string name="error_no_media_found">لم يُعثر على وسائط قابلة للتنزيل لهذا الرابط.</string>
+    <string name="error_fetch_formats">تعذّر جلب الصيغ لهذا الرابط.</string>
+    <string name="error_save_image">فشل حفظ الصورة</string>
+    <string name="error_image_download">فشل تنزيل الصورة</string>
+    <string name="error_video_download">فشل تنزيل الفيديو</string>
+    <string name="error_merge_audio">فشل دمج الصوت</string>
+    <string name="error_output_not_found">ملف الإخراج غير موجود</string>
+    <string name="error_download_failed">فشل التنزيل</string>
+    <string name="progress_starting">البدء…</string>
+    <string name="progress_downloading_video">جارٍ تنزيل الفيديو…</string>
+    <string name="progress_retrying_video">إعادة المحاولة بدون تقييد الارتفاع…</string>
+    <string name="progress_downloading_audio">جارٍ تنزيل الصوت…</string>
+    <string name="progress_merging_audio">جارٍ دمج الصوت…</string>
+</resources>
