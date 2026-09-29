@@ -4,7 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.data.repository.DeckSessionRepository
+import com.anydrop.app.data.repository.DeletionResult
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.PlaybackProgressRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +19,9 @@ import javax.inject.Inject
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
-    private val libraryRepository: LibraryRepository
+    private val libraryRepository: LibraryRepository,
+    private val progressRepository: PlaybackProgressRepository,
+    private val deckSessionRepository: DeckSessionRepository
 ) : ViewModel() {
 
     private val _currentMedia = MutableStateFlow<MediaItem?>(null)
@@ -31,23 +36,158 @@ class PlayerViewModel @Inject constructor(
     private val _previousMediaId = MutableStateFlow<String?>(null)
     val previousMediaId: StateFlow<String?> = _previousMediaId.asStateFlow()
 
+    // ---- Per-video session state. All of it is reset on every mediaId change
+    // so nothing (resume position, save tick anchor, completion flag, restore
+    // flag) leaks from one video into the next if this VM is ever reused.
+    private val _resumePosition = MutableStateFlow(0L)
+    val resumePosition: StateFlow<Long> = _resumePosition.asStateFlow()
+    private var lastSavedPosition = 0L
+    private var completionHandled = false
+    private var restoreAttempted = false
+    private var fallbackAttempted = false
+
     init {
         val mediaId = savedStateHandle.get<String>("mediaId")
         viewModelScope.launch {
-            // Combine video + audio items so the player can resolve and navigate
-            // between both. Audio ids are prefixed "aud_" (see LibraryRepository).
+            // The player navigation order mirrors the library's current view:
+            // media type filter (ALL / VIDEOS / IMAGES) + sort (DATE / LENGTH),
+            // with audio tracks appended at the end (newest first) so swiping
+            // from the Audio tab still works. Shared via LibraryRepository so
+            // the player can never disagree with what the Library screen shows.
             combine(
                 libraryRepository.mediaItems,
-                libraryRepository.audioItems
-            ) { videos, audios -> videos + audios }
+                libraryRepository.audioItems,
+                libraryRepository.filterMode,
+                libraryRepository.sortMode
+            ) { media, audios, filter, sort ->
+                libraryRepository.orderedMedia(media, filter, sort) +
+                    audios.sortedByDescending { it.downloadedAt }
+            }
                 .collect { items ->
                     _allMedia.value = items
-                    if (mediaId != null && _currentMedia.value == null) {
-                        _currentMedia.value = items.find { it.id == mediaId }
+                    if (mediaId != null) {
+                        val resolved = items.find { it.id == mediaId }
+                        if (resolved != null && resolved.id != _currentMedia.value?.id) {
+                            startSession(resolved)
+                        } else if (resolved == null && !fallbackAttempted && items.isNotEmpty()) {
+                            // The requested media no longer resolves (e.g. deleted or the
+                            // scan is empty) — fall back to the last played media instead
+                            // of leaving the player stuck on "NO MEDIA LOADED".
+                            fallbackAttempted = true
+                            val lastPlayed = deckSessionRepository.lastPlayedMediaId()
+                            val fallback = lastPlayed.takeIf { it.isNotBlank() && it != mediaId }
+                                ?.let { id -> items.find { it.id == id } }
+                            if (fallback != null && fallback.id != _currentMedia.value?.id) {
+                                startSession(fallback)
+                            }
+                        }
                     }
                     updateNavigation()
                 }
         }
+    }
+
+    /** Begin a watch session for [media], resetting every per-video piece of state. */
+    private fun startSession(media: MediaItem) {
+        _currentMedia.value = media
+        lastSavedPosition = 0L
+        completionHandled = false
+        restoreAttempted = false
+        fallbackAttempted = false
+        deckSessionRepository.saveLastPlayedMediaId(media.id)
+        viewModelScope.launch {
+            _resumePosition.value = progressRepository.getPosition(media.id) ?: 0L
+        }
+    }
+
+    /**
+     * Called on STATE_READY for the current video. Returns the position to seek
+     * to before playback starts, or 0 to start from the beginning. Only the
+     * FIRST STATE_READY counts — later READY events (post-rebuffer) are no-ops,
+     * so a mid-playback glitch can never yank the user backwards.
+     */
+    fun onPlayerReady(durationMs: Long): Long {
+        val media = _currentMedia.value
+        if (media == null || media.isImage || media.isAudio) return 0L
+        if (restoreAttempted) return 0L
+        restoreAttempted = true
+        val saved = _resumePosition.value
+        if (saved <= 10_000L || durationMs <= 0L || saved >= durationMs - 3_000L) return 0L
+        lastSavedPosition = saved
+        return saved
+    }
+
+    /**
+     * Periodic playback heartbeat (the player polls ~every 500ms):
+     *  - marks the video completed when within the last 3 seconds (whichever
+     *    comes first with STATE_ENDED) — suppressed while [loopMode] is on so
+     *    repeat-one looping doesn't clear the user's watch progress;
+     *  - otherwise saves every 5 seconds of playback.
+     */
+    fun onPlaybackTick(isPlaying: Boolean, positionMs: Long, durationMs: Long, loopMode: Boolean = false) {
+        val media = _currentMedia.value
+        if (media == null || media.isImage || media.isAudio) return
+        if (durationMs <= 0L) return
+        if (!loopMode && !completionHandled && positionMs >= durationMs - 3_000L) {
+            complete()
+            return
+        }
+        if (!isPlaying) return
+        if (positionMs - lastSavedPosition >= 5_000L) {
+            lastSavedPosition = positionMs
+            saveProgress(positionMs)
+        }
+    }
+
+    /** Save immediately (user seek or activity pause). */
+    fun onSeek(positionMs: Long) {
+        saveProgress(positionMs)
+    }
+
+    private fun saveProgress(positionMs: Long) {
+        val media = _currentMedia.value
+        if (media == null || media.isImage || media.isAudio) return
+        // Never record the first 10 seconds — too early to be meaningful.
+        if (positionMs < 10_000L) return
+        viewModelScope.launch {
+            progressRepository.savePosition(media.id, positionMs)
+        }
+    }
+
+    /** Mark the video completed and drop its saved position (starts from 0 next time). */
+    fun complete() {
+        if (completionHandled) return
+        completionHandled = true
+        val media = _currentMedia.value ?: return
+        viewModelScope.launch {
+            progressRepository.clearPosition(media.id)
+        }
+    }
+
+    /**
+     * Delete the currently playing/displayed item (MediaStore consent handled
+     * by the caller via [PlayerDeleteResult.consent]) and refresh the library
+     * so it disappears from the queue and the list screens. The neighbouring
+     * item to advance to is captured atomically from the in-memory queue so a
+     * delete can never race the navigation-target computation.
+     */
+    fun deleteCurrent(): PlayerDeleteResult {
+        val media = _currentMedia.value ?: return PlayerDeleteResult(DeletionResult(), null)
+        val all = _allMedia.value
+        val index = all.indexOfFirst { it.id == media.id }
+        val advanceTargetId = if (index >= 0) {
+            all.getOrNull(index + 1)?.id ?: all.getOrNull(index - 1)?.id
+        } else {
+            null
+        }
+        return PlayerDeleteResult(
+            consent = libraryRepository.deleteItems(listOf(media)),
+            advanceTargetId = advanceTargetId
+        )
+    }
+
+    fun refreshLibrary() {
+        viewModelScope.launch { libraryRepository.refreshLibrary() }
     }
 
     private fun updateNavigation() {
@@ -62,3 +202,9 @@ class PlayerViewModel @Inject constructor(
         _nextMediaId.value = if (index < all.size - 1) all[index + 1].id else null
     }
 }
+
+/** Result of deleting the current player item: consent info + where to go next. */
+data class PlayerDeleteResult(
+    val consent: DeletionResult,
+    val advanceTargetId: String?
+)

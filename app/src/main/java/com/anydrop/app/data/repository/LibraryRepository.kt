@@ -2,6 +2,7 @@ package com.anydrop.app.data.repository
 
 import android.content.ContentUris
 import android.content.Context
+import android.content.IntentSender
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -17,6 +18,17 @@ import java.io.File
 
 enum class SortMode { DATE, DURATION }
 
+/** Media-type filter for the library grid (and player navigation). */
+enum class MediaFilter { ALL, VIDEOS, IMAGES }
+
+/** Result of a batch delete: which URIs need user consent and how to ask. */
+data class DeletionResult(
+    /** MediaStore rows the app doesn't own (Android 11+ → createDeleteRequest). */
+    val consentUris: List<Uri> = emptyList(),
+    /** Android 10 only: the system consent sender from RecoverableSecurityException. */
+    val consentSender: IntentSender? = null
+)
+
 class LibraryRepository(private val context: Context) {
 
     private val _mediaItems = MutableStateFlow<List<MediaItem>>(emptyList())
@@ -28,11 +40,67 @@ class LibraryRepository(private val context: Context) {
     private val _sortMode = MutableStateFlow(SortMode.DATE)
     val sortMode: StateFlow<SortMode> = _sortMode.asStateFlow()
 
+    private val _filterMode = MutableStateFlow(MediaFilter.ALL)
+    val filterMode: StateFlow<MediaFilter> = _filterMode.asStateFlow()
+
+    private val prefs = context.getSharedPreferences("anydrop_library", Context.MODE_PRIVATE)
+    private val indexCache = LibraryIndexCache(context)
+    private var lastCacheSignature = 0L
+
     private val audioExtensions = listOf("m4a", "mp3", "opus", "aac", "ogg", "flac", "wav")
     private val imageExtensions = listOf("jpg", "jpeg", "png", "webp", "heic", "gif")
 
+    init {
+        _sortMode.value = runCatching { SortMode.valueOf(prefs.getString(KEY_SORT, SortMode.DATE.name)!!) }
+            .getOrDefault(SortMode.DATE)
+        _filterMode.value = runCatching { MediaFilter.valueOf(prefs.getString(KEY_FILTER, MediaFilter.ALL.name)!!) }
+            .getOrDefault(MediaFilter.ALL)
+    }
+
     fun setSortMode(mode: SortMode) {
         _sortMode.value = mode
+        prefs.edit().putString(KEY_SORT, mode.name).apply()
+    }
+
+    fun setFilterMode(mode: MediaFilter) {
+        _filterMode.value = mode
+        prefs.edit().putString(KEY_FILTER, mode.name).apply()
+    }
+
+    /**
+     * Show the previously cached index immediately (no MediaStore scan) so the
+     * grid is never empty on a cold start; the background refresh replaces it
+     * with fresh data moments later.
+     */
+    suspend fun loadCachedIndex() {
+        val cached = indexCache.load() ?: return
+        if (_mediaItems.value.isEmpty()) _mediaItems.value = cached.media
+        if (_audioItems.value.isEmpty()) _audioItems.value = cached.audio
+    }
+
+    /** Drop the on-disk index cache (used after re-exports / deletions). */
+    fun invalidateIndexCache() {
+        indexCache.invalidate()
+        lastCacheSignature = 0L
+    }
+
+    /**
+     * The single ordering rule for the library grid AND the player navigation,
+     * so swiping always follows exactly what the library shows:
+     *  - ALL shows videos + images; VIDEOS / IMAGES restrict to that type.
+     *  - DATE: newest → oldest. LENGTH: videos only, longest → shortest
+     *    (images have no duration, so they don't appear in LENGTH mode).
+     */
+    fun orderedMedia(items: List<MediaItem>, filter: MediaFilter, sort: SortMode): List<MediaItem> {
+        val filtered = when (filter) {
+            MediaFilter.ALL -> items
+            MediaFilter.VIDEOS -> items.filter { !it.isImage && !it.isAudio }
+            MediaFilter.IMAGES -> items.filter { it.isImage }
+        }
+        return when (sort) {
+            SortMode.DATE -> filtered.sortedByDescending { it.downloadedAt }
+            SortMode.DURATION -> filtered.filter { !it.isImage }.sortedByDescending { it.durationMs }
+        }
     }
 
     fun getDownloadDir(): File {
@@ -270,6 +338,15 @@ class LibraryRepository(private val context: Context) {
 
         _mediaItems.value = items
         refreshAudioLibrary()
+        persistIndexCache(items, _audioItems.value)
+    }
+
+    /** Rewrite the disk cache unless nothing changed since the last save. */
+    private suspend fun persistIndexCache(media: List<MediaItem>, audio: List<MediaItem>) {
+        val sig = indexCache.signature(media, audio)
+        if (sig == lastCacheSignature) return
+        lastCacheSignature = sig
+        indexCache.save(media, audio)
     }
 
     private fun refreshAudioLibrary() {
@@ -356,45 +433,73 @@ class LibraryRepository(private val context: Context) {
     }
 
     fun deleteItem(item: MediaItem): Boolean {
-        var deletedSomething = false
+        deleteItems(listOf(item))
+        return true
+    }
 
-        // 1) Delete via MediaStore content:// URI (public copy). A plain File.delete
-        //    can't remove a content URI, which is why deletes were "not working".
-        try {
+    /**
+     * Delete a batch of items. Content rows owned by this app are deleted
+     * directly; rows belonging to other apps throw SecurityException and their
+     * URIs are returned so the caller can ask the OS for permission. Real files,
+     * private-folder twins and sidecars are always cleaned up.
+     */
+    fun deleteItems(items: List<MediaItem>): DeletionResult {
+        val needConsent = mutableListOf<Uri>()
+        var consentSender: IntentSender? = null
+
+        for (item in items) {
             val uriStr = item.localUri?.toString() ?: item.localFilePath
             if (uriStr.startsWith("content://")) {
-                val rows = context.contentResolver.delete(android.net.Uri.parse(uriStr), null, null)
-                if (rows > 0) deletedSomething = true
+                val uri = Uri.parse(uriStr)
+                try {
+                    context.contentResolver.delete(uri, null, null)
+                } catch (e: SecurityException) {
+                    // Not owned by this app — the caller must ask the user.
+                    if (consentSender == null && Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                        consentSender = (e as? android.app.RecoverableSecurityException)
+                            ?.userAction?.actionIntent?.intentSender
+                    }
+                    needConsent.add(uri)
+                } catch (_: Exception) {}
             }
-        } catch (_: Exception) {}
+            deleteLocalCopies(item)
+        }
 
-        // 2) Delete the real file if localFilePath is a filesystem path.
+        invalidateIndexCache()
+
+        return DeletionResult(needConsent, consentSender)
+    }
+
+    /**
+     * Delete everything on disk for this item regardless of MediaStore:
+     * the real file (when [MediaItem.localFilePath] is a filesystem path) and
+     * the PRIVATE-folder twin (+ sidecar) matched by file name across all
+     * AnyDrop subfolders, so no copy lingers to reappear on the next scan.
+     */
+    private fun deleteLocalCopies(item: MediaItem) {
         try {
             if (!item.localFilePath.startsWith("content://")) {
                 val f = File(item.localFilePath)
-                if (f.exists() && f.delete()) deletedSomething = true
+                if (f.exists()) f.delete()
                 File("${item.localFilePath}.meta.json").takeIf { it.exists() }?.delete()
             }
         } catch (_: Exception) {}
 
-        // 3) Delete the PRIVATE-folder twin (+ its sidecar) matched by file name,
-        //    across all type subfolders. Ensures no copy lingers to reappear on scan.
         try {
             val baseName = File(item.title).nameWithoutExtension.ifBlank {
                 File(item.localFilePath).nameWithoutExtension
             }
-            listOf(getVideoDir(), getAudioDir(), getImageDir(), getDownloadDir()).forEach { dir ->
-                dir.listFiles()?.forEach { f ->
-                    if (f.isFile && f.nameWithoutExtension == baseName) {
-                        f.delete()
-                        File("${f.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
-                        deletedSomething = true
+            if (baseName.isNotBlank()) {
+                listOf(getVideoDir(), getAudioDir(), getImageDir(), getDownloadDir()).forEach { dir ->
+                    dir.listFiles()?.forEach { f ->
+                        if (f.isFile && f.nameWithoutExtension == baseName) {
+                            f.delete()
+                            File("${f.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
+                        }
                     }
                 }
             }
         } catch (_: Exception) {}
-
-        return deletedSomething
     }
 
     /** Read a video/audio file's duration in ms (0 on failure). */
@@ -542,6 +647,7 @@ class LibraryRepository(private val context: Context) {
         val baseName = oldest.nameWithoutExtension
         oldest.delete()
         File("${oldest.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
+        invalidateIndexCache()
         // Public MediaStore twin (same display name).
         _mediaItems.value.firstOrNull {
             !it.isImage && !it.isAudio && File(it.title).nameWithoutExtension == baseName
@@ -563,5 +669,10 @@ class LibraryRepository(private val context: Context) {
 
     fun getImageOutputPath(url: String, title: String = "", quality: String = ""): String {
         return File(getImageDir(), buildFileName(title, url, quality, "jpg")).absolutePath
+    }
+
+    companion object {
+        private const val KEY_SORT = "sort_mode"
+        private const val KEY_FILTER = "filter_mode"
     }
 }

@@ -1,29 +1,201 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AnyDrop</string>
-    <string name="tab_tape_deck">Tape Deck</string>
-    <string name="tab_library">Library</string>
-    <string name="tab_player">Player</string>
-    <string name="tab_settings">Settings</string>
-    <string name="paste_url">Paste URL here…</string>
-    <string name="btn_download">RECORD</string>
-    <string name="btn_cancel">STOP</string>
-    <string name="import_cookies">Import Cookies</string>
-    <string name="cookie_import_description">Import a cookies.txt file to access restricted content on Instagram, TikTok, and Reddit.</string>
-    <string name="btn_select_file">Select cookies.txt</string>
-    <string name="cookie_success">Cookies imported successfully</string>
-    <string name="cookie_failed">Failed to import cookies</string>
-    <string name="download_progress">Downloading… %1$d%%</string>
-    <string name="notification_channel_downloads">Downloads</string>
-    <string name="notification_download_active">Downloading media…</string>
+
+    <!-- Brand / shared -->
+    <string name="brand_wordmark">ANYDROP</string>
+    <string name="btn_cancel">CANCEL</string>
+    <string name="btn_close">CLOSE</string>
+    <string name="btn_add">ADD</string>
+    <string name="btn_done">DONE</string>
+    <string name="btn_retry">RETRY</string>
+    <string name="error_with_message">ERROR: %1$s</string>
+    <string name="back_desc">Back</string>
+    <string name="menu_desc">Menu</string>
+    <string name="delete_desc">Delete</string>
+    <string name="play_desc">Play</string>
+    <string name="select_all">SELECT ALL</string>
+    <string name="clear_all">CLEAR ALL</string>
+    <string name="selected_count">%1$d SELECTED</string>
+    <string name="downloading_ellipsis">Downloading…</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_deck">DECK</string>
+    <string name="nav_library">LIBRARY</string>
+    <string name="nav_audio">AUDIO</string>
+    <string name="nav_settings">SETTINGS</string>
+
+    <!-- Permission gate -->
+    <string name="permission_message">AnyDrop needs access to all files to save videos to\n/storage/emulated/0/AnyDrop</string>
+    <string name="open_settings">OPEN SETTINGS</string>
+    <string name="skip_downloads_may_fail">Skip (downloads may fail)</string>
+
+    <!-- Share sheet -->
+    <string name="share_select_what">Select what to download</string>
+    <string name="share_fetching">Fetching…</string>
+    <string name="share_images_count">%1$d IMAGES</string>
+    <string name="share_image_number">Image %1$d</string>
+    <string name="share_record">●  RECORD</string>
+    <string name="share_record_count">●  RECORD (%1$d)</string>
+
+    <!-- Tape deck -->
+    <string name="tape_deck_version">TAPE DECK v1.0</string>
+    <string name="led_power">POWER</string>
+    <string name="led_rec">REC</string>
+    <string name="led_signal">SIGNAL</string>
+    <string name="led_link">LINK</string>
+    <string name="vu_meter">VU METER</string>
+    <string name="preview_label">PREVIEW</string>
+    <string name="preview_image_desc">Image preview</string>
+    <string name="fetching_qualities">Fetching available qualities…</string>
+    <string name="link_detected">LINK DETECTED</string>
+    <string name="load_link">LOAD</string>
+    <string name="deck_images_tap_select">%1$d IMAGES · tap to select</string>
+    <string name="download_selected_count">DOWNLOAD SELECTED (%1$d)</string>
+    <string name="select_quality">SELECT QUALITY</string>
+    <string name="paste_url_hint">Paste URL here…</string>
+    <string name="paste_btn">PASTE</string>
+    <string name="recording_indicator">● REC</string>
+    <string name="downloading_status">downloading</string>
+    <string name="eta_format">ETA %1$s</string>
+    <string name="btn_stop">■ STOP</string>
+    <string name="btn_record">●  RECORD</string>
+    <string name="download_complete">DOWNLOAD COMPLETE</string>
+
+    <!-- Library -->
+    <string name="library_title">LIBRARY</string>
+    <string name="tapes_count">TAPES: %1$d</string>
+    <string name="sort_date">DATE</string>
+    <string name="sort_length">LENGTH</string>
+    <string name="filter_all">ALL</string>
+    <string name="filter_videos">VIDEOS</string>
+    <string name="filter_images">IMAGES</string>
     <string name="library_empty">Your tape collection is empty.\nDownload something to get started!</string>
-    <string name="player_speed">Speed</string>
+
+    <!-- Audio -->
+    <string name="audio_title">AUDIO</string>
+    <string name="tracks_count">TRACKS: %1$d</string>
+    <string name="audio_empty">No audio tracks yet.\nToggle \"AUDIO ONLY\" on the deck to rip audio!</string>
+
+    <!-- Media item actions -->
+    <string name="menu_share">Share</string>
+    <string name="menu_delete">Delete</string>
+    <string name="menu_info">Info</string>
+    <string name="share_via">Share via</string>
+    <string name="delete_title">DELETE</string>
+    <string name="delete_confirm_single">Are you sure you want to delete this content?</string>
+    <string name="delete_confirm_multi">Are you sure you want to delete these %1$d items?</string>
+    <string name="info_title">INFO</string>
+    <string name="info_title_label">Title</string>
+    <string name="info_saved_to">Saved to</string>
+    <string name="info_length">Length</string>
+    <string name="info_creator">Creator</string>
+    <string name="info_source">Source</string>
+    <string name="info_open_original">Open original ↗</string>
+    <string name="info_unknown_duration">Unknown</string>
+
+    <!-- Duplicate prompt -->
+    <string name="duplicate_title">ALREADY DOWNLOADED</string>
+    <string name="duplicate_message_single">\"%1$s\" is already downloaded. Replace the old one, download it again as a new file, or cancel?</string>
+    <string name="duplicate_message_multi">\"%1$s\" is already downloaded %2$d times. Replace the oldest copy, download it again as a new file, or cancel?</string>
+    <string name="btn_replace">REPLACE</string>
+    <string name="btn_download_anyway">DOWNLOAD ANYWAY</string>
+
+    <!-- Settings -->
+    <string name="settings_title">SETTINGS</string>
+    <string name="settings_session_signal">SESSION SIGNAL</string>
+    <string name="settings_session_signal_sub">Import cookies for restricted content</string>
+    <string name="settings_appearance">APPEARANCE</string>
+    <string name="settings_dark_sub">Dark mode — tap for light</string>
+    <string name="settings_light_sub">Light mode — tap for dark</string>
+    <string name="settings_max_quality">MAXIMUM QUALITY</string>
+    <string name="quality_best">Best available</string>
+    <string name="quality_4k">Up to 4K (2160p)</string>
+    <string name="quality_1080">Up to 1080p</string>
+    <string name="quality_720">Up to 720p</string>
+    <string name="quality_480">Up to 480p</string>
+    <string name="settings_auto_detect">AUTO-DETECT LINKS</string>
+    <string name="auto_detect_on">Enabled — links copied to the clipboard are offered on the deck</string>
+    <string name="auto_detect_off">Disabled</string>
+    <string name="settings_download_path">DOWNLOAD LOCATION</string>
+    <string name="settings_download_path_sub">Videos → Movies/AnyDrop · Images → Pictures/AnyDrop · Audio → Music/AnyDrop</string>
+    <string name="settings_version">ANYDROP v%1$s</string>
+    <string name="settings_tagline">⚡ The Analog-Inspired Universal Media Transcriber</string>
+    <string name="settings_creator">Created by M7MDSH · © 2026</string>
+    <string name="settings_language">LANGUAGE</string>
+    <string name="language_system">System Default</string>
+    <string name="language_english">English</string>
+    <string name="language_arabic">العربية</string>
+
+    <!-- Session signal (cookies) -->
+    <string name="session_signal_subtitle">Log in to platforms to download their content</string>
+    <string name="add_platform_btn">+  ADD PLATFORM</string>
+    <string name="cookies_or_import">— or import a cookies.txt file —</string>
+    <string name="btn_select_cookies">SELECT cookies.txt</string>
+    <string name="logged_in">✓ LOGGED IN</string>
+    <string name="log_in">LOG IN ›</string>
+    <string name="add_platform_title">ADD PLATFORM</string>
+    <string name="add_platform_name">Name (e.g. Facebook)</string>
+    <string name="add_platform_url">Login URL</string>
+    <string name="add_platform_auto_domain">The cookie domain is detected from the URL automatically.</string>
+    <string name="cookie_success">Cookies imported successfully</string>
+    <string name="cookie_import_failed">Import failed</string>
+    <string name="cookies_cleared">Cookies cleared</string>
+    <string name="web_login_saved">Logged in — cookies saved for %1$s</string>
+    <string name="web_login_capture_failed">Login capture failed</string>
+    <string name="web_login_hint">LOG IN, THEN TAP DONE</string>
+
+    <!-- Player -->
+    <string name="player_no_media">NO MEDIA LOADED</string>
+    <string name="image_viewer_desc">Image</string>
+    <string name="player_previous">Previous</string>
+    <string name="player_next">Next</string>
+    <string name="player_play_pause">Play/Pause</string>
+    <string name="player_aspect_ratio">Aspect ratio</string>
+    <string name="player_rotate">Rotate</string>
     <string name="player_pip">Picture-in-Picture</string>
-    <string name="settings_title">Settings</string>
-    <string name="settings_download_path">Download Location</string>
-    <string name="settings_max_quality">Maximum Quality</string>
-    <string name="settings_auto_detect">Auto-Detect Links</string>
-    <string name="settings_about">About AnyDrop</string>
-    <string name="settings_version">Version %1$s</string>
-    <string name="settings_cookies">Session Signal (Cookies)</string>
+    <string name="player_playback_failed">Playback failed</string>
+    <string name="player_volume">VOL</string>
+    <string name="player_brightness">BRIGHT</string>
+    <string name="player_speed">Speed</string>
+    <string name="player_speed_1x">1× Speed</string>
+    <string name="player_speed_normal">Normal (1×)</string>
+    <string name="player_repeat_one">Repeat one</string>
+    <string name="resize_fit">Fit</string>
+    <string name="resize_fill">Stretch</string>
+    <string name="resize_zoom">Zoom</string>
+    <string name="swipe_next">NEXT ▶</string>
+    <string name="swipe_prev">◀ PREV</string>
+    <string name="seek_back_feedback">« 10s</string>
+    <string name="seek_forward_feedback">10s »</string>
+    <string name="player_error_generic">This video can\'t be played.</string>
+    <string name="pip_previous">Previous</string>
+    <string name="pip_play">Play</string>
+    <string name="pip_pause">Pause</string>
+    <string name="pip_next">Next</string>
+
+    <!-- Downloads / notifications -->
+    <string name="notification_channel_downloads">Downloads</string>
+    <string name="notification_download_active">Downloading…</string>
+    <string name="notification_downloading_files">Downloading (%1$d files)</string>
+    <string name="notification_download_interrupted">Failed — download interrupted</string>
+    <string name="download_progress">Downloading… %1$d%%</string>
+    <string name="notification_complete">Complete</string>
+    <string name="notification_failed">Failed</string>
+    <string name="notification_cancelled">Cancelled</string>
+
+    <!-- Errors (ViewModel / engine) -->
+    <string name="error_no_media_found">No downloadable media found for this link.</string>
+    <string name="error_fetch_formats">Couldn\'t fetch formats for this link.</string>
+    <string name="error_save_image">Failed to save image</string>
+    <string name="error_image_download">Image download failed</string>
+    <string name="error_video_download">Failed to download video</string>
+    <string name="error_merge_audio">Failed to merge audio</string>
+    <string name="error_output_not_found">Output file not found</string>
+    <string name="error_download_failed">Download failed</string>
+    <string name="progress_starting">Starting…</string>
+    <string name="progress_downloading_video">Downloading video…</string>
+    <string name="progress_retrying_video">Retrying video without height restriction…</string>
+    <string name="progress_downloading_audio">Downloading audio…</string>
+    <string name="progress_merging_audio">Merging audio…</string>
 </resources>

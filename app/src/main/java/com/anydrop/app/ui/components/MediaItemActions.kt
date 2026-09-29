@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.components
 
 import android.content.Intent
+import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,10 +22,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anydrop.app.R
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.LedRed
@@ -44,7 +47,7 @@ fun MediaItemDropdown(
     val context = LocalContext.current
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text("Share", fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.menu_share), fontFamily = FontFamily.Monospace) },
             leadingIcon = { Icon(Icons.Default.Share, null, tint = Amber) },
             onClick = {
                 onDismiss()
@@ -52,12 +55,12 @@ fun MediaItemDropdown(
             }
         )
         DropdownMenuItem(
-            text = { Text("Delete", fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.menu_delete), fontFamily = FontFamily.Monospace) },
             leadingIcon = { Icon(Icons.Default.Delete, null, tint = LedRed) },
             onClick = { onDismiss(); onDelete() }
         )
         DropdownMenuItem(
-            text = { Text("Info", fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.menu_info), fontFamily = FontFamily.Monospace) },
             leadingIcon = { Icon(Icons.Default.Info, null, tint = White) },
             onClick = { onDismiss(); onInfo() }
         )
@@ -74,11 +77,11 @@ fun DeleteConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text("DELETE", color = LedRed, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.delete_title), color = LedRed, fontFamily = FontFamily.Monospace) },
         text = {
             Text(
-                if (count > 1) "Are you sure you want to delete these $count items?"
-                else "Are you sure you want to delete this content?",
+                if (count > 1) stringResource(R.string.delete_confirm_multi, count)
+                else stringResource(R.string.delete_confirm_single),
                 color = White,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp
@@ -86,12 +89,12 @@ fun DeleteConfirmDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("DELETE", color = LedRed, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.delete_title), color = LedRed, fontFamily = FontFamily.Monospace)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
             }
         }
     )
@@ -107,26 +110,26 @@ fun MediaInfoDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text("INFO", color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.info_title), color = Amber, fontFamily = FontFamily.Monospace) },
         text = {
             Column {
-                InfoRow("Title", item.title)
-                InfoRow("Saved to", item.localFilePath)
+                InfoRow(stringResource(R.string.info_title_label), item.title)
+                InfoRow(stringResource(R.string.info_saved_to), item.localFilePath)
                 if (!item.isImage) {
-                    InfoRow("Length", formatDuration(item.durationMs))
+                    InfoRow(stringResource(R.string.info_length), formatDuration(context, item.durationMs))
                 }
                 if (item.creator.isNotBlank()) {
                     val creatorLink = item.creatorUrl.ifBlank { item.url }
-                    InfoLinkRow("Creator", item.creator, creatorLink, context)
+                    InfoLinkRow(stringResource(R.string.info_creator), item.creator, creatorLink, context)
                 }
                 if (item.url.isNotBlank()) {
-                    InfoLinkRow("Source", "Open original ↗", item.url, context)
+                    InfoLinkRow(stringResource(R.string.info_source), stringResource(R.string.info_open_original), item.url, context)
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("CLOSE", color = Amber, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_close), color = Amber, fontFamily = FontFamily.Monospace)
             }
         }
     )
@@ -173,8 +176,8 @@ private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
         onClick = onClick
     )
 
-private fun formatDuration(ms: Long): String {
-    if (ms <= 0) return "Unknown"
+private fun formatDuration(context: android.content.Context, ms: Long): String {
+    if (ms <= 0) return context.getString(R.string.info_unknown_duration)
     val totalSec = ms / 1000
     val h = totalSec / 3600
     val m = (totalSec % 3600) / 60
@@ -182,22 +185,33 @@ private fun formatDuration(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
-/** Share the media file via a FileProvider content URI. */
+/**
+ * Share the media via its MediaStore content URI (works for all library items
+ * on Android 10+). App-private files fall back to a FileProvider URI.
+ */
 fun shareMedia(context: android.content.Context, item: MediaItem) {
     try {
-        val file = File(item.localFilePath)
-        if (!file.exists()) return
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val mime = when {
             item.isImage -> "image/*"
             item.isAudio -> "audio/*"
             else -> "video/*"
         }
+        val uri: Uri? = when {
+            item.localUri?.scheme == "content" -> item.localUri
+            else -> {
+                val file = File(item.localFilePath)
+                if (file.exists()) {
+                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                } else {
+                    null
+                }
+            }
+        } ?: return
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Share via").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_via)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: Exception) {}
 }

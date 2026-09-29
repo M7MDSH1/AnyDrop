@@ -1,10 +1,16 @@
 package com.anydrop.app
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,16 +48,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.anydrop.app.R
 import com.anydrop.app.data.model.DownloadState
+import com.anydrop.app.data.repository.readAppLanguageSync
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.ui.components.DuplicatePromptDialog
 import com.anydrop.app.ui.tape_deck.TapeDeckViewModel
+import com.anydrop.app.util.LocaleHelper
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AnyDropTheme
 import com.anydrop.app.ui.theme.Black
@@ -64,6 +75,12 @@ import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class ShareActivity : ComponentActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(
+            LocaleHelper.wrapAppLocale(newBase, readAppLanguageSync(newBase))
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,6 +121,18 @@ private fun ShareSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScopeCompat()
 
+    // One-time POST_NOTIFICATIONS request at the first download attempt (Android
+    // 13+); downloads proceed regardless, in-app feedback is unaffected.
+    val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    fun ensureNotificationPermission(run: () -> Unit) {
+        run()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val isLoading by viewModel.isLoadingFormats.collectAsState()
     val formats by viewModel.availableFormats.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
@@ -117,7 +146,7 @@ private fun ShareSheet(
     // Close shortly after a download starts.
     androidx.compose.runtime.LaunchedEffect(downloadState) {
         if (downloadState is DownloadState.Progress || downloadState is DownloadState.Completed) {
-            Toast.makeText(context, "Downloading…", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.downloading_ellipsis, Toast.LENGTH_SHORT).show()
             scope.launch { sheetState.hide() }.invokeOnCompletion { onClose() }
         }
     }
@@ -140,7 +169,7 @@ private fun ShareSheet(
         ) {
             // Header
             Text(
-                "ANYDROP",
+                stringResource(R.string.brand_wordmark),
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 18.sp,
@@ -148,7 +177,7 @@ private fun ShareSheet(
                 letterSpacing = 3.sp
             )
             Text(
-                "Select what to download",
+                stringResource(R.string.share_select_what),
                 color = White.copy(alpha = 0.5f),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp
@@ -166,7 +195,7 @@ private fun ShareSheet(
                             CircularProgressIndicator(color = Amber, modifier = Modifier.size(40.dp))
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                "Fetching…",
+                                stringResource(R.string.share_fetching),
                                 color = White.copy(alpha = 0.6f),
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp
@@ -185,15 +214,17 @@ private fun ShareSheet(
                 }
 
                 images.size > 1 -> {
-                    ShareImagePicker(images = images) { chosen -> viewModel.downloadImages(chosen) }
+                    ShareImagePicker(images = images) { chosen -> ensureNotificationPermission { viewModel.downloadImages(chosen) } }
                 }
 
                 else -> {
                     ShareQualityList(
                         formats = videoAudio.ifEmpty { formats },
                         onRecord = { fmt ->
-                            viewModel.selectFormat(fmt)
-                            viewModel.startDownload()
+                            ensureNotificationPermission {
+                                viewModel.selectFormat(fmt)
+                                viewModel.startDownload()
+                            }
                         }
                     )
                 }
@@ -207,8 +238,8 @@ private fun ShareSheet(
         DuplicatePromptDialog(
             title = prompt.title,
             copyCount = prompt.copyCount,
-            onReplace = { viewModel.confirmReplaceDownload() },
-            onDownloadAnyway = { viewModel.confirmDownloadAnyway() },
+            onReplace = { ensureNotificationPermission { viewModel.confirmReplaceDownload() } },
+            onDownloadAnyway = { ensureNotificationPermission { viewModel.confirmDownloadAnyway() } },
             onCancel = { viewModel.dismissDuplicatePrompt() }
         )
     }
@@ -277,7 +308,7 @@ private fun ShareQualityList(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                "●  RECORD",
+                stringResource(R.string.share_record),
                 color = if (selected == null) White.copy(alpha = 0.4f) else Black,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 15.sp,
@@ -305,13 +336,15 @@ private fun ShareImagePicker(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                "${images.size} IMAGES",
+                stringResource(R.string.share_images_count, images.size),
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp
             )
             Text(
-                if (selected.size == images.size) "CLEAR ALL" else "SELECT ALL",
+                stringResource(
+                    if (selected.size == images.size) R.string.clear_all else R.string.select_all
+                ),
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
@@ -343,7 +376,7 @@ private fun ShareImagePicker(
                 ) {
                     AsyncImage(
                         model = img.imageUrl,
-                        contentDescription = "Image ${index + 1}",
+                        contentDescription = stringResource(R.string.share_image_number, index + 1),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -376,7 +409,7 @@ private fun ShareImagePicker(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                "●  RECORD (${selected.size})",
+                stringResource(R.string.share_record_count, selected.size),
                 color = if (selected.isEmpty()) White.copy(alpha = 0.4f) else Black,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,

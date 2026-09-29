@@ -3,6 +3,7 @@ package com.anydrop.app.ui.audio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.data.repository.DeletionResult
 import com.anydrop.app.data.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,10 @@ class AudioViewModel @Inject constructor(
                 _audioItems.value = items
             }
         }
+        // Show the cached audio list instantly, then refresh in the background.
+        viewModelScope.launch {
+            libraryRepository.loadCachedIndex()
+        }
         refresh()
     }
 
@@ -34,8 +39,11 @@ class AudioViewModel @Inject constructor(
         }
     }
 
-    fun deleteItem(item: MediaItem) {
-        libraryRepository.deleteItem(item)
+    fun deleteItem(item: MediaItem): DeletionResult = deleteItems(listOf(item))
+
+    fun deleteItems(items: List<MediaItem>): DeletionResult {
+        val result = libraryRepository.deleteItems(items)
         refresh()
+        return result
     }
 }

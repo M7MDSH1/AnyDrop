@@ -64,14 +64,14 @@ object PipActions {
         hasNext: Boolean
     ): List<RemoteAction> {
         val playPause = if (isPlaying) {
-            action(context, R.drawable.ic_pip_pause, "Pause", CONTROL_PAUSE)
+            action(context, R.drawable.ic_pip_pause, context.getString(R.string.pip_pause), CONTROL_PAUSE)
         } else {
-            action(context, R.drawable.ic_pip_play, "Play", CONTROL_PLAY)
+            action(context, R.drawable.ic_pip_play, context.getString(R.string.pip_play), CONTROL_PLAY)
         }
         return listOf(
-            action(context, R.drawable.ic_pip_previous, "Previous", CONTROL_PREVIOUS, hasPrevious),
+            action(context, R.drawable.ic_pip_previous, context.getString(R.string.pip_previous), CONTROL_PREVIOUS, hasPrevious),
             playPause,
-            action(context, R.drawable.ic_pip_next, "Next", CONTROL_NEXT, hasNext)
+            action(context, R.drawable.ic_pip_next, context.getString(R.string.pip_next), CONTROL_NEXT, hasNext)
         )
     }
 }

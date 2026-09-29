@@ -3,9 +3,11 @@ package com.anydrop.app.ui.tape_deck
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.anydrop.app.R
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.pendingSharedUrl
 import com.anydrop.app.data.repository.CookieRepository
+import com.anydrop.app.data.repository.DeckSessionRepository
 import com.anydrop.app.data.repository.DownloadRepository
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
@@ -35,7 +37,8 @@ class TapeDeckViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val libraryRepository: LibraryRepository,
     private val cookieRepository: CookieRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val deckSessionRepository: DeckSessionRepository
 ) : AndroidViewModel(application) {
 
     private val _url = MutableStateFlow("")
@@ -62,9 +65,13 @@ class TapeDeckViewModel @Inject constructor(
     private var searchJob: Job? = null
 
     init {
-        pendingSharedUrl?.let { url ->
-            handleSharedUrl(url)
-            pendingSharedUrl = null
+        if (pendingSharedUrl == null) {
+            restoreSession()
+        } else {
+            pendingSharedUrl?.let { url ->
+                handleSharedUrl(url)
+                pendingSharedUrl = null
+            }
         }
         // React to shares that arrive while the app is already running (singleTask
         // delivers them via onNewIntent, after this ViewModel's init has run).
@@ -78,6 +85,19 @@ class TapeDeckViewModel @Inject constructor(
         }
     }
 
+    /** Restore the last URL + fetched formats + selection so the deck looks the same. */
+    private fun restoreSession() {
+        val sessionUrl = deckSessionRepository.lastUrl()
+        if (sessionUrl.isBlank()) return
+        _url.value = sessionUrl
+        val formats = deckSessionRepository.loadFormats()
+        if (formats.isNotEmpty()) {
+            _availableFormats.value = capByMaxQuality(formats)
+            val selectedId = deckSessionRepository.selectedFormatId()
+            _selectedFormat.value = _availableFormats.value.firstOrNull { it.id == selectedId }
+        }
+    }
+
     fun onUrlChange(newUrl: String) {
         _url.value = newUrl
         _downloadState.value = DownloadState.Idle
@@ -85,6 +105,7 @@ class TapeDeckViewModel @Inject constructor(
         _availableFormats.value = emptyList()
         _duplicatePrompt.value = null
         pendingSuffixPath = null
+        deckSessionRepository.saveSession(newUrl, emptyList(), "")
         searchJob?.cancel()
         if (newUrl.isNotBlank()) {
             searchJob = viewModelScope.launch {
@@ -96,6 +117,11 @@ class TapeDeckViewModel @Inject constructor(
 
     fun selectFormat(format: FormatInfo) {
         _selectedFormat.value = format
+        deckSessionRepository.saveSession(
+            _url.value.trim(),
+            _availableFormats.value,
+            format.id
+        )
     }
 
     // Non-null when the same video is already downloaded; UI shows the
@@ -105,6 +131,9 @@ class TapeDeckViewModel @Inject constructor(
 
     private var _forceReplace = false
     private var pendingSuffixPath: String? = null
+
+    /** Tag (output path) of the most recently started download — for user cancel. */
+    private var currentNotificationTag: String? = null
 
     /** User tapped "Replace" — delete the oldest copy, re-download to the base name. */
     fun confirmReplaceDownload() {
@@ -130,6 +159,24 @@ class TapeDeckViewModel @Inject constructor(
         pendingSuffixPath = null
     }
 
+    /**
+     * Route a download state to its per-file notification (keyed by the stable
+     * output-path tag). Cancelled is a no-op: the user-triggered service cancel
+     * already posted the "Cancelled" notification.
+     */
+    private fun reportToNotification(state: DownloadState, tag: String, title: String) {
+        when (state) {
+            is DownloadState.Progress ->
+                DownloadService.updateProgress(getApplication(), tag, state.percentage)
+            is DownloadState.Completed ->
+                DownloadService.finishDownload(getApplication(), tag, title.ifBlank { "Download complete" })
+            is DownloadState.Error ->
+                DownloadService.notifyFailed(getApplication(), tag, title.ifBlank { "Download failed" })
+            is DownloadState.Cancelled -> {}
+            else -> {}
+        }
+    }
+
     fun startDownload() {
         val urlValue = _url.value.trim()
         if (urlValue.isBlank()) return
@@ -149,68 +196,58 @@ class TapeDeckViewModel @Inject constructor(
             )
         }
 
-        // Keep the foreground notification in sync with the download flow.
-        fun reportToNotification(state: DownloadState) {
-            when (state) {
-                is DownloadState.Progress ->
-                    DownloadService.updateProgress(getApplication(), state.percentage)
-                is DownloadState.Completed ->
-                    DownloadService.finishDownload(getApplication(), title.ifBlank { "Download complete" })
-                is DownloadState.Error, is DownloadState.Cancelled ->
-                    // Dismiss the ongoing notification without a false "complete".
-                    DownloadService.cancelDownload(getApplication())
-                else -> {}
-            }
-        }
-
-        // If the user picked an image (photo posts from Instagram/X/TikTok), download
-        // the image file directly.
-        if (format.isImage) {
-            val imageFlow = downloadRepository.downloadImage(
-                url = urlValue,
-                outputPath = libraryRepository.getImageOutputPath(urlValue, title, "image"),
-                formatId = format.id,
-                cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() },
-                directImageUrl = format.imageUrl
-            )
-            _downloadState.value = DownloadState.Progress(0, "Starting...", "")
-            DownloadService.startDownload(getApplication(), urlValue)
-            com.anydrop.app.appDownloadScope.launch {
-                imageFlow.collect { state ->
-                    _downloadState.value = state
-                    reportToNotification(state)
-                    if (state is DownloadState.Completed) {
-                        saveMeta(state.mediaItem.localFilePath)
-                        libraryRepository.refreshLibrary()
-                    }
+    // If the user picked an image (photo posts from Instagram/X/TikTok), download
+    // the image file directly.
+    if (format.isImage) {
+        val tag = libraryRepository.getImageOutputPath(urlValue, title, "image")
+        currentNotificationTag = tag
+        val imageFlow = downloadRepository.downloadImage(
+            url = urlValue,
+            outputPath = tag,
+            formatId = format.id,
+            cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() },
+            directImageUrl = format.imageUrl
+        )
+        _downloadState.value = DownloadState.Progress(0, "Starting...", "")
+        DownloadService.startDownload(getApplication(), tag, title)
+        com.anydrop.app.appDownloadScope.launch {
+            imageFlow.collect { state ->
+                _downloadState.value = state
+                reportToNotification(state, tag, title)
+                if (state is DownloadState.Completed) {
+                    saveMeta(state.mediaItem.localFilePath)
+                    libraryRepository.refreshLibrary()
                 }
             }
-            return
         }
+        return
+    }
 
-        // If the user picked an audio-only quality from the format list, extract
-        // just the audio to .m4a instead of downloading video.
-        if (format.isAudioOnly) {
-            val audioQuality = if (format.abr > 0) "${format.abr}kbps" else "audio"
-            val audioFlow = downloadRepository.downloadAudio(
-                url = urlValue,
-                outputPath = libraryRepository.getAudioOutputPath(urlValue, title, audioQuality),
-                cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
-            )
-            _downloadState.value = DownloadState.Progress(0, "Starting...", "")
-            DownloadService.startDownload(getApplication(), urlValue)
-            com.anydrop.app.appDownloadScope.launch {
-                audioFlow.collect { state ->
-                    _downloadState.value = state
-                    reportToNotification(state)
-                    if (state is DownloadState.Completed) {
-                        saveMeta(state.mediaItem.localFilePath)
-                        libraryRepository.refreshLibrary()
-                    }
+    // If the user picked an audio-only quality from the format list, extract
+    // just the audio to .m4a instead of downloading video.
+    if (format.isAudioOnly) {
+        val audioQuality = if (format.abr > 0) "${format.abr}kbps" else "audio"
+        val tag = libraryRepository.getAudioOutputPath(urlValue, title, audioQuality)
+        currentNotificationTag = tag
+        val audioFlow = downloadRepository.downloadAudio(
+            url = urlValue,
+            outputPath = tag,
+            cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
+        )
+        _downloadState.value = DownloadState.Progress(0, "Starting...", "")
+        DownloadService.startDownload(getApplication(), tag, title)
+        com.anydrop.app.appDownloadScope.launch {
+            audioFlow.collect { state ->
+                _downloadState.value = state
+                reportToNotification(state, tag, title)
+                if (state is DownloadState.Completed) {
+                    saveMeta(state.mediaItem.localFilePath)
+                    libraryRepository.refreshLibrary()
                 }
             }
-            return
         }
+        return
+    }
 
         val quality = format.resolution.ifBlank { "video" }
 
@@ -263,12 +300,13 @@ class TapeDeckViewModel @Inject constructor(
         }
 
         _downloadState.value = DownloadState.Progress(0, "Starting...", "")
-        DownloadService.startDownload(getApplication(), urlValue)
+        currentNotificationTag = resolvedPath
+        DownloadService.startDownload(getApplication(), resolvedPath, title)
 
         com.anydrop.app.appDownloadScope.launch {
             flow.collect { state ->
                 _downloadState.value = state
-                reportToNotification(state)
+                reportToNotification(state, resolvedPath, title)
                 if (state is DownloadState.Completed) {
                     saveMeta(state.mediaItem.localFilePath)
                     libraryRepository.refreshLibrary()
@@ -290,14 +328,21 @@ class TapeDeckViewModel @Inject constructor(
         val cookie = cookieRepository.getCookieFile().takeIf { it.exists() }
 
         _downloadState.value = DownloadState.Progress(0, "Starting...", "")
-        DownloadService.startDownload(getApplication(), urlValue)
+        // Pre-register the whole batch up front so the service only tears down its
+        // foreground notification once, after the last image, not between images.
+        val tags = images.mapIndexed { idx, _ ->
+            libraryRepository.getImageOutputPath(urlValue, title, "img${idx + 1}")
+        }
+        DownloadService.startDownload(getApplication(), tags.first(), title, batchTags = tags)
         com.anydrop.app.appDownloadScope.launch {
             var lastState: DownloadState = DownloadState.Idle
             images.forEachIndexed { idx, img ->
-                val quality = "img${idx + 1}"
+                val tag = tags[idx]
+                currentNotificationTag = tag
+                DownloadService.startDownload(getApplication(), tag, title)
                 val flow = downloadRepository.downloadImage(
                     url = urlValue,
-                    outputPath = libraryRepository.getImageOutputPath(urlValue, title, quality),
+                    outputPath = tag,
                     formatId = img.id,
                     cookieFile = cookie,
                     directImageUrl = img.imageUrl
@@ -305,6 +350,7 @@ class TapeDeckViewModel @Inject constructor(
                 flow.collect { state ->
                     lastState = state
                     _downloadState.value = state
+                    reportToNotification(state, tag, title)
                     if (state is DownloadState.Completed) {
                         libraryRepository.writeMetadata(
                             state.mediaItem.localFilePath, webpageUrl, creator, "", title
@@ -316,13 +362,12 @@ class TapeDeckViewModel @Inject constructor(
             if (lastState is DownloadState.Completed) {
                 _downloadState.value = lastState
             }
-            DownloadService.finishDownload(getApplication(), "${images.size} images downloaded")
         }
     }
 
     fun cancelDownload() {
         downloadRepository.cancelDownload()
-        DownloadService.cancelDownload(getApplication())
+        currentNotificationTag?.let { DownloadService.cancelDownload(getApplication(), it) }
         _downloadState.value = DownloadState.Cancelled
     }
 
@@ -330,19 +375,20 @@ class TapeDeckViewModel @Inject constructor(
         _downloadState.value = DownloadState.Idle
     }
 
-    fun handleSharedUrl(url: String) {
-        _url.value = url
-        _downloadState.value = DownloadState.Idle
-        _selectedFormat.value = null
-        _availableFormats.value = emptyList()
-        _duplicatePrompt.value = null
-        pendingSuffixPath = null
-        searchJob?.cancel()
-        viewModelScope.launch {
-            delay(200)
-            fetchFormats()
-        }
+fun handleSharedUrl(url: String) {
+    _url.value = url
+    _downloadState.value = DownloadState.Idle
+    _selectedFormat.value = null
+    _availableFormats.value = emptyList()
+    _duplicatePrompt.value = null
+    pendingSuffixPath = null
+    deckSessionRepository.saveSession(url, emptyList(), "")
+    searchJob?.cancel()
+    viewModelScope.launch {
+        delay(200)
+        fetchFormats()
     }
+}
 
     private suspend fun fetchFormats() {
         val urlValue = _url.value.trim()
@@ -355,15 +401,23 @@ class TapeDeckViewModel @Inject constructor(
                 cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
             )
             _availableFormats.value = capByMaxQuality(formats)
+            deckSessionRepository.saveSession(
+                urlValue,
+                formats,
+                _selectedFormat.value?.id.orEmpty()
+            )
             if (formats.isEmpty()) {
-                _downloadState.value = DownloadState.Error("No downloadable media found for this link.")
+                _downloadState.value = DownloadState.Error(
+                    getApplication<Application>().getString(R.string.error_no_media_found)
+                )
             }
         } catch (e: Exception) {
             _availableFormats.value = emptyList()
             // Surface a clear reason (e.g. "needs login / import cookies") instead of
             // silently showing an empty list.
             _downloadState.value = DownloadState.Error(
-                e.message ?: "Couldn't fetch formats for this link."
+                e.message
+                    ?: getApplication<Application>().getString(R.string.error_fetch_formats)
             )
         } finally {
             _isLoadingFormats.value = false

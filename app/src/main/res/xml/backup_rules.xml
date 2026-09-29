@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Automotive backup rules (Android 8.0-11). Exclude the plaintext cookies file
+     and the app-private media folders under getExternalFilesDir()/AnyDrop. -->
+<full-backup-content>
+    <exclude domain="file" path="cookies.txt" />
+    <exclude domain="external" path="AnyDrop/" />
+</full-backup-content>
