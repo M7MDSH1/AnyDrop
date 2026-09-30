@@ -8,9 +8,9 @@ import javax.inject.Inject
 
 /**
  * Light/dark mode state, read at the app roots (MainActivity, ShareActivity) so
- * the theme reactively follows the persisted setting. The flow is backed by the
- * repository's SharedPreferences listener, so the theme updates immediately no
- * matter which screen/ViewModel flips the setting.
+ * the theme reactively follows the persisted setting. The repository updates the
+ * flow on every write, so the theme updates immediately no matter which
+ * screen/ViewModel flips the setting.
  */
 @HiltViewModel
 class AppearanceViewModel @Inject constructor(
@@ -23,7 +23,5 @@ class AppearanceViewModel @Inject constructor(
         settingsRepository.darkMode = dark
     }
 
-    fun toggleDarkMode() {
-        settingsRepository.darkMode = !settingsRepository.darkMode
-    }
+    fun toggleDarkMode() = settingsRepository.toggleDarkMode()
 }

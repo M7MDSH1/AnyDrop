@@ -55,7 +55,18 @@ internal val LightPalette = TapeDeckPalette(
 
 object TapeDeckPaletteState {
     val current: MutableState<TapeDeckPalette> = mutableStateOf(DarkPalette)
+
+    /**
+     * Switches the active palette. Called only from outside composition (AnyDropApp
+     * follows the saved setting), so the write lands in the global snapshot and no
+     * composition pass can drop it or fight over it.
+     */
+    fun select(dark: Boolean) {
+        current.value = paletteFor(dark)
+    }
 }
+
+internal fun paletteFor(dark: Boolean): TapeDeckPalette = if (dark) DarkPalette else LightPalette
 
 val Amber: Color get() = TapeDeckPaletteState.current.value.accent
 val AmberDim: Color get() = TapeDeckPaletteState.current.value.accentDim
