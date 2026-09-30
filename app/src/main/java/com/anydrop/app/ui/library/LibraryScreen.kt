@@ -74,6 +74,7 @@ import com.anydrop.app.ui.theme.MediumGray
 import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.flow.Flow
+import com.anydrop.app.ui.theme.tracked
 
 @Composable
 fun LibraryScreen(
@@ -209,7 +210,7 @@ fun LibraryScreen(
                 color = White.copy(alpha = 0.4f),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp
+                letterSpacing = tracked(2f)
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
@@ -304,7 +305,7 @@ private fun SortButton(label: String, active: Boolean, onClick: () -> Unit) {
             color = if (active) Amber else White.copy(alpha = 0.4f),
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.sp
+            letterSpacing = tracked(1f)
         )
     }
 }

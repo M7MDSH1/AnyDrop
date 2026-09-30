@@ -6,7 +6,10 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.anydrop.app.sharedUrlFlow
 import com.anydrop.app.ui.audio.AudioScreen
+import com.anydrop.app.ui.browser.BrowserScreen
+import com.anydrop.app.ui.browser.BrowserState
 import com.anydrop.app.ui.library.LibraryScreen
 import com.anydrop.app.ui.player.PlayerScreen
 import com.anydrop.app.ui.settings.CookieImportScreen
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.emptyFlow
 
 object Routes {
     const val TAPE_DECK = "tape_deck"
+    const val BROWSER = "browser"
     const val LIBRARY = "library"
     const val AUDIO = "audio"
     const val PLAYER = "player/{mediaId}"
@@ -29,7 +33,8 @@ fun AnyDropNavGraph(
     navController: NavHostController,
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
     scrollToTopFlow: Flow<String> = emptyFlow(),
-    startDestination: String = Routes.TAPE_DECK
+    startDestination: String = Routes.TAPE_DECK,
+    browserState: BrowserState? = null
 ) {
     NavHost(
         navController = navController,
@@ -38,6 +43,23 @@ fun AnyDropNavGraph(
     ) {
         composable(Routes.TAPE_DECK) {
             TapeDeckScreen()
+        }
+
+        composable(Routes.BROWSER) {
+            if (browserState != null) {
+                BrowserScreen(
+                    state = browserState,
+                    // "Analyze this page": hand the URL to the deck the same way a share does.
+                    onAnalyze = { url ->
+                        sharedUrlFlow.value = url
+                        navController.navigate(Routes.TAPE_DECK) {
+                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+            }
         }
 
         composable(Routes.LIBRARY) {

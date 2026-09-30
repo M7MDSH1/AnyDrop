@@ -118,6 +118,7 @@ import com.anydrop.app.ui.theme.LedRed
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.delay
 import java.io.File
+import com.anydrop.app.ui.theme.tracked
 
 @Composable
 fun PlayerScreen(
@@ -503,7 +504,7 @@ private fun ImageViewerContent(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp,
+                    letterSpacing = tracked(2f),
                     modifier = Modifier
                         .align(Alignment.Center)
                         .clip(RoundedCornerShape(8.dp))
@@ -1203,7 +1204,7 @@ private fun SwipeableContent(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp,
+                    letterSpacing = tracked(2f),
                     modifier = Modifier
                         .align(Alignment.Center)
                         .clip(RoundedCornerShape(8.dp))

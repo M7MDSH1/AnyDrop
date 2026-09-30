@@ -2,6 +2,7 @@ package com.anydrop.app.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.webkit.CookieManager
 import com.anydrop.app.data.model.CookieEntry
 import com.anydrop.app.data.model.CookieSession
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,6 +52,52 @@ class CookieRepository @Inject constructor(
         getCookieFile().delete()
         _importedSessions.value = emptyList()
         _isImported.value = false
+    }
+
+    /**
+     * Signs out of one site only: drops its cookies from cookies.txt (what yt-dlp uses) and
+     * from the in-app browser (so the login page doesn't sign straight back in). Other sites'
+     * sessions are untouched; the platform itself stays in the list.
+     */
+    suspend fun disconnect(domain: String) {
+        val d = domain.removePrefix(".").lowercase()
+        withContext(Dispatchers.IO) {
+            val file = getCookieFile()
+            if (file.exists()) {
+                val kept = file.readLines().filter { line ->
+                    val t = line.trim()
+                    if (t.isBlank() || t.startsWith("#")) return@filter true
+                    val entry = t.split("\t").firstOrNull()?.removePrefix(".")?.lowercase().orEmpty()
+                    !(entry == d || entry.endsWith(".$d"))
+                }
+                if (kept.any { it.isNotBlank() && !it.trim().startsWith("#") }) {
+                    file.printWriter().use { pw -> kept.forEach { pw.println(it) } }
+                } else {
+                    file.delete() // no sessions left at all
+                }
+            }
+            val sessions = if (file.exists()) parseCookies(file) else emptyList()
+            _importedSessions.value = sessions
+            _isImported.value = sessions.isNotEmpty()
+        }
+        withContext(Dispatchers.Main) { clearBrowserCookies(d) }
+    }
+
+    /** CookieManager has no "remove for domain", so each cookie is expired individually. */
+    private fun clearBrowserCookies(domain: String) {
+        val manager = runCatching { CookieManager.getInstance() }.getOrNull() ?: return
+        listOf("https://$domain", "https://www.$domain", "https://m.$domain").forEach { url ->
+            val names = manager.getCookie(url)
+                ?.split(";")
+                ?.map { it.substringBefore("=").trim() }
+                ?.filter { it.isNotEmpty() }
+                .orEmpty()
+            names.forEach { name ->
+                manager.setCookie(url, "$name=; Max-Age=0; Path=/")
+                manager.setCookie(url, "$name=; Max-Age=0; Path=/; Domain=.$domain")
+            }
+        }
+        manager.flush()
     }
 
     /** True if the cookie file has at least one entry for [domain] (for ✓ marks). */

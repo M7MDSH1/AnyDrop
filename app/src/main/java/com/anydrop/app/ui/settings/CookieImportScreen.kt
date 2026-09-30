@@ -3,22 +3,29 @@ package com.anydrop.app.ui.settings
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,6 +46,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
@@ -50,9 +59,10 @@ import com.anydrop.app.data.repository.LoginPlatform
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
-import com.anydrop.app.ui.theme.LedGreen
-import com.anydrop.app.ui.theme.LedRed
+import com.anydrop.app.ui.theme.Hairline
 import com.anydrop.app.ui.theme.MediumGray
+import com.anydrop.app.ui.theme.StatusGreen
+import com.anydrop.app.ui.theme.StatusRed
 import com.anydrop.app.ui.theme.White
 
 @Composable
@@ -66,6 +76,7 @@ fun CookieImportScreen(
 
     var activeLogin by remember { mutableStateOf<LoginPlatform?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var confirmAction by remember { mutableStateOf<Pair<SessionAction, LoginPlatform>?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -96,6 +107,21 @@ fun CookieImportScreen(
                 viewModel.addPlatform(name, url)
                 showAddDialog = false
             }
+        )
+    }
+
+    confirmAction?.let { (action, platform) ->
+        ConfirmSessionDialog(
+            action = action,
+            platformName = platform.name,
+            onConfirm = {
+                when (action) {
+                    SessionAction.DISCONNECT -> viewModel.disconnect(platform)
+                    SessionAction.DELETE -> viewModel.deletePlatform(platform)
+                }
+                confirmAction = null
+            },
+            onDismiss = { confirmAction = null }
         )
     }
 
@@ -144,8 +170,13 @@ fun CookieImportScreen(
                     platform = platform,
                     loggedIn = loggedIn,
                     onClick = { activeLogin = platform },
-                    onRemove = if (!platform.builtIn) {
-                        { viewModel.removePlatform(platform.name) }
+                    // Sign out, keep the platform (every platform, Instagram included).
+                    onDisconnect = if (loggedIn) {
+                        { confirmAction = SessionAction.DISCONNECT to platform }
+                    } else null,
+                    // Sign out AND remove from the list (only platforms the user added).
+                    onDelete = if (!platform.builtIn) {
+                        { confirmAction = SessionAction.DELETE to platform }
                     } else null
                 )
             }
@@ -168,7 +199,7 @@ fun CookieImportScreen(
         statusMessage?.let {
             Text(
                 text = it.text,
-                color = if (it.isError) LedRed else LedGreen,
+                color = if (it.isError) StatusRed else StatusGreen,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center
@@ -196,47 +227,147 @@ fun CookieImportScreen(
     }
 }
 
+enum class SessionAction { DISCONNECT, DELETE }
+
 @Composable
 private fun PlatformRow(
     platform: LoginPlatform,
     loggedIn: Boolean,
     onClick: () -> Unit,
-    onRemove: (() -> Unit)?
+    onDisconnect: (() -> Unit)?,
+    onDelete: (() -> Unit)?
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, if (loggedIn) StatusGreen.copy(alpha = 0.35f) else Hairline, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Black)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(platform.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
-                Text(
-                    platform.domain,
-                    color = White.copy(alpha = 0.35f),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(platform.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                    Text(
+                        platform.domain,
+                        color = White.copy(alpha = 0.4f),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp
+                    )
+                }
                 if (loggedIn) {
-                    Text(stringResource(R.string.logged_in), color = LedGreen, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    Text(stringResource(R.string.logged_in), color = StatusGreen, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 } else {
                     Text(stringResource(R.string.log_in), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 }
-                if (onRemove != null) {
-                    Spacer(modifier = Modifier.height(0.dp))
-                    TextButton(onClick = onRemove) {
-                        Text("✕", color = LedRed, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+            }
+            if (onDisconnect != null || onDelete != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
+                    onDisconnect?.let {
+                        SessionButton(
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            label = stringResource(R.string.session_disconnect),
+                            color = Amber,
+                            onClick = it
+                        )
+                    }
+                    onDelete?.let {
+                        SessionButton(
+                            icon = Icons.Filled.DeleteOutline,
+                            label = stringResource(R.string.session_delete),
+                            color = StatusRed,
+                            onClick = it
+                        )
                     }
                 }
             }
         }
     }
+}
+
+/** Small outlined icon+label button used for DISCONNECT / DELETE on a platform card. */
+@Composable
+private fun SessionButton(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.6f)),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = color),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        modifier = Modifier.height(36.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(label, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun ConfirmSessionDialog(
+    action: SessionAction,
+    platformName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isDelete = action == SessionAction.DELETE
+    val accent = if (isDelete) StatusRed else Amber
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MediumGray,
+        icon = {
+            Icon(
+                if (isDelete) Icons.Filled.DeleteOutline else Icons.AutoMirrored.Filled.Logout,
+                contentDescription = null,
+                tint = accent
+            )
+        },
+        title = {
+            Text(
+                stringResource(if (isDelete) R.string.delete_platform_title else R.string.disconnect_confirm_title, platformName),
+                color = White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Text(
+                stringResource(if (isDelete) R.string.delete_platform_message else R.string.disconnect_confirm_message, platformName),
+                color = White.copy(alpha = 0.8f),
+                fontSize = 13.sp,
+                lineHeight = 19.sp
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Icon(
+                    if (isDelete) Icons.Filled.DeleteOutline else Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    stringResource(if (isDelete) R.string.session_delete else R.string.session_disconnect),
+                    color = accent,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+            }
+        }
+    )
 }
 
 @Composable

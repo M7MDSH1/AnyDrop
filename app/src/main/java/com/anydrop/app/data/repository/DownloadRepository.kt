@@ -96,9 +96,30 @@ class DownloadRepository(
             .flowOn(ioDispatcher)
     }
 
-    fun cancelDownload() {
-        ytDlpEngine.cancel()
+    /** Media the web extractor found on the page (no login); see [YtDlpEngine.downloadDirect]. */
+    fun downloadDirect(
+        pageUrl: String,
+        format: YtDlpEngine.FormatInfo,
+        outputPath: String,
+        cookieHeader: String? = null
+    ): Flow<DownloadState> {
+        return ytDlpEngine.downloadDirect(pageUrl, format, outputPath, cookieHeader)
+            .map { state ->
+                if (state is DownloadState.Completed) {
+                    indexInMediaStore(state.mediaItem)
+                }
+                state
+            }
+            .flowOn(ioDispatcher)
     }
+
+    /** Stops one download (by its output path), or all of them when [tag] is null. */
+    fun cancelDownload(tag: String? = null) {
+        ytDlpEngine.cancel(tag)
+    }
+
+    /** False on phones where the bundled ffmpeg can't load (16 KB memory pages). */
+    fun ffmpegUsable(): Boolean = ytDlpEngine.ffmpegUsable
 
     /**
      * Re-export a finished private download into the public MediaStore on a later

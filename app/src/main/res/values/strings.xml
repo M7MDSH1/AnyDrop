@@ -104,7 +104,7 @@
     <!-- Settings -->
     <string name="settings_title">SETTINGS</string>
     <string name="settings_session_signal">SESSION SIGNAL</string>
-    <string name="settings_session_signal_sub">Import cookies for restricted content</string>
+    <string name="settings_session_signal_sub">Optional — only for private content. Public posts need no login.</string>
     <string name="settings_appearance">APPEARANCE</string>
     <string name="settings_dark_sub">Dark mode — tap for light</string>
     <string name="settings_light_sub">Light mode — tap for dark</string>
@@ -198,4 +198,52 @@
     <string name="progress_retrying_video">Retrying video without height restriction…</string>
     <string name="progress_downloading_audio">Downloading audio…</string>
     <string name="progress_merging_audio">Merging audio…</string>
+
+    <!-- No-login downloads, download tracker, browser -->
+    <string name="error_region_blocked">The site blocks this video for your country or network. Try again later or on another connection.</string>
+    <string name="error_private_post">This post is private or needs a login. Public posts download without an account — for private ones, sign in under Settings → Session Signal.</string>
+    <string name="error_site_unsupported">This site blocks non-browser downloaders and isn\'t supported.</string>
+    <string name="error_link_expired">The site refused the download — the link may have expired. Tap RETRY.</string>
+    <string name="error_no_space">Your phone is out of storage space.</string>
+    <string name="error_network">Couldn\'t reach the site. Check your connection and try again.</string>
+    <string name="error_no_app_to_open">No app can open this file.</string>
+    <string name="progress_finishing">Finishing up…</string>
+    <string name="progress_extracting_audio">Extracting audio…</string>
+    <string name="found_on_page">FOUND ON PAGE · NO LOGIN</string>
+    <string name="queue_title">DOWNLOADS</string>
+    <string name="queue_clear">CLEAR FINISHED</string>
+    <string name="task_saved">SAVED</string>
+    <string name="task_failed">FAILED</string>
+    <string name="task_stopped">STOPPED</string>
+    <string name="task_open">OPEN</string>
+    <string name="task_stop">STOP</string>
+    <string name="task_dismiss">Remove from list</string>
+    <string name="nav_browser">BROWSER</string>
+    <string name="browser_search_hint">Search or type a link</string>
+    <string name="browser_title">BROWSE &amp; DOWNLOAD</string>
+    <string name="browser_subtitle">Open any site and play a video. When AnyDrop spots it, the download button lights up.</string>
+    <string name="browser_find_video">FIND VIDEO</string>
+    <string name="browser_download_count">DOWNLOAD · %1$d</string>
+    <string name="browser_sheet_title">MEDIA ON THIS PAGE</string>
+    <string name="browser_nothing_found">Nothing spotted yet. Play the video, or analyze the page — that works for Instagram, YouTube, TikTok and most sites.</string>
+    <string name="browser_analyze">ANALYZE THIS PAGE</string>
+    <string name="browser_more_qualities">MORE QUALITIES · ANALYZE PAGE</string>
+    <string name="browser_save">SAVE</string>
+    <string name="browser_desktop_site">Desktop site</string>
+    <string name="browser_copy_link">Copy link</string>
+    <string name="browser_forward">Forward</string>
+    <string name="browser_start_page">Start page</string>
+    <string name="browser_reload">Reload</string>
+    <string name="browser_stop">Stop loading</string>
+    <string name="browser_added">Added to downloads</string>
+
+    <!-- Session signal: disconnect / delete -->
+    <string name="session_disconnect">DISCONNECT</string>
+    <string name="session_delete">DELETE</string>
+    <string name="disconnect_confirm_title">Disconnect %1$s?</string>
+    <string name="disconnect_confirm_message">You\'ll be signed out of your %1$s account in AnyDrop. %1$s stays in this list, so you can log in again anytime.</string>
+    <string name="delete_platform_title">Delete %1$s?</string>
+    <string name="delete_platform_message">This signs you out of %1$s and removes it from the list. You can add it again later.</string>
+    <string name="session_disconnected">Disconnected from %1$s</string>
+    <string name="session_deleted">%1$s removed</string>
 </resources>

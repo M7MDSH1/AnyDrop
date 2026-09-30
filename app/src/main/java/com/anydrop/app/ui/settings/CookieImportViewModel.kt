@@ -58,13 +58,35 @@ class CookieImportViewModel @Inject constructor(
         refreshLoginStatus()
     }
 
-    fun removePlatform(name: String) {
-        platformRepository.removePlatform(name)
-        refreshLoginStatus()
-    }
-
     private val _statusMessage = MutableStateFlow<CookieStatusMessage?>(null)
     val statusMessage: StateFlow<CookieStatusMessage?> = _statusMessage.asStateFlow()
+
+    /** Sign out of [platform] but keep it (and its login URL) in the list for later. */
+    fun disconnect(platform: LoginPlatform) {
+        viewModelScope.launch {
+            cookieRepository.disconnect(platform.domain)
+            refreshLoginStatus()
+            _statusMessage.value = CookieStatusMessage(
+                appContext.getString(R.string.session_disconnected, platform.name),
+                isError = false
+            )
+        }
+    }
+
+    /** Sign out of [platform] AND remove it from the list (added platforms only). */
+    fun deletePlatform(platform: LoginPlatform) {
+        if (platform.builtIn) return
+        viewModelScope.launch {
+            // Sign out first: removing the row alone used to leave the account's cookies saved.
+            cookieRepository.disconnect(platform.domain)
+            platformRepository.removePlatform(platform.name)
+            refreshLoginStatus()
+            _statusMessage.value = CookieStatusMessage(
+                appContext.getString(R.string.session_deleted, platform.name),
+                isError = false
+            )
+        }
+    }
 
     private fun errorText(fallbackRes: Int, exception: Throwable?): String =
         appContext.getString(

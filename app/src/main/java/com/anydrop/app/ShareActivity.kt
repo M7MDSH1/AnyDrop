@@ -69,9 +69,13 @@ import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
 import com.anydrop.app.ui.theme.LedGreen
 import com.anydrop.app.ui.theme.MediumGray
+import com.anydrop.app.ui.theme.StatusGreen
+import com.anydrop.app.ui.theme.StatusRed
 import com.anydrop.app.ui.theme.White
+import com.anydrop.app.ui.settings.AppearanceViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import com.anydrop.app.ui.theme.tracked
 
 @AndroidEntryPoint
 class ShareActivity : ComponentActivity() {
@@ -92,9 +96,10 @@ class ShareActivity : ComponentActivity() {
         }
 
         setContent {
-            // The share sheet hardcodes the deck's dark palette (like the
-            // player), so it stays dark in both appearance modes.
-            AnyDropTheme(darkTheme = true) {
+            // Follows the app's appearance setting, like the rest of the app.
+            val appearance: AppearanceViewModel = hiltViewModel()
+            val darkMode by appearance.darkMode.collectAsState()
+            AnyDropTheme(darkTheme = darkMode) {
                 ShareSheet(
                     sharedUrl = sharedUrl,
                     onClose = { finish() }
@@ -174,7 +179,7 @@ private fun ShareSheet(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 3.sp
+                letterSpacing = tracked(3f)
             )
             Text(
                 stringResource(R.string.share_select_what),
@@ -182,6 +187,19 @@ private fun ShareSheet(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp
             )
+            if (formats.any { it.isFromPage }) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.found_on_page),
+                    color = StatusGreen,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(StatusGreen.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 5.dp)
+                )
+            }
             Spacer(Modifier.height(16.dp))
 
             when {
@@ -207,19 +225,22 @@ private fun ShareSheet(
                 downloadState is DownloadState.Error -> {
                     Text(
                         (downloadState as DownloadState.Error).message,
-                        color = Color(0xFFFF6E6E),
+                        color = StatusRed,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
                     )
                 }
 
-                images.size > 1 -> {
+                // A carousel of photos only; mixed photo/video posts use the list below.
+                images.size > 1 && videoAudio.isEmpty() -> {
                     ShareImagePicker(images = images) { chosen -> ensureNotificationPermission { viewModel.downloadImages(chosen) } }
                 }
 
                 else -> {
                     ShareQualityList(
-                        formats = videoAudio.ifEmpty { formats },
+                        // Mixed carousels list their photos too; otherwise just video/audio.
+                        formats = if (images.size > 1) formats else videoAudio.ifEmpty { formats },
                         onRecord = { fmt ->
                             ensureNotificationPermission {
                                 viewModel.selectFormat(fmt)
@@ -313,7 +334,7 @@ private fun ShareQualityList(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 3.sp
+                letterSpacing = tracked(3f)
             )
         }
     }
@@ -414,7 +435,7 @@ private fun ShareImagePicker(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
+                letterSpacing = tracked(2f)
             )
         }
     }
