@@ -4,27 +4,39 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.1.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.2.0**
 
 ---
 
 ## Features
 
-- **Download videos** in any available quality (picks video + audio and merges via ffmpeg).
+- **Download videos** in any available quality (picks video + audio and merges them).
+- **No login needed** for public posts — Instagram reels, posts and carousels (and any
+  site yt-dlp can't handle) are read straight from the web page, like a browser would.
 - **Audio-only** extraction (.m4a) at selectable bitrates.
 - **Images** — including multi-image / carousel posts with a select-what-you-want grid.
+- **Download tracker** — run several downloads at once and follow each one's real
+  progress, speed and time left, with STOP / RETRY / OPEN.
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
   sheet fetches the formats, you pick quality/images and hit **RECORD**, and it
   downloads in the background without leaving the app you were in.
-- **Library** — browse all device videos & images, filter (All / Videos / Images),
-  sort by date or length, multi-select delete, and a per-item menu (Share / Delete / Info).
+- **Built-in browser** — browse any site and download the videos it plays. The start
+  page is yours: add, edit, reorder or remove sites. Desktop mode is remembered per
+  site and fits desktop pages to the screen; TikTok opens as its desktop site so its
+  feed scrolls without the app.
+- **Library** — browse all device videos & images, **search** (title, creator, site,
+  file name — Arabic spelling variants included), filter (All / Videos / Images), sort
+  by date or length, multi-select delete, and a per-item menu (Share / Delete / Info).
 - **Audio tab** — plays device audio with background playback + media notification.
-- **Built-in player** — gestures (seek, volume, brightness), playback speed, PiP with
-  controls, aspect-ratio toggle, **swipe left/right to jump between images & videos**,
-  and a zoomable image viewer.
-- **Appearance** — instant dark ↔ light "tape" theme toggle from Settings.
-- **In-app login (cookies)** — sign in to sites (e.g. Instagram) inside the app to
-  download content that requires authentication. Add custom platforms too.
+- **Built-in player** — a smooth seek bar with live frame preview while you drag,
+  stacking double-tap seek, gestures (volume, brightness), playback speed, PiP shaped
+  like the video, aspect-ratio toggle, resume where you left off, **share the video or
+  the link it came from**, swipe left/right between items, and a zoomable image viewer.
+- **Default video player** — AnyDrop appears in "Open with" and can be set as the
+  phone's video player for files from any app.
+- **English & Arabic**, with a **dark ↔ light** theme, both switchable from Settings.
+- **Optional login (cookies)** — only for private content: sign in inside the app, and
+  disconnect or remove a site's session any time.
 - Downloads are saved to your device and exported to the public gallery (Movies /
   Pictures / Music → `AnyDrop/`) so other apps (WhatsApp, Google Photos) can see them.
 
