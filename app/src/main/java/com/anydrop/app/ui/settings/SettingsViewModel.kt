@@ -42,9 +42,7 @@ class SettingsViewModel @Inject constructor(
         _autoDetectLinks.value = next
     }
 
-    fun toggleDarkMode() {
-        settingsRepository.darkMode = !settingsRepository.darkMode
-    }
+    fun toggleDarkMode() = settingsRepository.toggleDarkMode()
 
     /** Persists the choice; the caller applies it to the running activity. */
     suspend fun setLanguage(language: AppLanguage) {

@@ -73,6 +73,19 @@ class TapeDeckViewModel @Inject constructor(
 
     private var searchJob: Job? = null
 
+    // Non-null when the same video is already downloaded; UI shows the
+    // REPLACE / DOWNLOAD ANYWAY / CANCEL dialog. Holds the video's display title.
+    private val _duplicatePrompt = MutableStateFlow<DuplicatePrompt?>(null)
+    val duplicatePrompt: StateFlow<DuplicatePrompt?> = _duplicatePrompt.asStateFlow()
+
+    private var _forceReplace = false
+    private var pendingSuffixPath: String? = null
+
+    /** Tag (output path) of the most recently started download — for user cancel. */
+    private var currentNotificationTag: String? = null
+
+    // Keep every property above this block: init may handle a pending share,
+    // which writes these fields, and Kotlin initializes in declaration order.
     init {
         if (pendingSharedUrl == null) {
             restoreSession()
@@ -153,17 +166,6 @@ class TapeDeckViewModel @Inject constructor(
             format.id
         )
     }
-
-    // Non-null when the same video is already downloaded; UI shows the
-    // REPLACE / DOWNLOAD ANYWAY / CANCEL dialog. Holds the video's display title.
-    private val _duplicatePrompt = MutableStateFlow<DuplicatePrompt?>(null)
-    val duplicatePrompt: StateFlow<DuplicatePrompt?> = _duplicatePrompt.asStateFlow()
-
-    private var _forceReplace = false
-    private var pendingSuffixPath: String? = null
-
-    /** Tag (output path) of the most recently started download — for user cancel. */
-    private var currentNotificationTag: String? = null
 
     /** User tapped "Replace" — delete the oldest copy, re-download to the base name. */
     fun confirmReplaceDownload() {

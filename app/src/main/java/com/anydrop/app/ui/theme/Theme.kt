@@ -21,56 +21,55 @@ fun AnyDropTheme(
     darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    // Activate the palette BEFORE anything reads the color getters below, and
-    // make the system bars follow the mode. The palette write also triggers
-    // recomposition of every composable that read a color getter.
-    TapeDeckPaletteState.current.value = if (darkTheme) DarkPalette else LightPalette
+    // The global palette behind the color getters is switched by AnyDropApp, outside
+    // composition. Writing it from here raced other windows' compositions and could
+    // leave the app stuck on the old palette. This function only reads the palette
+    // for [darkTheme], so it is correct in the same frame the mode flips.
+    val p = paletteFor(darkTheme)
 
     val view = LocalView.current
     SideEffect {
         val window = view.context.findActivity()?.window ?: return@SideEffect
-        window.statusBarColor = DarkGray.toArgb()
-        window.navigationBarColor = Black.toArgb()
+        window.statusBarColor = p.background.toArgb()
+        window.navigationBarColor = p.surface.toArgb()
         WindowCompat.getInsetsController(window, view).apply {
             isAppearanceLightStatusBars = !darkTheme
             isAppearanceLightNavigationBars = !darkTheme
         }
     }
 
-    // Schemes are built inside the composable (not as file-level vals) so the
-    // color getters resolve against the palette just activated above. Every surface
-    // role is set: menus, dialogs and sheets otherwise fall back to Material's
-    // purple-grey defaults, which clash with the warm palette.
+    // Every surface role is set: menus, dialogs and sheets otherwise fall back to
+    // Material's purple-grey defaults, which clash with the warm palette.
     val colorScheme = if (darkTheme) {
         darkColorScheme(
-            primary = Amber,
-            onPrimary = OnAccent,
+            primary = p.accent,
+            onPrimary = p.onAccent,
             primaryContainer = Color(0xFF3E2C08),
-            onPrimaryContainer = AmberBright,
-            secondary = AmberBright,
-            onSecondary = OnAccent,
-            secondaryContainer = MediumGray,
-            onSecondaryContainer = White,
+            onPrimaryContainer = p.accentBright,
+            secondary = p.accentBright,
+            onSecondary = p.onAccent,
+            secondaryContainer = p.surfaceVariant,
+            onSecondaryContainer = p.content,
             tertiary = LedBlue,
-            background = Black,
-            onBackground = White,
-            surface = DarkGray,
-            onSurface = White,
-            surfaceVariant = MediumGray,
-            onSurfaceVariant = White.copy(alpha = 0.7f),
-            surfaceTint = Amber,
+            background = p.surface,
+            onBackground = p.content,
+            surface = p.background,
+            onSurface = p.content,
+            surfaceVariant = p.surfaceVariant,
+            onSurfaceVariant = p.content.copy(alpha = 0.7f),
+            surfaceTint = p.accent,
             surfaceContainerLowest = Color(0xFF0B0A09),
-            surfaceContainerLow = Black,
+            surfaceContainerLow = p.surface,
             surfaceContainer = Color(0xFF1F1D19),
             surfaceContainerHigh = Color(0xFF26231F),
-            surfaceContainerHighest = MediumGray,
+            surfaceContainerHighest = p.surfaceVariant,
             surfaceBright = Color(0xFF34302A),
-            surfaceDim = Black,
-            inverseSurface = White,
-            inverseOnSurface = Black,
-            inversePrimary = AmberDim,
-            outline = LightGray,
-            outlineVariant = Hairline,
+            surfaceDim = p.surface,
+            inverseSurface = p.content,
+            inverseOnSurface = p.surface,
+            inversePrimary = p.accentDim,
+            outline = p.outline,
+            outlineVariant = p.hairline,
             error = StatusRed,
             onError = Color.Black,
             errorContainer = Color(0xFF4A1515),
@@ -79,34 +78,34 @@ fun AnyDropTheme(
         )
     } else {
         lightColorScheme(
-            primary = Amber,
-            onPrimary = OnAccent,
+            primary = p.accent,
+            onPrimary = p.onAccent,
             primaryContainer = Color(0xFFFFE2B3),
             onPrimaryContainer = Color(0xFF3A2200),
-            secondary = AmberBright,
-            onSecondary = OnAccent,
-            secondaryContainer = MediumGray,
-            onSecondaryContainer = White,
+            secondary = p.accentBright,
+            onSecondary = p.onAccent,
+            secondaryContainer = p.surfaceVariant,
+            onSecondaryContainer = p.content,
             tertiary = LedBlue,
-            background = Black,
-            onBackground = White,
-            surface = DarkGray,
-            onSurface = White,
-            surfaceVariant = MediumGray,
-            onSurfaceVariant = White.copy(alpha = 0.7f),
-            surfaceTint = Amber,
+            background = p.surface,
+            onBackground = p.content,
+            surface = p.background,
+            onSurface = p.content,
+            surfaceVariant = p.surfaceVariant,
+            onSurfaceVariant = p.content.copy(alpha = 0.7f),
+            surfaceTint = p.accent,
             surfaceContainerLowest = Color.White,
-            surfaceContainerLow = Black,
+            surfaceContainerLow = p.surface,
             surfaceContainer = Color(0xFFF8F4EE),
             surfaceContainerHigh = Color(0xFFF1EBE2),
-            surfaceContainerHighest = MediumGray,
+            surfaceContainerHighest = p.surfaceVariant,
             surfaceBright = Color.White,
             surfaceDim = Color(0xFFE2D9CC),
             inverseSurface = Color(0xFF34302A),
             inverseOnSurface = Color(0xFFF8F4EE),
             inversePrimary = Color(0xFFFFB000),
-            outline = LightGray,
-            outlineVariant = Hairline,
+            outline = p.outline,
+            outlineVariant = p.hairline,
             error = StatusRed,
             onError = Color.White,
             errorContainer = Color(0xFFFFDAD6),

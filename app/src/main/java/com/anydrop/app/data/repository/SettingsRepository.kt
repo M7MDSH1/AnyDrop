@@ -18,12 +18,12 @@ class SettingsRepository @Inject constructor(
     private val _darkMode = MutableStateFlow(prefs.getBoolean(KEY_DARK_MODE, true))
 
     /**
-     * Live dark-mode state. Backed by a SharedPreferences listener so ANY writer
-     * (any ViewModel/screen) instantly updates every collector — the theme flips
-     * the moment the setting flips, with no restart.
+     * Live dark-mode state and the single source of truth for the theme. [darkMode]'s
+     * setter updates it directly, so the theme flips the moment the setting flips.
      */
     val darkModeFlow: StateFlow<Boolean> = _darkMode.asStateFlow()
 
+    // Safety net for a write that bypasses [darkMode] (e.g. prefs edited elsewhere).
     private val darkModeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == KEY_DARK_MODE) {
             _darkMode.value = prefs.getBoolean(KEY_DARK_MODE, true)
@@ -44,10 +44,22 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_DETECT, value).apply()
 
-    /** Dark mode is the default; false switches the whole UI to the light palette. */
+    /**
+     * Dark mode is the default; false switches the whole UI to the light palette.
+     * The setter updates [darkModeFlow] itself instead of waiting on the prefs
+     * listener, so the theme can never miss a switch.
+     */
     var darkMode: Boolean
-        get() = prefs.getBoolean(KEY_DARK_MODE, true)
-        set(value) = prefs.edit().putBoolean(KEY_DARK_MODE, value).apply()
+        get() = _darkMode.value
+        set(value) {
+            prefs.edit().putBoolean(KEY_DARK_MODE, value).apply()
+            _darkMode.value = value
+        }
+
+    /** Flips the mode the user is currently looking at. */
+    fun toggleDarkMode() {
+        darkMode = !_darkMode.value
+    }
 
     /** Last time (epoch millis) a yt-dlp update check was attempted, to throttle it. */
     fun lastYtDlpUpdateCheck(): Long = prefs.getLong(KEY_YTDLP_LAST_UPDATE, 0L)

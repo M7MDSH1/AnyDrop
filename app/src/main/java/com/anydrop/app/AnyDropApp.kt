@@ -11,11 +11,14 @@ import com.anydrop.app.R
 import com.anydrop.app.data.repository.DownloadRepository
 import com.anydrop.app.data.repository.DownloadTracker
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.readAppLanguageSync
+import com.anydrop.app.ui.theme.TapeDeckPaletteState
 import com.anydrop.app.util.Constants
 import com.anydrop.app.util.LocaleHelper
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +57,9 @@ class AnyDropApp : Application() {
     @Inject
     lateinit var libraryRepository: LibraryRepository
 
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
     override fun attachBaseContext(base: android.content.Context) {
         super.attachBaseContext(
             LocaleHelper.wrapAppLocale(base, readAppLanguageSync(base))
@@ -62,6 +68,7 @@ class AnyDropApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        followDarkMode()
         createNotificationChannel()
         reconcileInterruptedDownloads()
         val imageLoader = ImageLoader.Builder(this)
@@ -70,6 +77,19 @@ class AnyDropApp : Application() {
             }
             .build()
         Coil.setImageLoader(imageLoader)
+    }
+
+    /**
+     * Keeps the palette behind the global color getters in step with the saved
+     * setting for the life of the process. UNDISPATCHED applies the saved mode
+     * before any activity composes (no flash of the wrong palette), and later
+     * switches land on the main thread before the next frame.
+     */
+    private fun followDarkMode() {
+        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+            .launch(start = CoroutineStart.UNDISPATCHED) {
+                settingsRepository.darkModeFlow.collect(TapeDeckPaletteState::select)
+            }
     }
 
     private fun createNotificationChannel() {
