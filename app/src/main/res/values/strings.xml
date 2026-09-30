@@ -131,6 +131,29 @@
     <string name="language_system">System Default</string>
     <string name="language_english">English</string>
     <string name="language_arabic">العربية</string>
+    <string name="settings_updates">UPDATES</string>
+    <string name="update_check_tap">Tap to check for a new version</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You have the latest version (v%1$s)</string>
+    <string name="update_available_sub">Version %1$s is available — tap to update</string>
+    <string name="update_check_failed">Couldn\'t check for updates — tap to try again</string>
+    <string name="update_title">UPDATE AVAILABLE</string>
+    <string name="update_message">AnyDrop %1$s is ready. You have %2$s.</string>
+    <string name="update_size">Download size: %1$s</string>
+    <string name="update_now">UPDATE</string>
+    <string name="update_later">LATER</string>
+    <string name="update_skip">SKIP</string>
+    <string name="update_install">INSTALL</string>
+    <string name="update_allow">ALLOW</string>
+    <string name="update_open_page">OPEN PAGE</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_allow_installs">To install updates, allow AnyDrop to install apps: tap ALLOW, switch it on, then come back.</string>
+    <string name="update_failed">The update couldn\'t be downloaded. Check your connection and try again.</string>
+    <string name="update_not_anydrop">The downloaded file isn\'t an AnyDrop update.</string>
+    <string name="update_signature_mismatch">This update is signed differently from the app you have, so Android won\'t install it over it. Get it from the release page instead.</string>
+    <string name="update_notification_title">AnyDrop %1$s is available</string>
+    <string name="update_notification_text">Tap to see what\'s new and update.</string>
+    <string name="notification_channel_updates">App updates</string>
 
     <!-- Session signal (cookies) -->
     <string name="session_signal_subtitle">Log in to platforms to download their content</string>

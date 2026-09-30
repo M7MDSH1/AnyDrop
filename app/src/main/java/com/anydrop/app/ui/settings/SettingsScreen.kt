@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.settings
 
 import android.app.Activity
+import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -42,6 +45,8 @@ import com.anydrop.app.BuildConfig
 import com.anydrop.app.R
 import com.anydrop.app.data.repository.AppLanguage
 import com.anydrop.app.data.repository.SettingsRepository
+import com.anydrop.app.data.repository.UpdateStatus
+import com.anydrop.app.ui.update.UpdateViewModel
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -65,6 +70,9 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // The activity's instance, so "check now" opens the same dialog as the automatic check.
+    val updateViewModel: UpdateViewModel = hiltViewModel(context.findActivity())
+    val updateStatus by updateViewModel.status.collectAsState()
 
     Column(
         modifier = Modifier
@@ -83,6 +91,13 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Cards scroll on small screens; the version footer stays at the bottom.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+        ) {
         SettingsCard(
             title = stringResource(R.string.settings_session_signal),
             subtitle = stringResource(R.string.settings_session_signal_sub),
@@ -122,8 +137,24 @@ fun SettingsScreen(
             subtitle = stringResource(R.string.settings_download_path_sub),
             onClick = null
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsCard(
+            title = stringResource(R.string.settings_updates),
+            subtitle = when (val status = updateStatus) {
+                UpdateStatus.Idle -> stringResource(R.string.update_check_tap)
+                UpdateStatus.Checking -> stringResource(R.string.update_checking)
+                UpdateStatus.UpToDate -> stringResource(R.string.update_up_to_date, BuildConfig.VERSION_NAME)
+                is UpdateStatus.Available -> stringResource(R.string.update_available_sub, status.update.version)
+                UpdateStatus.Failed -> stringResource(R.string.update_check_failed)
+            },
+            onClick = {
+                if (updateStatus is UpdateStatus.Available) updateViewModel.showUpdate() else updateViewModel.checkNow()
+            }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
@@ -267,6 +298,12 @@ private val qualityOptions = listOf(
 @StringRes
 private fun maxQualityLabelRes(height: Int): Int =
     qualityOptions.firstOrNull { it.first == height }?.second ?: R.string.quality_best
+
+private tailrec fun android.content.Context.findActivity(): ComponentActivity = when (this) {
+    is ComponentActivity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> error("Settings is not hosted in an activity")
+}
 
 @Composable
 private fun SettingsCard(title: String, subtitle: String, onClick: (() -> Unit)?) {

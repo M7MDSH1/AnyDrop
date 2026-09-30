@@ -7,6 +7,12 @@ object Constants {
     const val DOWNLOAD_PROGRESS_NOTIFICATION_ID = 1001
     const val DOWNLOAD_CHANNEL_ID = "anydrop_downloads"
 
+    // In-app updates from the project's GitHub releases.
+    const val GITHUB_REPO = "M7MDSH1/AnyDrop"
+    const val UPDATE_CHANNEL_ID = "anydrop_updates"
+    const val UPDATE_NOTIFICATION_ID = 2001
+    const val EXTRA_SHOW_UPDATE = "com.anydrop.app.SHOW_UPDATE"
+
     const val COOKIE_FILE_KEY = "cookies.txt"
     const val DEFAULT_DOWNLOAD_DIR = "AnyDrop"
 

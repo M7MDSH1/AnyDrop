@@ -72,6 +72,9 @@ import com.anydrop.app.data.repository.DeckSessionRepository
 import com.anydrop.app.data.repository.readAppLanguageSync
 import com.anydrop.app.util.LocaleHelper
 import com.anydrop.app.ui.settings.AppearanceViewModel
+import com.anydrop.app.ui.update.UpdatePrompt
+import com.anydrop.app.ui.update.UpdateViewModel
+import com.anydrop.app.util.Constants
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -108,9 +111,13 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    // Set when the "update available" notification opened (or re-opened) the app.
+    private var showUpdateRequested by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         extractUrlFromIntent(intent)?.let { pendingSharedUrl = it }
+        showUpdateRequested = intent?.getBooleanExtra(Constants.EXTRA_SHOW_UPDATE, false) == true
         // Reopen on the tab the user last left, unless a share is pending (force DECK).
         val startTab = if (pendingSharedUrl != null) Routes.TAPE_DECK
         else deckSessionRepository.lastTab(Routes.TAPE_DECK)
@@ -118,6 +125,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appearanceViewModel: AppearanceViewModel = hiltViewModel()
             val darkMode by appearanceViewModel.darkMode.collectAsState()
+            val updateViewModel: UpdateViewModel = hiltViewModel()
+            LaunchedEffect(Unit) { updateViewModel.checkOnLaunch() }
+            LaunchedEffect(showUpdateRequested) {
+                if (showUpdateRequested) {
+                    showUpdateRequested = false
+                    updateViewModel.showUpdate()
+                }
+            }
             AnyDropTheme(darkTheme = darkMode) {
                 AnyDropMainScreen(
                     onNavControllerReady = { navController = it },
@@ -125,6 +140,7 @@ class MainActivity : ComponentActivity() {
                     deckSessionRepository = deckSessionRepository,
                     downloadQueue = downloadQueue
                 )
+                UpdatePrompt(updateViewModel)
             }
         }
     }
@@ -138,6 +154,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(Constants.EXTRA_SHOW_UPDATE, false)) showUpdateRequested = true
         extractUrlFromIntent(intent)?.let { url ->
             pendingSharedUrl = url
             // Notify the running deck ViewModel so it pastes the URL immediately.
