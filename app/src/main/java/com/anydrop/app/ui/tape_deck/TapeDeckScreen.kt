@@ -54,7 +54,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.ui.components.DuplicatePromptDialog
-import com.anydrop.app.ui.tape_deck.components.DeckControls
+import com.anydrop.app.ui.tape_deck.components.LinkField
+import com.anydrop.app.ui.tape_deck.components.RecordButton
+import com.anydrop.app.ui.tape_deck.components.DeckError
+import com.anydrop.app.ui.tape_deck.components.DeckPanel
+import com.anydrop.app.ui.tape_deck.components.DownloadQueuePanel
+import com.anydrop.app.ui.theme.StatusGreen
 import com.anydrop.app.ui.tape_deck.components.LEDIndicator
 import com.anydrop.app.ui.tape_deck.components.ReelAnimation
 import com.anydrop.app.util.Constants
@@ -66,6 +71,7 @@ import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AmberBright
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
+import com.anydrop.app.ui.theme.Hairline
 import com.anydrop.app.ui.theme.LedBlue
 import com.anydrop.app.ui.theme.LedGreen
 import com.anydrop.app.ui.theme.LedRed
@@ -76,6 +82,7 @@ import com.anydrop.app.ui.theme.VuRed
 import com.anydrop.app.ui.theme.VuYellow
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.delay
+import com.anydrop.app.ui.theme.tracked
 
 @Composable
 fun TapeDeckScreen(
@@ -89,6 +96,7 @@ fun TapeDeckScreen(
     val isLoadingFormats by viewModel.isLoadingFormats.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
+    val tasks by viewModel.tasks.collectAsState()
     val context = LocalContext.current
 
     // One-time POST_NOTIFICATIONS request at the first download attempt (Android
@@ -135,17 +143,17 @@ fun TapeDeckScreen(
         )
     }
 
-    val isSpinning = downloadState is DownloadState.Progress
-
-    val canDownload = selectedFormat != null &&
-        downloadState !is DownloadState.Progress && url.isNotBlank()
+    // The reels turn while anything is downloading; several downloads can run at once.
+    val isSpinning = tasks.any { it.isActive }
+    val canDownload = selectedFormat != null && url.isNotBlank()
+    val level = tasks.filter { it.isActive }.maxOfOrNull { it.percent }?.div(100f) ?: 0f
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkGray)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -161,46 +169,136 @@ fun TapeDeckScreen(
             color = White.copy(alpha = 0.5f),
             fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 4.sp
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            LEDIndicator(label = stringResource(R.string.led_power), isOn = true, onColor = LedGreen)
-            LEDIndicator(label = stringResource(R.string.led_rec), isOn = isSpinning, onColor = LedRed, blink = isSpinning)
-            LEDIndicator(label = stringResource(R.string.led_signal), isOn = isCookieImported, onColor = LedBlue)
-            LEDIndicator(label = stringResource(R.string.led_link), isOn = url.isNotBlank(), onColor = Amber)
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ReelAnimation(size = 100.dp, isSpinning = isSpinning, reelColor = Amber, trackColor = MediumGray)
-            ReelAnimation(size = 100.dp, isSpinning = isSpinning, reelColor = Amber, trackColor = MediumGray)
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        VUMeter(
-            level = when (val state = downloadState) {
-                is DownloadState.Progress -> state.percentage / 100f
-                else -> 0f
-            }
+            letterSpacing = tracked(4f)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Multi-image picker: when the URL is a carousel/multi-image post, show a
+        DeckPanel {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                LEDIndicator(label = stringResource(R.string.led_power), isOn = true, onColor = LedGreen)
+                LEDIndicator(label = stringResource(R.string.led_rec), isOn = isSpinning, onColor = LedRed, blink = isSpinning)
+                LEDIndicator(label = stringResource(R.string.led_signal), isOn = isCookieImported, onColor = LedBlue)
+                LEDIndicator(label = stringResource(R.string.led_link), isOn = url.isNotBlank(), onColor = Amber)
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ReelAnimation(size = 96.dp, isSpinning = isSpinning, reelColor = Amber, trackColor = MediumGray)
+                ReelAnimation(size = 96.dp, isSpinning = isSpinning, reelColor = Amber, trackColor = MediumGray)
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            VUMeter(level = level)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        detectedLink?.let { link ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Black)
+                    .border(1.dp, LedGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.link_detected),
+                        color = StatusGreen,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = tracked(2f)
+                    )
+                    Text(
+                        text = link,
+                        color = White.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                TextButton(onClick = {
+                    viewModel.onUrlChange(link)
+                    detectedLink = null
+                }) {
+                    Text(stringResource(R.string.load_link), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                }
+                TextButton(onClick = { detectedLink = null }) {
+                    Text("✕", color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        LinkField(
+            url = url,
+            onUrlChange = viewModel::onUrlChange,
+            onPaste = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.let {
+                    viewModel.onUrlChange(it)
+                }
+            },
+            onGo = { if (canDownload) ensureNotificationPermission { viewModel.startDownload() } }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (isLoadingFormats) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    color = Amber,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.width(16.dp).height(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.fetching_qualities),
+                    color = White.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Found by reading the page itself (Instagram and friends): say so, no login involved.
+        if (availableFormats.any { it.isFromPage }) {
+            Text(
+                text = stringResource(R.string.found_on_page),
+                color = StatusGreen,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = tracked(1f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(StatusGreen.copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        // Multi-image picker: when the URL is a carousel of photos only, show a
         // checkable preview grid so the user can pick one, several, or all images.
+        // (Mixed carousels with videos use the regular list, which shows every item.)
         val imageEntries = availableFormats.filter { it.isImage && it.imageUrl.isNotBlank() }
-        val multiImage = imageEntries.size > 1
+        val multiImage = imageEntries.size > 1 && availableFormats.all { it.isImage }
         if (multiImage) {
             MultiImagePicker(
                 images = imageEntries,
@@ -229,7 +327,7 @@ fun TapeDeckScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 240.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Black),
                     contentAlignment = Alignment.Center
                 ) {
@@ -246,88 +344,33 @@ fun TapeDeckScreen(
                     color = Amber.copy(alpha = 0.7f),
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
-                    letterSpacing = 3.sp
+                    letterSpacing = tracked(3f)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
 
-        if (isLoadingFormats) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(
-                    color = Amber,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.width(16.dp).height(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.fetching_qualities),
-                    color = White.copy(alpha = 0.5f),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+        (downloadState as? DownloadState.Error)?.let { error ->
+            DeckError(error.message)
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        Spacer(modifier = Modifier.weight(1f))
-
-        detectedLink?.let { link ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Black)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.link_detected),
-                        color = LedGreen,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 2.sp
-                    )
-                    Text(
-                        text = link,
-                        color = White.copy(alpha = 0.8f),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                TextButton(onClick = {
-                    viewModel.onUrlChange(link)
-                    detectedLink = null
-                }) {
-                    Text(stringResource(R.string.load_link), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-                }
-                TextButton(onClick = { detectedLink = null }) {
-                    Text("✕", color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
+        if (!multiImage) {
+            RecordButton(
+                enabled = canDownload,
+                onRecord = { ensureNotificationPermission { viewModel.startDownload() } }
+            )
         }
 
-        DeckControls(
-            url = url,
-            downloadState = downloadState,
-            downloadEnabled = canDownload,
-            onUrlChange = viewModel::onUrlChange,
-            onDownload = { ensureNotificationPermission { viewModel.startDownload() } },
-            onCancel = viewModel::cancelDownload,
-            onPaste = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.primaryClip?.getItemAt(0)?.text?.toString()?.let {
-                    viewModel.onUrlChange(it)
-                }
-            }
+        Spacer(modifier = Modifier.height(20.dp))
+
+        DownloadQueuePanel(
+            tasks = tasks,
+            onStop = viewModel::cancelTask,
+            onRetry = viewModel::retryTask,
+            onOpen = viewModel::openTask,
+            onDismiss = viewModel::dismissTask,
+            onClearFinished = viewModel::clearFinishedTasks
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -351,7 +394,7 @@ private fun MultiImagePicker(
                 color = Amber,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp,
-                letterSpacing = 1.sp
+                letterSpacing = tracked(1f)
             )
             Text(
                 stringResource(
@@ -443,26 +486,30 @@ private fun FormatSelector(
             color = White.copy(alpha = 0.4f),
             fontSize = 9.sp,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 2.sp
+            letterSpacing = tracked(2f)
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        val grouped = formats
+            .filter { it.resolution != "unknown" }
+            .groupBy { it.resolution }
+            .map { (_, list) -> list.first() }
+        // Tall enough for ~6 rows without an inner scroll; longer lists scroll inside.
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().height(140.dp),
+            modifier = Modifier.fillMaxWidth().height((grouped.size.coerceIn(1, 6) * 44).dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            val grouped = formats
-                .filter { it.resolution != "unknown" }
-                .groupBy { it.resolution }
-                .map { (res, list) -> list.first() }
             items(grouped) { format ->
-                val isSelected = selectedFormat?.id == format.id
+                // Page images have no format id, so the label is part of the identity.
+                val isSelected = selectedFormat?.id == format.id && selectedFormat.resolution == format.resolution
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (isSelected) Amber.copy(alpha = 0.2f) else MediumGray.copy(alpha = 0.4f))
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) Amber.copy(alpha = 0.16f) else Black)
+                        .border(1.dp, if (isSelected) Amber else Hairline, RoundedCornerShape(8.dp))
                         .clickable { onSelect(format) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -472,8 +519,9 @@ private fun FormatSelector(
                             format.isAudioOnly -> "♪ ${format.resolution}"
                             else -> "● ${format.resolution}"
                         },
-                        color = if (isSelected) AmberBright else White.copy(alpha = 0.8f),
+                        color = if (isSelected) Amber else White.copy(alpha = 0.85f),
                         fontSize = 12.sp,
+                        fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else null,
                         fontFamily = FontFamily.Monospace
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -545,7 +593,7 @@ private fun VUMeter(modifier: Modifier = Modifier, level: Float = 0f) {
             color = White.copy(alpha = 0.3f),
             fontSize = 8.sp,
             fontFamily = FontFamily.Monospace,
-            letterSpacing = 2.sp
+            letterSpacing = tracked(2f)
         )
     }
 }

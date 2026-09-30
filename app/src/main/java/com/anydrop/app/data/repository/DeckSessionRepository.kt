@@ -55,7 +55,9 @@ class DeckSessionRepository @Inject constructor(
                             isAudioOnly = o.optBoolean("isAudioOnly"),
                             abr = o.optInt("abr"),
                             isImage = o.optBoolean("isImage"),
-                            imageUrl = o.optString("imageUrl")
+                            imageUrl = o.optString("imageUrl"),
+                            directUrl = o.optString("directUrl"),
+                            userAgent = o.optString("userAgent")
                         )
                     )
                 }
@@ -99,6 +101,9 @@ class DeckSessionRepository @Inject constructor(
                         put("abr", f.abr)
                         put("isImage", f.isImage)
                         put("imageUrl", f.imageUrl)
+                        // Media found on a web page: without these a restored session couldn't download it.
+                        put("directUrl", f.directUrl)
+                        put("userAgent", f.userAgent)
                     }
                 )
             }

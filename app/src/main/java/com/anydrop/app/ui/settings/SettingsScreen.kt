@@ -48,6 +48,7 @@ import com.anydrop.app.ui.theme.DarkGray
 import com.anydrop.app.ui.theme.White
 import com.anydrop.app.util.LocaleHelper
 import kotlinx.coroutines.launch
+import com.anydrop.app.ui.theme.tracked
 
 @Composable
 fun SettingsScreen(
@@ -129,7 +130,7 @@ fun SettingsScreen(
             color = White.copy(alpha = 0.3f),
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp,
-            letterSpacing = 2.sp
+            letterSpacing = tracked(2f)
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -137,7 +138,7 @@ fun SettingsScreen(
             color = White.copy(alpha = 0.2f),
             fontFamily = FontFamily.Monospace,
             fontSize = 9.sp,
-            letterSpacing = 1.sp
+            letterSpacing = tracked(1f)
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
@@ -145,7 +146,7 @@ fun SettingsScreen(
             color = Amber.copy(alpha = 0.5f),
             fontFamily = FontFamily.Monospace,
             fontSize = 10.sp,
-            letterSpacing = 1.sp
+            letterSpacing = tracked(1f)
         )
     }
 
@@ -282,7 +283,7 @@ private fun SettingsCard(title: String, subtitle: String, onClick: (() -> Unit)?
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, color = Amber, fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = 2.sp)
+                Text(text = title, color = Amber, fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = tracked(2f))
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = subtitle, color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
             }

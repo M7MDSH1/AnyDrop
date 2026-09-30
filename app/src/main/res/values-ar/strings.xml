@@ -104,7 +104,7 @@
     <!-- Settings -->
     <string name="settings_title">الإعدادات</string>
     <string name="settings_session_signal">إشارة الجلسة</string>
-    <string name="settings_session_signal_sub">استيراد ملفات تعريف الارتباط للمحتوى المقيّد</string>
+    <string name="settings_session_signal_sub">اختياري — للمحتوى الخاص فقط. المنشورات العامة لا تحتاج تسجيل دخول.</string>
     <string name="settings_appearance">المظهر</string>
     <string name="settings_dark_sub">الوضع الداكن — اضغط للوضع الفاتح</string>
     <string name="settings_light_sub">الوضع الفاتح — اضغط للوضع الداكن</string>
@@ -198,4 +198,52 @@
     <string name="progress_retrying_video">إعادة المحاولة بدون تقييد الارتفاع…</string>
     <string name="progress_downloading_audio">جارٍ تنزيل الصوت…</string>
     <string name="progress_merging_audio">جارٍ دمج الصوت…</string>
+
+    <!-- No-login downloads, download tracker, browser -->
+    <string name="error_region_blocked">الموقع يحجب هذا الفيديو في بلدك أو على شبكتك. حاول لاحقًا أو عبر اتصال آخر.</string>
+    <string name="error_private_post">هذا المنشور خاص أو يتطلب تسجيل الدخول. المنشورات العامة تُنزَّل بدون حساب — وللخاصة يمكنك تسجيل الدخول من الإعدادات ← إشارة الجلسة.</string>
+    <string name="error_site_unsupported">هذا الموقع يحجب برامج التنزيل غير المتصفحات وهو غير مدعوم.</string>
+    <string name="error_link_expired">رفض الموقع التنزيل — ربما انتهت صلاحية الرابط. اضغط إعادة المحاولة.</string>
+    <string name="error_no_space">لا توجد مساحة تخزين كافية في هاتفك.</string>
+    <string name="error_network">تعذّر الوصول إلى الموقع. تحقّق من اتصالك وحاول مجددًا.</string>
+    <string name="error_no_app_to_open">لا يوجد تطبيق يمكنه فتح هذا الملف.</string>
+    <string name="progress_finishing">جارٍ الإنهاء…</string>
+    <string name="progress_extracting_audio">جارٍ استخراج الصوت…</string>
+    <string name="found_on_page">وُجد في الصفحة · بدون تسجيل دخول</string>
+    <string name="queue_title">التنزيلات</string>
+    <string name="queue_clear">مسح المنتهية</string>
+    <string name="task_saved">تم الحفظ</string>
+    <string name="task_failed">فشل</string>
+    <string name="task_stopped">أُوقف</string>
+    <string name="task_open">فتح</string>
+    <string name="task_stop">إيقاف</string>
+    <string name="task_dismiss">إزالة من القائمة</string>
+    <string name="nav_browser">المتصفح</string>
+    <string name="browser_search_hint">ابحث أو اكتب رابطًا</string>
+    <string name="browser_title">تصفّح ونزّل</string>
+    <string name="browser_subtitle">افتح أي موقع وشغّل الفيديو. عندما يعثر عليه AnyDrop يضيء زر التنزيل.</string>
+    <string name="browser_find_video">ابحث عن الفيديو</string>
+    <string name="browser_download_count">تنزيل · %1$d</string>
+    <string name="browser_sheet_title">الوسائط في هذه الصفحة</string>
+    <string name="browser_nothing_found">لم يُعثر على شيء بعد. شغّل الفيديو أو حلّل الصفحة — يعمل ذلك مع إنستغرام ويوتيوب وتيك توك ومعظم المواقع.</string>
+    <string name="browser_analyze">حلّل هذه الصفحة</string>
+    <string name="browser_more_qualities">جودات أكثر · حلّل الصفحة</string>
+    <string name="browser_save">حفظ</string>
+    <string name="browser_desktop_site">إصدار سطح المكتب</string>
+    <string name="browser_copy_link">نسخ الرابط</string>
+    <string name="browser_forward">للأمام</string>
+    <string name="browser_start_page">صفحة البداية</string>
+    <string name="browser_reload">إعادة التحميل</string>
+    <string name="browser_stop">إيقاف التحميل</string>
+    <string name="browser_added">أُضيف إلى التنزيلات</string>
+
+    <!-- Session signal: disconnect / delete -->
+    <string name="session_disconnect">قطع الاتصال</string>
+    <string name="session_delete">حذف</string>
+    <string name="disconnect_confirm_title">قطع الاتصال بـ %1$s؟</string>
+    <string name="disconnect_confirm_message">سيتم تسجيل خروجك من حسابك في %1$s داخل AnyDrop. سيبقى %1$s في هذه القائمة لتتمكن من تسجيل الدخول مجددًا في أي وقت.</string>
+    <string name="delete_platform_title">حذف %1$s؟</string>
+    <string name="delete_platform_message">سيؤدي هذا إلى تسجيل خروجك من %1$s وإزالته من القائمة. يمكنك إضافته مجددًا لاحقًا.</string>
+    <string name="session_disconnected">تم قطع الاتصال بـ %1$s</string>
+    <string name="session_deleted">تمت إزالة %1$s</string>
 </resources>

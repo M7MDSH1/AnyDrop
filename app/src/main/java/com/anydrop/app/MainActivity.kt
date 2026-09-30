@@ -28,7 +28,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import com.anydrop.app.data.repository.DownloadQueue
+import com.anydrop.app.ui.browser.rememberBrowserState
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
@@ -94,6 +99,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var deckSessionRepository: DeckSessionRepository
 
+    @Inject
+    lateinit var downloadQueue: DownloadQueue
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(
             LocaleHelper.wrapAppLocale(newBase, readAppLanguageSync(newBase))
@@ -114,7 +122,8 @@ class MainActivity : ComponentActivity() {
                 AnyDropMainScreen(
                     onNavControllerReady = { navController = it },
                     startDestination = startTab,
-                    deckSessionRepository = deckSessionRepository
+                    deckSessionRepository = deckSessionRepository,
+                    downloadQueue = downloadQueue
                 )
             }
         }
@@ -207,6 +216,7 @@ private data class BottomNavItem(val route: String, @StringRes val labelRes: Int
 
 private val bottomNavItems = listOf(
     BottomNavItem(Routes.TAPE_DECK, R.string.nav_deck, Icons.Filled.Videocam),
+    BottomNavItem(Routes.BROWSER, R.string.nav_browser, Icons.Filled.Language),
     BottomNavItem(Routes.LIBRARY, R.string.nav_library, Icons.Filled.LibraryMusic),
     BottomNavItem(Routes.AUDIO, R.string.nav_audio, Icons.Filled.MusicNote),
     BottomNavItem(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings)
@@ -216,8 +226,12 @@ private val bottomNavItems = listOf(
 fun AnyDropMainScreen(
     onNavControllerReady: (NavController) -> Unit = {},
     startDestination: String = Routes.TAPE_DECK,
-    deckSessionRepository: DeckSessionRepository? = null
+    deckSessionRepository: DeckSessionRepository? = null,
+    downloadQueue: DownloadQueue? = null
 ) {
+    // Survives tab switches so the browser keeps its page and history.
+    val browserState = rememberBrowserState()
+    val runningDownloads = downloadQueue?.tasks?.collectAsState()?.value.orEmpty().count { it.isActive }
     val context = LocalContext.current
     // Downloads now save to app-specific external storage (getExternalFilesDir),
     // which needs NO storage permission on any Android version. The old
@@ -284,7 +298,16 @@ fun AnyDropMainScreen(
                                     }
                                 }
                             },
-                            icon = { Icon(imageVector = item.icon, contentDescription = stringResource(item.labelRes)) },
+                            icon = {
+                                // DECK shows how many downloads are running right now.
+                                if (item.route == Routes.TAPE_DECK && runningDownloads > 0) {
+                                    BadgedBox(badge = { Badge(containerColor = Amber, contentColor = OnAccent) { Text("$runningDownloads") } }) {
+                                        Icon(imageVector = item.icon, contentDescription = stringResource(item.labelRes))
+                                    }
+                                } else {
+                                    Icon(imageVector = item.icon, contentDescription = stringResource(item.labelRes))
+                                }
+                            },
                             label = { Text(text = stringResource(item.labelRes), fontFamily = FontFamily.Monospace, fontSize = 9.sp) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Amber,
@@ -309,7 +332,8 @@ fun AnyDropMainScreen(
                 navController = navController,
                 modifier = Modifier.fillMaxSize(),
                 scrollToTopFlow = scrollToTopFlow,
-                startDestination = startDestination
+                startDestination = startDestination,
+                browserState = browserState
             )
         }
     }

@@ -1,6 +1,7 @@
 package com.anydrop.app.engine
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.anydrop.app.R
 import com.anydrop.app.data.model.DownloadState
@@ -9,26 +10,39 @@ import com.anydrop.app.data.model.MediaSource
 import com.anydrop.app.data.repository.SettingsRepository
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
-import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.youtubedl_android.YoutubeDL.CanceledException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Collections
+import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 class YtDlpEngine(
     private val context: Context,
     private val settingsRepository: SettingsRepository
 ) {
 
-    private var processId: String? = null
     private var ffmpegDir: File? = null
 
+    /** Running yt-dlp process per download (keyed by output path), so STOP hits the right one. */
+    private val running = ConcurrentHashMap<String, String>()
+    private val cancelled: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap())
+
+    private val webExtractor = WebVideoExtractor(context)
+
     private companion object {
+        const val TAG = "YtDlpEngine"
         const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+        val VIDEO_EXTS = listOf("mp4", "mkv", "webm", "mov", "m4v")
+        val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
     }
 
     data class FormatInfo(
@@ -41,38 +55,69 @@ class YtDlpEngine(
         val isAudioOnly: Boolean = false,
         val abr: Int = 0, // audio bitrate (kbps), for audio-only entries
         val isImage: Boolean = false,
-        val imageUrl: String = "" // direct image URL when derived from a thumbnail (no yt-dlp format id)
-    )
+        val imageUrl: String = "", // direct image URL when derived from a thumbnail (no yt-dlp format id)
+        /** Media file found on the web page itself (no login needed); downloaded with [downloadDirect]. */
+        val directUrl: String = "",
+        /** Browser identity used to find [directUrl]; the download reuses it so the CDN sees the same client. */
+        val userAgent: String = ""
+    ) {
+        val isFromPage: Boolean get() = directUrl.isNotBlank()
+    }
 
     fun init() {
         YoutubeDL.getInstance().init(context)
-        // Initialize the official FFmpeg native library (installs a real executable
-        // in the app's native lib dir and registers it with yt-dlp). This replaces
-        // the old shell-wrapper hack, which couldn't execute on Android 10+ (SELinux
-        // blocks running binaries from filesDir) — that's why audio extraction failed
-        // with "ffprobe and ffmpeg not found".
+        // Initialize the official FFmpeg native lib (installs a real executable in the app's
+        // native lib dir and registers it with yt-dlp).
         try {
             com.yausername.ffmpeg.FFmpeg.getInstance().init(context)
-            Log.i("YtDlpEngine", "FFmpeg initialized")
+            Log.i(TAG, "FFmpeg initialized")
         } catch (e: Exception) {
-            Log.w("YtDlpEngine", "FFmpeg init failed", e)
+            Log.w(TAG, "FFmpeg init failed", e)
         }
         Thread {
+            Log.i(TAG, "ffmpeg usable on this device: $ffmpegUsable")
             try {
                 // Only check for a nightly update once a day — keeps cold starts
                 // cheap instead of hitting the network on every launch.
                 val last = settingsRepository.lastYtDlpUpdateCheck()
                 if (System.currentTimeMillis() - last >= UPDATE_CHECK_INTERVAL_MS) {
-                    Log.i("YtDlpEngine", "Checking for yt-dlp update...")
+                    Log.i(TAG, "Checking for yt-dlp update...")
                     YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.NIGHTLY)
                     settingsRepository.markYtDlpUpdateCheck()
                 } else {
-                    Log.i("YtDlpEngine", "yt-dlp update check skipped (checked recently)")
+                    Log.i(TAG, "yt-dlp update check skipped (checked recently)")
                 }
             } catch (e: Exception) {
-                Log.w("YtDlpEngine", "yt-dlp update failed (non-fatal)", e)
+                Log.w(TAG, "yt-dlp update failed (non-fatal)", e)
             }
         }.apply { isDaemon = true }.start()
+    }
+
+    /**
+     * Whether the bundled ffmpeg actually runs here. It's built for 4 KB memory pages, so it
+     * can't load on phones with 16 KB pages (newer devices); yt-dlp then silently skips
+     * merging/converting. When false we avoid needing it: merges use [MediaMuxerUtil] (already
+     * the case) and audio is kept as the original AAC stream instead of being converted.
+     */
+    val ffmpegUsable: Boolean by lazy {
+        try {
+            val bin = File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so")
+            val packages = File(context.noBackupFilesDir, "youtubedl-android/packages")
+            val process = ProcessBuilder(bin.absolutePath, "-hide_banner", "-version")
+                .redirectErrorStream(true)
+                .apply {
+                    environment()["LD_LIBRARY_PATH"] = listOf("python", "ffmpeg", "aria2c")
+                        .joinToString(":") { File(packages, "$it/usr/lib").absolutePath }
+                }
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            val ok = process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0 && output.contains("ffmpeg version")
+            if (!ok) Log.w(TAG, "ffmpeg can't run here: ${output.take(200)}")
+            ok
+        } catch (e: Exception) {
+            Log.w(TAG, "ffmpeg probe failed", e)
+            false
+        }
     }
 
     /**
@@ -83,15 +128,14 @@ class YtDlpEngine(
      */
     private val youtubeClientFallbackOrder = listOf("android", "tv", "web_creator", "mweb", "web")
 
-    private fun isYoutubeUrl(url: String): Boolean {
-        val u = url.lowercase()
-        return u.contains("youtube.com") || u.contains("youtu.be")
-    }
+    private fun hostOf(url: String): String =
+        runCatching { Uri.parse(url.trim()).host?.lowercase() }.getOrNull().orEmpty()
 
-    private fun isTiktokUrl(url: String): Boolean {
-        val u = url.lowercase()
-        return u.contains("tiktok.com") || u.contains("vm.tiktok.com") || u.contains("vt.tiktok.com")
-    }
+    private fun String.isOn(vararg domains: String) = domains.any { this == it || endsWith(".$it") }
+
+    private fun isYoutubeUrl(url: String): Boolean = hostOf(url).isOn("youtube.com", "youtu.be", "youtube-nocookie.com")
+
+    private fun isTiktokUrl(url: String): Boolean = hostOf(url).isOn("tiktok.com")
 
     /**
      * Applies the shared extractor/client args used for BOTH info fetch and download.
@@ -120,9 +164,8 @@ class YtDlpEngine(
         }
         addOption("--extractor-retries", "5")
         addOption("--retries", "5")
-        // NOTE: no manual --ffmpeg-location. The official com.yausername.ffmpeg
-        // library (initialized in init()) installs a real ffmpeg executable and
-        // registers it with yt-dlp automatically, so it's found without a path.
+        // One progress line per update (the library parses them for the tracker).
+        addOption("--newline")
         if (youtubeClient != null) {
             addOption("--extractor-args", "youtube:player_client=$youtubeClient")
             addOption("--extractor-args", "youtube:skip=webpage")
@@ -164,7 +207,96 @@ class YtDlpEngine(
     var lastFetchedWebpageUrl: String = ""
         private set
 
+    // ── Format discovery ─────────────────────────────────────────────────────
+
+    /**
+     * Two independent engines:
+     *  1. yt-dlp (all qualities for 1800+ sites);
+     *  2. the web extractor — a hidden browser that reads the media straight from the page.
+     *     It needs no account, which is what makes Instagram work without logging in.
+     * Instagram/Threads use the page first (yt-dlp needs a login there); everything else
+     * tries yt-dlp first and falls back to the page when yt-dlp can't get it.
+     */
     suspend fun getFormats(url: String, cookieFile: File? = null): List<FormatInfo> {
+        val host = hostOf(url)
+        val instagramLike = host.isOn("instagram.com", "instagr.am", "threads.net", "threads.com")
+        val loggedIn = cookieFile != null && hasCookiesFor(cookieFile, if (host.contains("threads")) "threads" else "instagram.com")
+        val pageFirst = instagramLike && !loggedIn
+
+        if (pageFirst) {
+            webFormats(url, desktop = true)?.let { return it }
+        }
+
+        var failure: Exception? = null
+        val formats = try {
+            ytdlpFormats(url, cookieFile)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            failure = e
+            emptyList()
+        }
+        if (formats.isNotEmpty()) return formats
+
+        // yt-dlp came up empty: look at the page like a browser would. (Not for YouTube:
+        // its player streams are split and signed, the page has nothing directly usable.)
+        if (!pageFirst && !isYoutubeUrl(url)) {
+            val desktop = instagramLike || host.isOn("facebook.com", "fb.watch", "fb.com")
+            webFormats(url, desktop)?.let { return it }
+            if (!instagramLike && !isTiktokUrl(url)) {
+                // Some sites only put a <video> in one flavor of their page.
+                webFormats(url, !desktop, timeoutMs = 15_000)?.let { return it }
+            }
+        }
+
+        failure?.let { throw friendlyFailure(it) }
+        return emptyList()
+    }
+
+    private fun hasCookiesFor(cookieFile: File, domain: String): Boolean =
+        runCatching { cookieFile.readText().contains(domain) }.getOrDefault(false)
+
+    /** Turns raw yt-dlp errors into something a person can act on. */
+    private fun friendlyFailure(e: Exception): Exception {
+        val m = e.message.orEmpty()
+        return when {
+            listOf("ip address is blocked", "not available in your country", "geo restrict", "blocked in your country", "not available in your region")
+                .any { m.contains(it, ignoreCase = true) } ->
+                UnsupportedSiteException(context.getString(R.string.error_region_blocked))
+            e is UnsupportedSiteException && e.isLoginMessage ->
+                UnsupportedSiteException(context.getString(R.string.error_private_post))
+            e is UnsupportedSiteException -> e
+            listOf("unable to download webpage", "timed out", "network is unreachable", "failed to resolve", "connection reset")
+                .any { m.contains(it, ignoreCase = true) } ->
+                UnsupportedSiteException(context.getString(R.string.error_network))
+            else -> UnsupportedSiteException(context.getString(R.string.error_no_media_found))
+        }
+    }
+
+    private val Exception.isLoginMessage: Boolean get() = message == loginRequiredMessage
+    private val loginRequiredMessage = "login-required"
+
+    private suspend fun webFormats(url: String, desktop: Boolean, timeoutMs: Long = 25_000): List<FormatInfo>? {
+        val scan = try {
+            webExtractor.extract(url, desktop, timeoutMs)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Web extraction failed", e)
+            return null
+        }
+        if (scan.videos.isEmpty() && scan.images.isEmpty()) return null
+        Log.i(TAG, "Found on page: ${scan.videos.size} video(s), ${scan.images.size} image(s)")
+
+        lastFetchedTitle = scan.title
+        lastFetchedUploader = scan.uploader
+        lastFetchedUploaderUrl = ""
+        lastFetchedWebpageUrl = scan.pageUrl
+
+        return scan.toFormatInfos()
+    }
+
+    private suspend fun ytdlpFormats(url: String, cookieFile: File? = null): List<FormatInfo> {
         return withContext(Dispatchers.IO) {
             val isTiktok = isTiktokUrl(url)
             val clients = if (isYoutubeUrl(url)) youtubeClientFallbackOrder else listOf<String?>(null)
@@ -252,34 +384,27 @@ class YtDlpEngine(
                     // derive an image entry from it (Instagram/TikTok photo posts often
                     // expose the picture only via `thumbnails`, not `formats`).
                     val thumbImages = if (videoFormats.isEmpty() && audioFormats.isEmpty() && imageFormats.isEmpty()) {
-                        // Try the carousel JSON path first (all slides); fall back to
-                        // the single cover thumbnail if it finds nothing.
                         carouselImagesFromJson(url, cookieFile, client, isTiktok)
                             .ifEmpty { imageEntriesFromThumbnail(info) }
                     } else emptyList()
 
                     val formats = videoFormats + audioFormats + imageFormats + thumbImages
                     if (formats.isNotEmpty()) return@withContext formats
-                    Log.w("YtDlpEngine", "Client '$client' returned no usable formats, trying next")
+                    Log.w(TAG, "Client '$client' returned no usable formats, trying next")
                 } catch (e: Exception) {
-                    Log.w("YtDlpEngine", "getFormats failed with client '$client' (${index + 1}/${clients.size})", e)
+                    Log.w(TAG, "getFormats failed with client '$client' (${index + 1}/${clients.size})", e)
                     if (e.isImpersonationUnavailable()) {
-                        throw UnsupportedSiteException(
-                            "This site blocks non-browser downloaders and requires browser impersonation, which this app doesn't support."
-                        )
+                        throw UnsupportedSiteException(context.getString(R.string.error_site_unsupported))
                     }
                     if (e.needsLogin()) {
-                        throw UnsupportedSiteException(
-                            "This post requires you to be logged in. Import your cookies in Settings → Cookie Import (log in on your browser, export cookies.txt, then load it here), and try again."
-                        )
+                        // Caller tries the page-reading engine before this reaches the user.
+                        throw UnsupportedSiteException(loginRequiredMessage)
                     }
-                    // Instagram/TikTok image posts make the video extractor throw
-                    // "No video formats found!". Fall back to grabbing the image via a
-                    // thumbnail-oriented info pass and offer it as an image download.
                     if (e.isNoVideoFormats()) {
                         val imgs = imageFallbackViaThumbnails(url, cookieFile, client, isTiktok)
                         if (imgs.isNotEmpty()) return@withContext imgs
                     }
+                    if (clients.size == 1) throw e
                 }
             }
             emptyList()
@@ -372,7 +497,7 @@ class YtDlpEngine(
             val info = YoutubeDL.getInstance().getInfo(request)
             imageEntriesFromThumbnail(info)
         } catch (e: Exception) {
-            Log.w("YtDlpEngine", "Image thumbnail fallback failed", e)
+            Log.w(TAG, "Image thumbnail fallback failed", e)
             emptyList()
         }
     }
@@ -398,10 +523,12 @@ class YtDlpEngine(
             val response = YoutubeDL.getInstance().execute(request)
             YtDlpFormatParser.parseCarouselImages(response.out.trim())
         } catch (e: Exception) {
-            Log.w("YtDlpEngine", "Carousel JSON parse failed", e)
+            Log.w(TAG, "Carousel JSON parse failed", e)
             emptyList()
         }
     }
+
+    // ── Downloads ────────────────────────────────────────────────────────────
 
     fun download(
         url: String,
@@ -409,7 +536,9 @@ class YtDlpEngine(
         formatId: String = "bestvideo+bestaudio/best",
         cookieFile: File? = null
     ): Flow<DownloadState> = callbackFlow {
-        trySend(DownloadState.Progress(0, "Initializing...", ""))
+        val tag = outputPath
+        cancelled.remove(tag)
+        trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
 
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
@@ -427,13 +556,13 @@ class YtDlpEngine(
             else -> listOf(formatId)
         }
 
-        var lastError: String = "Download failed"
+        var lastError: String = context.getString(R.string.error_download_failed)
         var succeeded = false
 
         outer@ for (fmt in formatsToTry) {
             for ((index, client) in clients.withIndex()) {
                 if (succeeded) break@outer
-                processId = UUID.randomUUID().toString()
+                if (tag in cancelled) break@outer
 
                 val request = YoutubeDLRequest(url)
                 request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
@@ -441,11 +570,8 @@ class YtDlpEngine(
                 request.addOption("-o", outputPath)
 
                 try {
-                    val pid = processId
-                    YoutubeDL.getInstance().execute(request, pid) { progress, etaSeconds, _ ->
-                        val eta = if (etaSeconds > 0) "${etaSeconds}s" else ""
-                        trySend(DownloadState.Progress((progress * 100).toInt().coerceIn(0, 100), "", eta))
-                    }
+                    val progress = ProgressMapper()
+                    runTracked(tag, request) { p, eta, line -> progress.map(p, eta, line)?.let { trySend(it) } }
 
                     val outputDir = File(outputPath).parentFile
                     val expectedFile = File(outputPath)
@@ -471,15 +597,13 @@ class YtDlpEngine(
                         )
                         succeeded = true
                     } else {
-                        lastError = "Output file not found at: $outputPath"
+                        lastError = context.getString(R.string.error_output_not_found)
                     }
                 } catch (e: CanceledException) {
-                    trySend(DownloadState.Cancelled)
-                    close()
-                    return@callbackFlow
+                    break@outer
                 } catch (e: Exception) {
-                    lastError = e.message ?: "Download failed"
-                    Log.w("YtDlpEngine", "Download failed with client '$client', format '$fmt' (${index + 1}/${clients.size})", e)
+                    lastError = friendlyDownloadError(e)
+                    Log.w(TAG, "Download failed with client '$client', format '$fmt' (${index + 1}/${clients.size})", e)
                     // Only worth retrying if this looks like a 403/blocked-client
                     // issue, not a genuine bad URL or no-space error. For TikTok there
                     // is only one client entry, so this break just moves on to the
@@ -489,31 +613,22 @@ class YtDlpEngine(
             }
         }
 
-        if (!succeeded) {
-            trySend(DownloadState.Error(lastError))
-        }
-        close()
-
-        awaitClose {
-            processId?.let { id ->
-                try {
-                    YoutubeDL.getInstance().destroyProcessById(id)
-                } catch (_: Exception) {}
-            }
-        }
+        finish(tag, succeeded, lastError)
     }
 
     /**
-     * Audio-only download: grabs the best audio stream and extracts it to an .m4a
-     * using ffmpeg (already wired via --ffmpeg-location). The outputPath should end
-     * in ".m4a"; yt-dlp writes the extracted file next to it.
+     * Audio-only download. With a working ffmpeg the best audio is extracted to .m4a; without
+     * one (16 KB-page phones) the original AAC stream is saved as-is, which needs no conversion.
+     * The outputPath should end in ".m4a"; yt-dlp writes the file next to it.
      */
     fun downloadAudio(
         url: String,
         outputPath: String,
         cookieFile: File? = null
     ): Flow<DownloadState> = callbackFlow {
-        trySend(DownloadState.Progress(0, "Initializing...", ""))
+        val tag = outputPath
+        cancelled.remove(tag)
+        trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
 
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
@@ -527,32 +642,31 @@ class YtDlpEngine(
             File(f.parentFile, f.nameWithoutExtension).absolutePath
         }
 
-        var lastError = "Audio download failed"
+        var lastError = context.getString(R.string.error_download_failed)
         var succeeded = false
 
         for ((index, client) in clients.withIndex()) {
-            if (succeeded) break
-            processId = UUID.randomUUID().toString()
+            if (succeeded || tag in cancelled) break
 
             val request = YoutubeDLRequest(url)
             request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
-            request.addOption("-f", "bestaudio/best")
-            request.addOption("-x")                       // extract audio
-            request.addOption("--audio-format", "m4a")    // container ffmpeg can produce
-            request.addOption("--audio-quality", "0")     // best
+            if (ffmpegUsable) {
+                request.addOption("-f", "bestaudio/best")
+                request.addOption("-x")                       // extract audio
+                request.addOption("--audio-format", "m4a")    // container ffmpeg can produce
+                request.addOption("--audio-quality", "0")     // best
+            } else {
+                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
+            }
             request.addOption("-o", "$outBase.%(ext)s")
 
             try {
-                val pid = processId
-                YoutubeDL.getInstance().execute(request, pid) { progress, etaSeconds, _ ->
-                    val eta = if (etaSeconds > 0) "${etaSeconds}s" else ""
-                    trySend(DownloadState.Progress((progress * 100).toInt().coerceIn(0, 100), "", eta))
-                }
+                val progress = ProgressMapper()
+                runTracked(tag, request) { p, eta, line -> progress.map(p, eta, line)?.let { trySend(it) } }
 
                 val outputDir = File(outputPath).parentFile
                 val actualFile = outputDir?.listFiles { f ->
-                    f.nameWithoutExtension == File(outBase).name &&
-                        f.extension in listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
+                    f.nameWithoutExtension == File(outBase).name && f.extension in AUDIO_EXTS
                 }?.maxByOrNull { it.lastModified() }
 
                 if (actualFile != null && actualFile.exists()) {
@@ -570,35 +684,22 @@ class YtDlpEngine(
                     )
                     succeeded = true
                 } else {
-                    lastError = "Audio output not found for: $outBase"
+                    lastError = context.getString(R.string.error_output_not_found)
                 }
             } catch (e: CanceledException) {
-                trySend(DownloadState.Cancelled)
-                close()
-                return@callbackFlow
+                break
             } catch (e: Exception) {
-                lastError = e.message ?: "Audio download failed"
-                Log.w("YtDlpEngine", "Audio download failed with client '$client' (${index + 1}/${clients.size})", e)
+                lastError = friendlyDownloadError(e)
+                Log.w(TAG, "Audio download failed with client '$client' (${index + 1}/${clients.size})", e)
                 if (e.isImpersonationUnavailable()) {
-                    lastError = "This site blocks non-browser downloaders and isn't supported."
+                    lastError = context.getString(R.string.error_site_unsupported)
                     break
                 }
                 if (!needsResilientRetry || !e.is403()) break
             }
         }
 
-        if (!succeeded) {
-            trySend(DownloadState.Error(lastError))
-        }
-        close()
-
-        awaitClose {
-            processId?.let { id ->
-                try {
-                    YoutubeDL.getInstance().destroyProcessById(id)
-                } catch (_: Exception) {}
-            }
-        }
+        finish(tag, succeeded, lastError)
     }
 
     /**
@@ -613,9 +714,9 @@ class YtDlpEngine(
         cookieFile: File? = null,
         directImageUrl: String = ""
     ): Flow<DownloadState> = callbackFlow {
-        trySend(DownloadState.Progress(0, "Initializing...", ""))
+        trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
 
-        // If we have a direct image URL (derived from a thumbnail), fetch it over HTTP
+        // If we have a direct image URL (from the page or a thumbnail), fetch it over HTTP
         // instead of going through yt-dlp format ids.
         if (directImageUrl.isNotBlank()) {
             try {
@@ -641,13 +742,16 @@ class YtDlpEngine(
                     trySend(DownloadState.Error(context.getString(R.string.error_save_image)))
                 }
             } catch (e: Exception) {
-                Log.w("YtDlpEngine", "Direct image download failed", e)
+                Log.w(TAG, "Direct image download failed", e)
                 trySend(DownloadState.Error(e.message ?: context.getString(R.string.error_image_download)))
             }
             close()
+            awaitClose { }
             return@callbackFlow
         }
 
+        val tag = outputPath
+        cancelled.remove(tag)
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
         val needsResilientRetry = isYt || isTiktok
@@ -662,8 +766,7 @@ class YtDlpEngine(
         var succeeded = false
 
         for ((index, client) in clients.withIndex()) {
-            if (succeeded) break
-            processId = UUID.randomUUID().toString()
+            if (succeeded || tag in cancelled) break
 
             val request = YoutubeDLRequest(url)
             request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
@@ -671,11 +774,8 @@ class YtDlpEngine(
             request.addOption("-o", "$outBase.%(ext)s")
 
             try {
-                val pid = processId
-                YoutubeDL.getInstance().execute(request, pid) { progress, etaSeconds, _ ->
-                    val eta = if (etaSeconds > 0) "${etaSeconds}s" else ""
-                    trySend(DownloadState.Progress((progress * 100).toInt().coerceIn(0, 100), "", eta))
-                }
+                val progress = ProgressMapper()
+                runTracked(tag, request) { p, eta, line -> progress.map(p, eta, line)?.let { trySend(it) } }
 
                 val outputDir = File(outputPath).parentFile
                 val actualFile = outputDir?.listFiles { f ->
@@ -698,35 +798,22 @@ class YtDlpEngine(
                     )
                     succeeded = true
                 } else {
-                    lastError = "Image output not found for: $outBase"
+                    lastError = context.getString(R.string.error_output_not_found)
                 }
             } catch (e: CanceledException) {
-                trySend(DownloadState.Cancelled)
-                close()
-                return@callbackFlow
+                break
             } catch (e: Exception) {
-                lastError = e.message ?: "Image download failed"
-                Log.w("YtDlpEngine", "Image download failed with client '$client' (${index + 1}/${clients.size})", e)
+                lastError = friendlyDownloadError(e)
+                Log.w(TAG, "Image download failed with client '$client' (${index + 1}/${clients.size})", e)
                 if (e.isImpersonationUnavailable()) {
-                    lastError = "This site blocks non-browser downloaders and isn't supported."
+                    lastError = context.getString(R.string.error_site_unsupported)
                     break
                 }
                 if (!needsResilientRetry || !e.is403()) break
             }
         }
 
-        if (!succeeded) {
-            trySend(DownloadState.Error(lastError))
-        }
-        close()
-
-        awaitClose {
-            processId?.let { id ->
-                try {
-                    YoutubeDL.getInstance().destroyProcessById(id)
-                } catch (_: Exception) {}
-            }
-        }
+        finish(tag, succeeded, lastError)
     }
 
     fun downloadWithMerge(
@@ -736,9 +823,9 @@ class YtDlpEngine(
         height: Int,
         cookieFile: File? = null
     ): Flow<DownloadState> = callbackFlow {
-        trySend(DownloadState.Progress(0, context.getString(R.string.progress_starting), ""))
-
-        processId = UUID.randomUUID().toString()
+        val tag = outputPath
+        cancelled.remove(tag)
+        trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
 
         val downloadDir = File(outputPath).parentFile ?: File(outputPath)
         val timestamp = System.currentTimeMillis()
@@ -746,31 +833,56 @@ class YtDlpEngine(
         val tempAudioPath = File(downloadDir, ".temp_audio_$timestamp.m4a").absolutePath
 
         try {
-            trySend(DownloadState.Progress(5, context.getString(R.string.progress_downloading_video), ""))
-            var videoFormat = "bestvideo[height<=$height]"
-            var videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile)
-            if (videoFile == null || !videoFile.exists()) {
-                trySend(DownloadState.Progress(5, context.getString(R.string.progress_retrying_video), ""))
-                videoFormat = "bestvideo"
-                videoFile = downloadRaw(url, videoFormat, tempVideoPath, cookieFile)
-                if (videoFile == null || !videoFile.exists()) {
-                    trySend(DownloadState.Error(context.getString(R.string.error_video_download)))
-                    close()
-                    return@callbackFlow
+            // Video is ~85% of the bytes, audio the rest; each phase gets its share of the bar.
+            val videoPhase = context.getString(R.string.progress_downloading_video)
+            val videoProgress = ProgressMapper(phase = videoPhase, from = 0, to = 85)
+            trySend(DownloadState.Progress(0, phase = videoPhase))
+            // The format the user picked first; H.264 at that height as a fallback because
+            // Android's own muxer can always put it in an MP4.
+            val videoSelector = listOfNotNull(
+                formatId.takeIf { it.isNotBlank() && !it.contains("+") && !it.contains("/") },
+                "bestvideo[height<=$height][vcodec~='^(avc|h264)']",
+                "bestvideo[height<=$height]"
+            ).joinToString("/")
+            var videoFile = downloadRaw(tag, url, videoSelector, tempVideoPath, cookieFile) { p, eta, line ->
+                videoProgress.map(p, eta, line)?.let { trySend(it) }
+            }
+            if ((videoFile == null || !videoFile.exists()) && tag !in cancelled) {
+                trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_retrying_video)))
+                videoFile = downloadRaw(tag, url, "bestvideo", tempVideoPath, cookieFile) { p, eta, line ->
+                    videoProgress.map(p, eta, line)?.let { trySend(it) }
                 }
             }
-            trySend(DownloadState.Progress(45, context.getString(R.string.progress_downloading_audio), ""))
+            if (tag in cancelled) {
+                videoFile?.delete()
+                finish(tag, false, "")
+                return@callbackFlow
+            }
+            if (videoFile == null || !videoFile.exists()) {
+                finish(tag, false, context.getString(R.string.error_video_download))
+                return@callbackFlow
+            }
 
-            val audioFile = downloadRaw(url, "bestaudio[ext=m4a]", tempAudioPath, cookieFile)
+            val audioPhase = context.getString(R.string.progress_downloading_audio)
+            val audioProgress = ProgressMapper(phase = audioPhase, from = 85, to = 97)
+            trySend(DownloadState.Progress(85, phase = audioPhase))
+            val audioFile = downloadRaw(tag, url, "bestaudio[ext=m4a]/bestaudio", tempAudioPath, cookieFile) { p, eta, line ->
+                audioProgress.map(p, eta, line)?.let { trySend(it) }
+            }
+            if (tag in cancelled) {
+                videoFile.delete()
+                audioFile?.delete()
+                finish(tag, false, "")
+                return@callbackFlow
+            }
 
             if (audioFile != null && audioFile.exists()) {
-                trySend(DownloadState.Progress(75, context.getString(R.string.progress_merging_audio), ""))
+                trySend(DownloadState.Progress(98, phase = context.getString(R.string.progress_merging_audio)))
                 val muxed = MediaMuxerUtil.mux(videoFile.absolutePath, audioFile.absolutePath, outputPath)
                 videoFile.delete()
                 audioFile.delete()
                 if (!muxed) {
-                    trySend(DownloadState.Error(context.getString(R.string.error_merge_audio)))
-                    close()
+                    finish(tag, false, context.getString(R.string.error_merge_audio))
                     return@callbackFlow
                 }
             } else {
@@ -786,30 +898,113 @@ class YtDlpEngine(
                     localFilePath = finalFile.absolutePath,
                     source = url.detectSource()
                 )))
+                finish(tag, true, "")
             } else {
-                trySend(DownloadState.Error(context.getString(R.string.error_output_not_found)))
+                finish(tag, false, context.getString(R.string.error_output_not_found))
             }
-        } catch (e: CanceledException) {
-            trySend(DownloadState.Cancelled)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("YtDlpEngine", "Download with merge failed", e)
-            trySend(DownloadState.Error(e.message ?: context.getString(R.string.error_download_failed)))
-        } finally {
-            close()
+            Log.e(TAG, "Download with merge failed", e)
+            finish(tag, false, friendlyDownloadError(e))
+        }
+    }
+
+    /**
+     * Downloads a media file that the web extractor found on the page — no site extractor,
+     * no login. yt-dlp still does the transfer (resume, retries, HLS), posing as the same
+     * browser that found the link.
+     */
+    fun downloadDirect(
+        pageUrl: String,
+        format: FormatInfo,
+        outputPath: String,
+        cookieHeader: String? = null
+    ): Flow<DownloadState> = callbackFlow {
+        val tag = outputPath
+        cancelled.remove(tag)
+        trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
+
+        val out = File(outputPath)
+        val dir = out.parentFile ?: out
+        val audioOnly = format.isAudioOnly
+        // Without ffmpeg the audio is pulled out of the video by Android's muxer afterwards.
+        val nativeAudio = audioOnly && !ffmpegUsable
+        val base = if (nativeAudio) ".temp_webaudio_${System.currentTimeMillis()}" else out.nameWithoutExtension
+
+        val request = YoutubeDLRequest(format.directUrl).apply {
+            addOption("--no-update")
+            addOption("--no-playlist")
+            addOption("--newline")
+            addOption("--retries", "5")
+            addOption("--fragment-retries", "5")
+            addOption("--concurrent-fragments", "4")
+            addOption("-o", File(dir, "$base.%(ext)s").absolutePath)
+            if (audioOnly && !nativeAudio) {
+                addOption("-x")
+                addOption("--audio-format", "m4a")
+                addOption("--audio-quality", "0")
+            } else {
+                addOption("--merge-output-format", "mp4")
+            }
+            if (format.userAgent.isNotBlank()) addOption("--user-agent", format.userAgent)
+            addOption("--referer", pageUrl)
+            cookieHeader?.takeIf { it.isNotBlank() }?.let { addOption("--add-header", "Cookie:$it") }
         }
 
-        awaitClose {
-            processId?.let { id ->
-                try { YoutubeDL.getInstance().destroyProcessById(id) } catch (_: Exception) {}
+        try {
+            val progress = ProgressMapper(to = if (nativeAudio) 95 else 100)
+            runTracked(tag, request) { p, eta, line -> progress.map(p, eta, line)?.let { trySend(it) } }
+
+            var file = dir.listFiles { f ->
+                f.isFile && f.nameWithoutExtension == base && f.extension.lowercase() in (VIDEO_EXTS + AUDIO_EXTS)
+            }?.maxByOrNull { it.lastModified() }
+
+            if (file != null && !ffmpegUsable && MediaMuxerUtil.isMpegTs(file)) {
+                trySend(DownloadState.Progress(98, phase = context.getString(R.string.progress_finishing)))
+                MediaMuxerUtil.remuxToMp4(file)
             }
+            if (file != null && nativeAudio) {
+                trySend(DownloadState.Progress(97, phase = context.getString(R.string.progress_extracting_audio)))
+                val ok = MediaMuxerUtil.extractAudio(file.absolutePath, outputPath)
+                file.delete()
+                file = if (ok) out else null
+            }
+
+            if (file != null && file.exists()) {
+                trySend(
+                    DownloadState.Completed(
+                        MediaItem(
+                            id = file.nameWithoutExtension,
+                            title = file.nameWithoutExtension,
+                            url = pageUrl,
+                            localFilePath = file.absolutePath,
+                            source = pageUrl.detectSource(),
+                            isAudio = audioOnly
+                        )
+                    )
+                )
+                finish(tag, true, "")
+            } else {
+                finish(tag, false, context.getString(R.string.error_output_not_found))
+            }
+        } catch (e: CanceledException) {
+            finish(tag, false, "")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct download failed", e)
+            finish(tag, false, friendlyDownloadError(e))
         }
     }
 
     private fun downloadRaw(
+        tag: String,
         url: String,
         formatId: String,
         outputPath: String,
-        cookieFile: File?
+        cookieFile: File?,
+        onProgress: (Float, Long, String) -> Unit
     ): File? {
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
@@ -817,14 +1012,14 @@ class YtDlpEngine(
         val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
 
         for ((index, client) in clients.withIndex()) {
+            if (tag in cancelled) return null
             try {
                 val request = YoutubeDLRequest(url)
                 request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
                 request.addOption("-f", formatId)
                 request.addOption("-o", outputPath)
 
-                val pid = UUID.randomUUID().toString()
-                YoutubeDL.getInstance().execute(request, pid, null)
+                runTracked(tag, request, onProgress)
 
                 val expectedFile = File(outputPath)
                 if (expectedFile.exists()) return expectedFile
@@ -835,12 +1030,66 @@ class YtDlpEngine(
                     f.name.startsWith(stem) && f.lastModified() > System.currentTimeMillis() - 60000
                 }?.maxByOrNull { it.lastModified() }
                 if (found != null) return found
+            } catch (e: CanceledException) {
+                return null
             } catch (e: Exception) {
-                Log.w("YtDlpEngine", "Raw download failed for format '$formatId' with client '$client' (${index + 1}/${clients.size})", e)
+                Log.w(TAG, "Raw download failed for format '$formatId' with client '$client' (${index + 1}/${clients.size})", e)
                 if (!needsResilientRetry || !e.is403()) break
             }
         }
         return null
+    }
+
+    /** Runs yt-dlp for one download, remembering its process so [cancel] can stop it. */
+    private fun runTracked(tag: String, request: YoutubeDLRequest, onProgress: (Float, Long, String) -> Unit) {
+        val pid = UUID.randomUUID().toString()
+        running[tag] = pid
+        try {
+            if (tag in cancelled) throw CanceledException()
+            YoutubeDL.getInstance().execute(request, pid) { progress, eta, line -> onProgress(progress, eta, line.orEmpty()) }
+        } finally {
+            running.remove(tag, pid)
+        }
+    }
+
+    /** Terminal event for a download flow: completed (already sent), cancelled or failed. */
+    private suspend fun ProducerScope<DownloadState>.finish(tag: String, succeeded: Boolean, error: String) {
+        if (!succeeded) {
+            if (tag in cancelled) trySend(DownloadState.Cancelled)
+            else trySend(DownloadState.Error(error.ifBlank { context.getString(R.string.error_download_failed) }))
+        }
+        cancelled.remove(tag)
+        close()
+        awaitClose { }
+    }
+
+    private fun friendlyDownloadError(e: Exception): String {
+        val m = e.message.orEmpty()
+        return when {
+            m.contains("HTTP Error 403", true) -> context.getString(R.string.error_link_expired)
+            m.contains("No space left", true) -> context.getString(R.string.error_no_space)
+            listOf("timed out", "Unable to download", "Network is unreachable", "Connection reset", "Failed to resolve")
+                .any { m.contains(it, true) } -> context.getString(R.string.error_network)
+            else -> m.lineSequence().firstOrNull { it.contains("ERROR") }?.substringAfter("ERROR:")?.trim()?.take(180)
+                ?: m.lineSequence().firstOrNull { it.isNotBlank() }?.take(180)
+                ?: context.getString(R.string.error_download_failed)
+        }
+    }
+
+    /**
+     * Stops a download. With a [tag] (the download's output path) only that one; without,
+     * every running download (the old single-download behavior).
+     */
+    fun cancel(tag: String? = null) {
+        val targets = if (tag == null) running.keys.toList() else listOf(tag)
+        targets.forEach { t ->
+            cancelled.add(t)
+            running.remove(t)?.let { pid ->
+                try {
+                    YoutubeDL.getInstance().destroyProcessById(pid)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun ensureFfmpeg(): File? {
@@ -888,29 +1137,89 @@ exec "${'$'}DIR/ffmpeg.bin" "${'$'}@"
             ffmpegDir = destDir
             return destDir
         } catch (e: Exception) {
-            Log.w("YtDlpEngine", "Failed to extract ffmpeg", e)
+            Log.w(TAG, "Failed to extract ffmpeg", e)
             return null
         }
     }
 
-    fun cancel() {
-        processId?.let { id ->
-            try {
-                YoutubeDL.getInstance().destroyProcessById(id)
-            } catch (_: Exception) {}
-        }
-    }
-
     private fun String.detectSource(): MediaSource {
-        val url = lowercase()
+        val host = hostOf(this)
         return when {
-            url.contains("instagram.com") -> MediaSource.INSTAGRAM
-            url.contains("tiktok.com") -> MediaSource.TIKTOK
-            url.contains("youtube.com") || url.contains("youtu.be") -> MediaSource.YOUTUBE
-            url.contains("facebook.com") || url.contains("fb.watch") -> MediaSource.FACEBOOK
-            url.contains("reddit.com") || url.contains("redd.it") -> MediaSource.REDDIT
-            url.contains("twitter.com") || url.contains("x.com") -> MediaSource.TWITTER
+            host.isOn("instagram.com", "instagr.am") -> MediaSource.INSTAGRAM
+            host.isOn("tiktok.com") -> MediaSource.TIKTOK
+            host.isOn("youtube.com", "youtu.be") -> MediaSource.YOUTUBE
+            host.isOn("facebook.com", "fb.watch", "fb.com") -> MediaSource.FACEBOOK
+            host.isOn("reddit.com", "redd.it") -> MediaSource.REDDIT
+            host.isOn("twitter.com", "x.com", "t.co") -> MediaSource.TWITTER
             else -> MediaSource.UNKNOWN
         }
+    }
+}
+
+/**
+ * Turns yt-dlp's progress callback (0–100 %, ETA seconds, raw line) into a tracker state
+ * with speed and size. [from]..[to] maps this transfer onto part of the overall bar, e.g.
+ * video 0–85 and audio 85–97 for a merged download.
+ */
+private class ProgressMapper(
+    private val phase: String = "",
+    private val from: Int = 0,
+    private val to: Int = 100
+) {
+    private val pctRe = Regex("""\[download]\s+([\d.]+)%""")
+    private val sizeRe = Regex("""of\s+~?\s*([\d.]+)\s*([KMGT]?i?B)""")
+    private val speedRe = Regex("""at\s+([\d.]+)\s*([KMGT]?i?B)/s""")
+    private val etaRe = Regex("""ETA\s+(\d+(?::\d+){1,2})""")
+    private var lastPct = -1
+
+    fun map(rawProgress: Float, rawEta: Long, line: String): DownloadState.Progress? {
+        val pct = when {
+            rawProgress >= 0 -> rawProgress
+            else -> pctRe.find(line)?.groupValues?.get(1)?.toFloatOrNull() ?: return null
+        }.coerceIn(0f, 100f)
+        if (!line.contains("[download]") && rawProgress < 0) return null
+        val overall = (from + (to - from) * pct / 100f).toInt().coerceIn(0, 100)
+
+        val total = sizeRe.find(line)?.let { toBytes(it.groupValues[1], it.groupValues[2]) } ?: 0L
+        val speed = speedRe.find(line)?.let { toBytes(it.groupValues[1], it.groupValues[2]) } ?: 0L
+        val eta = when {
+            rawEta > 0 -> rawEta
+            else -> etaRe.find(line)?.groupValues?.get(1)?.split(":")?.mapNotNull { it.toLongOrNull() }
+                ?.fold(0L) { acc, n -> acc * 60 + n } ?: 0L
+        }
+        // Drop duplicate lines that change nothing visible.
+        if (overall == lastPct && speed == 0L) return null
+        lastPct = overall
+        return DownloadState.Progress(
+            percentage = overall,
+            speed = if (speed > 0) "${formatBytes(speed)}/s" else "",
+            eta = if (eta > 0 && pct < 100f) formatClock(eta) else "",
+            phase = phase,
+            sizeText = if (total > 0) "${formatBytes((total * pct / 100f).toLong())} / ${formatBytes(total)}" else ""
+        )
+    }
+
+    private fun toBytes(num: String, unit: String): Long {
+        val v = num.toDoubleOrNull() ?: return 0
+        val mult = when (unit.uppercase(Locale.ROOT)) {
+            "KIB" -> 1024.0; "MIB" -> 1024.0 * 1024; "GIB" -> 1024.0 * 1024 * 1024
+            "KB" -> 1e3; "MB" -> 1e6; "GB" -> 1e9
+            else -> 1.0
+        }
+        return (v * mult).toLong()
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1_000_000_000 -> String.format(Locale.US, "%.1f GB", bytes / 1e9)
+        bytes >= 1_000_000 -> String.format(Locale.US, "%.1f MB", bytes / 1e6)
+        bytes >= 1_000 -> String.format(Locale.US, "%.0f KB", bytes / 1e3)
+        else -> "$bytes B"
+    }
+
+    private fun formatClock(seconds: Long): String {
+        val h = seconds / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s) else String.format(Locale.US, "%d:%02d", m, s)
     }
 }
