@@ -241,6 +241,23 @@
     <string name="browser_reload">Reload</string>
     <string name="browser_stop">Stop loading</string>
     <string name="browser_added">Added to downloads</string>
+    <string name="btn_save">SAVE</string>
+    <string name="share_video">Share video</string>
+    <string name="share_link">Share link</string>
+    <string name="browser_add_site">Add site</string>
+    <string name="browser_edit_site">Edit site</string>
+    <string name="browser_site_name">Name</string>
+    <string name="browser_site_url">Web address</string>
+    <string name="browser_site_url_invalid">Enter a web address like example.com</string>
+    <string name="browser_edit">Edit</string>
+    <string name="browser_move_top">Move to top</string>
+    <string name="browser_remove">Remove</string>
+    <string name="browser_remove_site_title">REMOVE SITE</string>
+    <string name="browser_remove_site_message">Remove %1$s from the start page?</string>
+    <string name="browser_sites_hint">Long-press a site to edit, move or remove it</string>
+    <string name="browser_restore_sites">Restore default sites</string>
+    <string name="browser_add_to_start">Add to start page</string>
+    <string name="browser_site_added">Added to the start page</string>
 
     <!-- Session signal: disconnect / delete -->
     <string name="session_disconnect">DISCONNECT</string>

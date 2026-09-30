@@ -264,7 +264,8 @@ fun PlayerScreen(
             onNext = { nextMediaId?.let(onNavigateToMedia) },
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
             onDeleteRequest = if (externalFile) null else ({ showDeleteConfirm = true }),
-            title = if (externalFile) currentMedia!!.title else null
+            title = if (externalFile) currentMedia!!.title else null,
+            shareItem = currentMedia!!
         )
     }
 }
@@ -560,7 +561,8 @@ private fun VideoPlayerContent(
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
     onDeleteRequest: (() -> Unit)? = null,
-    title: String? = null
+    title: String? = null,
+    shareItem: com.anydrop.app.data.model.MediaItem? = null
 ) {
     val context: Context = activity
 
@@ -608,6 +610,7 @@ private fun VideoPlayerContent(
     var showControls by remember { mutableStateOf(true) }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var showSpeedMenu by remember { mutableStateOf(false) }
+    var shareMenuOpen by remember { mutableStateOf(false) }
     var showSeekFeedback by remember { mutableStateOf<String?>(null) }
     // Which side the feedback shows on: -1 left (rewind), 1 right (forward), 0 centre.
     var seekFeedbackSide by remember { mutableIntStateOf(0) }
@@ -634,7 +637,8 @@ private fun VideoPlayerContent(
 
     val hideHandler = remember { Handler(Looper.getMainLooper()) }
     val hideRunnable = remember {
-        Runnable { showControls = false }
+        // An open menu lives inside the controls; hiding them would close it under the finger.
+        Runnable { if (!showSpeedMenu && !shareMenuOpen) showControls = false }
     }
     fun resetHideTimer() {
         hideHandler.removeCallbacks(hideRunnable)
@@ -1096,6 +1100,17 @@ private fun VideoPlayerContent(
                                 .padding(end = 8.dp)
                         )
                     }
+                    shareItem?.let { item ->
+                        PlayerShareButton(
+                            item = item,
+                            tint = OnVideo,
+                            menuColor = VideoMenu,
+                            onMenuOpenChange = { open ->
+                                shareMenuOpen = open
+                                resetHideTimer()
+                            }
+                        )
+                    }
                     onDeleteRequest?.let { requestDelete ->
                         IconButton(onClick = { requestDelete(); resetHideTimer() }) {
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.menu_delete), tint = LedRed)
@@ -1273,7 +1288,7 @@ private fun VideoPlayerContent(
 
                             DropdownMenu(
                                 expanded = showSpeedMenu,
-                                onDismissRequest = { showSpeedMenu = false },
+                                onDismissRequest = { showSpeedMenu = false; resetHideTimer() },
                                 modifier = Modifier.background(VideoMenu)
                             ) {
                                 speeds.forEach { speed ->
