@@ -7,6 +7,13 @@ import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,10 +34,17 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -48,11 +62,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -70,6 +90,7 @@ import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
 import com.anydrop.app.ui.theme.LedRed
+import com.anydrop.app.ui.theme.LightGray
 import com.anydrop.app.ui.theme.MediumGray
 import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
@@ -85,7 +106,10 @@ fun LibraryScreen(
     val mediaItems by viewModel.mediaItems.collectAsState()
     val sortMode by viewModel.sortMode.collectAsState()
     val filter by viewModel.filter.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val unsearchedCount by viewModel.unsearchedCount.collectAsState()
     val listState = rememberLazyGridState()
+    val focusManager = LocalFocusManager.current
 
     // Multi-select (long-press) + dialog state.
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -97,6 +121,20 @@ fun LibraryScreen(
 
     fun toggleSelect(item: MediaItem) {
         selectedIds = if (selectedIds.contains(item.id)) selectedIds - item.id else selectedIds + item.id
+    }
+
+    // A search that hides selected items drops them from the selection, so the
+    // count and DELETE only ever cover what is on screen.
+    LaunchedEffect(mediaItems) {
+        if (selectedIds.isNotEmpty()) {
+            val visible = mediaItems.mapTo(HashSet()) { it.id }
+            selectedIds = selectedIds.filterTo(HashSet()) { it in visible }
+        }
+    }
+
+    // Scrolling the results puts the keyboard away.
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) focusManager.clearFocus()
     }
 
     // Launcher for the OS delete-permission flow (MediaStore.createDeleteRequest
@@ -198,6 +236,13 @@ fun LibraryScreen(
             )
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LibrarySearchField(
+            query = searchQuery,
+            onQueryChange = viewModel::setSearchQuery
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
@@ -206,7 +251,11 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.tapes_count, mediaItems.size),
+                text = if (searchQuery.isBlank()) {
+                    stringResource(R.string.tapes_count, mediaItems.size)
+                } else {
+                    stringResource(R.string.tapes_count_filtered, mediaItems.size, unsearchedCount)
+                },
                 color = White.copy(alpha = 0.4f),
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
@@ -253,7 +302,37 @@ fun LibraryScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (mediaItems.isEmpty()) {
+        if (mediaItems.isEmpty() && searchQuery.isNotBlank()) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Filled.SearchOff,
+                    contentDescription = null,
+                    tint = White.copy(alpha = 0.25f),
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.library_no_results, searchQuery.trim()),
+                    color = White.copy(alpha = 0.5f),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
+                TextButton(onClick = { viewModel.setSearchQuery("") }) {
+                    Text(
+                        stringResource(R.string.library_clear_search),
+                        color = Amber,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        letterSpacing = tracked(1f)
+                    )
+                }
+            }
+        } else if (mediaItems.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -291,6 +370,86 @@ fun LibraryScreen(
             }
         }
     }
+}
+
+/**
+ * Library search. Filters as you type (title, creator, platform, file name);
+ * the keyboard's search key or a scroll of the grid puts the keyboard away.
+ */
+@Composable
+private fun LibrarySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val focusManager = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    val borderColor by animateColorAsState(
+        if (focused) Amber else LightGray,
+        animationSpec = tween(180),
+        label = "searchBorder"
+    )
+    val shape = RoundedCornerShape(10.dp)
+
+    BasicTextField(
+        value = query,
+        onValueChange = { onQueryChange(it.replace("\n", "")) },
+        singleLine = true,
+        textStyle = TextStyle(color = White, fontFamily = FontFamily.Monospace, fontSize = 13.sp),
+        cursorBrush = SolidColor(Amber),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused },
+        decorationBox = { innerTextField ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .clip(shape)
+                    .background(Black)
+                    .border(1.dp, borderColor, shape)
+                    .padding(start = 14.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = if (focused || query.isNotEmpty()) Amber else White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            stringResource(R.string.library_search_hint),
+                            color = White.copy(alpha = 0.4f),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    innerTextField()
+                }
+                AnimatedVisibility(
+                    visible = query.isNotEmpty(),
+                    enter = fadeIn(tween(120)) + scaleIn(tween(120), initialScale = 0.6f),
+                    exit = fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.6f)
+                ) {
+                    IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.search_clear_desc),
+                            tint = White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -403,6 +562,8 @@ private fun LibraryCard(
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    // Titles read in their own direction ("@name …" stays intact in Arabic).
+                    style = TextStyle(textDirection = TextDirection.Content),
                     modifier = Modifier.weight(1f).padding(vertical = 8.dp)
                 )
                 Box {

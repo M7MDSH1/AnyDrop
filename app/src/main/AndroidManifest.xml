@@ -40,6 +40,30 @@
             </intent-filter>
         </activity>
 
+        <!-- Video player for other apps' files. The VIEW video/* filter is what puts
+             AnyDrop in "Open with" and in the default video player choices. An empty
+             taskAffinity keeps it out of the main AnyDrop task: it opens in the
+             caller's task (or its own), so Back returns to where the video came from. -->
+        <activity
+            android:name=".VideoViewerActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AnyDrop"
+            android:taskAffinity=""
+            android:autoRemoveFromRecents="true"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:scheme="https" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
         <!-- New bottom-sheet overlay activity specifically for holding incoming shares
              without ever redirecting the user out of their target source apps -->
         <activity

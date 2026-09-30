@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Rational
@@ -19,10 +20,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -36,6 +39,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,8 +61,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,6 +76,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,9 +92,12 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,6 +112,7 @@ import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -114,17 +122,24 @@ import com.anydrop.app.R
 import com.anydrop.app.ui.components.DeleteConfirmDialog
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
+import com.anydrop.app.ui.theme.DarkPalette
 import com.anydrop.app.ui.theme.LedRed
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.math.roundToInt
 import com.anydrop.app.ui.theme.tracked
 
+/**
+ * @param externalFile true when playing a file another app opened with AnyDrop:
+ *   the file name is shown and there is no delete (the file is not ours).
+ */
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
     onNavigateToMedia: (String) -> Unit = {},
-    onExit: () -> Unit = {}
+    onExit: () -> Unit = {},
+    externalFile: Boolean = false
 ) {
     val context = LocalContext.current
     val activity = context as ComponentActivity
@@ -248,7 +263,8 @@ fun PlayerScreen(
             hasPrevious = previousMediaId != null,
             onNext = { nextMediaId?.let(onNavigateToMedia) },
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
-            onDeleteRequest = { showDeleteConfirm = true }
+            onDeleteRequest = if (externalFile) null else ({ showDeleteConfirm = true }),
+            title = if (externalFile) currentMedia!!.title else null
         )
     }
 }
@@ -268,6 +284,7 @@ private fun AudioPlayerContent(
     var controller by remember { mutableStateOf<MediaController?>(null) }
     var isPlaying by remember { mutableStateOf(true) }
     var position by remember { mutableLongStateOf(0L) }
+    var buffered by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
 
     // Connect to the background PlaybackService and start this track.
@@ -293,14 +310,19 @@ private fun AudioPlayerContent(
         }
     }
 
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubTarget by remember { mutableLongStateOf(0L) }
+
+    // Frame clock for the timeline (MediaController extrapolates the position
+    // locally, so this is cheap); the bar reads it in its draw phase.
     LaunchedEffect(controller) {
-        while (controller != null) {
-            controller?.let {
-                isPlaying = it.isPlaying
-                position = it.currentPosition
-                duration = it.duration.coerceAtLeast(0L)
-            }
-            delay(500)
+        val c = controller ?: return@LaunchedEffect
+        while (true) {
+            withFrameMillis { }
+            isPlaying = c.isPlaying
+            position = c.currentPosition
+            buffered = c.bufferedPosition
+            duration = c.duration.coerceAtLeast(0L)
         }
     }
 
@@ -350,21 +372,32 @@ private fun AudioPlayerContent(
             Spacer(Modifier.height(24.dp))
 
             // Scrubber — kept LTR (together with its timestamps) in every locale.
+            // Audio seeks once, on release; the bubble previews the target.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Slider(
-                    value = if (duration > 0) position.toFloat() / duration else 0f,
-                    onValueChange = { frac -> controller?.seekTo((frac * duration).toLong()) },
-                    colors = SliderDefaults.colors(
-                        thumbColor = Amber,
-                        activeTrackColor = Amber
-                    )
+                ScrubBar(
+                    position = { position },
+                    buffered = { buffered },
+                    duration = duration,
+                    accent = Amber,
+                    trackColor = White.copy(alpha = 0.15f),
+                    bufferColor = White.copy(alpha = 0.3f),
+                    onScrubStart = { scrubbing = true },
+                    onScrub = { scrubTarget = it },
+                    onScrubEnd = { target ->
+                        controller?.seekTo(target)
+                        position = target
+                        scrubbing = false
+                    }
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(position.toTimeString(), color = White.copy(alpha = 0.6f), fontSize = 11.sp)
-                    Text(duration.toTimeString(), color = White.copy(alpha = 0.6f), fontSize = 11.sp)
+                    TimeLabel(
+                        text = { (if (scrubbing) scrubTarget else position).toTimeString() },
+                        color = White.copy(alpha = 0.6f)
+                    )
+                    TimeLabel(text = { duration.toTimeString() }, color = White.copy(alpha = 0.6f))
                 }
             }
 
@@ -526,7 +559,8 @@ private fun VideoPlayerContent(
     hasPrevious: Boolean = false,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
-    onDeleteRequest: () -> Unit = {}
+    onDeleteRequest: (() -> Unit)? = null,
+    title: String? = null
 ) {
     val context: Context = activity
 
@@ -555,14 +589,28 @@ private fun VideoPlayerContent(
     }
 
     var isPlaying by remember { mutableStateOf(true) }
-    var currentPosition by remember { mutableLongStateOf(0L) }
+    // Timeline state. uiPosition/bufferedPosition move every frame while the
+    // controls are up and are only read in draw/derived scopes (see ScrubBar).
+    var uiPosition by remember { mutableLongStateOf(0L) }
+    var bufferedPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubTarget by remember { mutableLongStateOf(0L) }
+    var resumeAfterScrub by remember { mutableStateOf(false) }
+    var showRemaining by rememberSaveable { mutableStateOf(false) }
+    // Double-tap seeks stack: each extra double-tap on the same side within a
+    // second adds another 10s to the jump (and to the on-screen total).
+    var seekStreakDirection by remember { mutableIntStateOf(0) }
+    var seekStreakSeconds by remember { mutableIntStateOf(0) }
+    var lastSeekTapAt by remember { mutableLongStateOf(0L) }
     var isBuffering by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var showControls by remember { mutableStateOf(true) }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showSeekFeedback by remember { mutableStateOf<String?>(null) }
+    // Which side the feedback shows on: -1 left (rewind), 1 right (forward), 0 centre.
+    var seekFeedbackSide by remember { mutableIntStateOf(0) }
     var volume by remember { mutableFloatStateOf(context.getSystemVolume()) }
     var brightness by remember { mutableFloatStateOf(context.getScreenBrightness()) }
     var showVolumeFeedback by remember { mutableStateOf(false) }
@@ -594,14 +642,64 @@ private fun VideoPlayerContent(
         hideHandler.postDelayed(hideRunnable, 3000)
     }
 
+    fun seekBy(direction: Int) {
+        val now = SystemClock.uptimeMillis()
+        seekStreakSeconds =
+            if (direction == seekStreakDirection && now - lastSeekTapAt < 1_000L) seekStreakSeconds + 10 else 10
+        seekStreakDirection = direction
+        lastSeekTapAt = now
+        val target = player.currentPosition + direction * 10_000L
+        val end = player.duration
+        player.seekTo(if (end > 0L) target.coerceIn(0L, end) else target.coerceAtLeast(0L))
+        seekFeedbackSide = direction
+        showSeekFeedback = context.getString(
+            if (direction < 0) R.string.seek_back_feedback else R.string.seek_forward_feedback,
+            seekStreakSeconds
+        )
+        resetHideTimer()
+    }
+
+    // Scrubbing pauses playback and previews frames with fast key-frame seeks;
+    // lifting the finger does one exact seek and resumes if it was playing.
+    fun beginScrub() {
+        scrubTarget = player.currentPosition
+        resumeAfterScrub = player.playWhenReady
+        scrubbing = true
+        player.pause()
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+        hideHandler.removeCallbacks(hideRunnable)
+        showControls = true
+    }
+
+    fun endScrub(targetMs: Long) {
+        player.setSeekParameters(SeekParameters.DEFAULT)
+        player.seekTo(targetMs)
+        uiPosition = targetMs
+        scrubbing = false
+        if (resumeAfterScrub) player.play()
+        viewModel.onSeek(targetMs)
+        resetHideTimer()
+    }
+
+    LaunchedEffect(scrubbing) {
+        if (!scrubbing) return@LaunchedEffect
+        var shown = -1L
+        while (scrubbing) {
+            val target = scrubTarget
+            if (target != shown) {
+                player.seekTo(target)
+                shown = target
+            }
+            delay(50)
+        }
+    }
+
     LaunchedEffect(player) {
         while (true) {
-            currentPosition = player.currentPosition
             duration = player.duration.coerceAtLeast(0L)
-            isPlaying = player.isPlaying
             // Watch-progress heartbeat: 5s save tick + completion detection
             // (completion is suppressed while repeat-one is looping).
-            viewModel.onPlaybackTick(isPlaying, currentPosition, duration, repeatOne)
+            viewModel.onPlaybackTick(player.isPlaying, player.currentPosition, duration, repeatOne)
             delay(500)
         }
     }
@@ -612,6 +710,10 @@ private fun VideoPlayerContent(
     // mark completed on STATE_ENDED.
     DisposableEffect(player) {
         val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = state == Player.STATE_BUFFERING
                 when (state) {
@@ -631,7 +733,8 @@ private fun VideoPlayerContent(
                 newPosition: Player.PositionInfo,
                 reason: Int
             ) {
-                if (reason == Player.DISCONTINUITY_REASON_SEEK &&
+                // Scrub previews are not saved; endScrub saves the final spot.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK && !scrubbing &&
                     newPosition.positionMs != C.TIME_UNSET
                 ) {
                     viewModel.onSeek(newPosition.positionMs)
@@ -670,7 +773,7 @@ private fun VideoPlayerContent(
     // Keep the PiP action buttons in sync with play state / navigation availability.
     fun refreshPipParams() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            updatePipParams(activity, isPlaying, hasPrevious, hasNext)
+            updatePipParams(activity, player.pipAspectRatio(), isPlaying, hasPrevious, hasNext)
         }
     }
     LaunchedEffect(isPlaying, hasNext, hasPrevious, isInPipMode) {
@@ -700,6 +803,18 @@ private fun VideoPlayerContent(
         onDispose { runCatching { activity.unregisterReceiver(receiver) } }
     }
 
+    // Frame clock for the timeline while it is on screen, so the bar glides instead
+    // of stepping twice a second. Nothing recomposes: only ScrubBar's draw phase and
+    // the time labels' derived text read these values.
+    LaunchedEffect(player, showControls, isInPipMode) {
+        if (!showControls || isInPipMode) return@LaunchedEffect
+        while (true) {
+            withFrameMillis { }
+            uiPosition = player.currentPosition
+            bufferedPosition = player.bufferedPosition
+        }
+    }
+
     // Track PiP mode so we hide the in-app overlay controls while in PiP.
     LaunchedEffect(Unit) {
         while (true) {
@@ -719,7 +834,7 @@ private fun VideoPlayerContent(
             if (player.isPlaying && !activity.isInPictureInPictureModeCompat() &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ) {
-                enterPip(activity, isPlaying = true, hasPrevious = hasPrevious, hasNext = hasNext)
+                enterPip(activity, player.pipAspectRatio(), isPlaying = true, hasPrevious = hasPrevious, hasNext = hasNext)
             }
         }
         onDispose { PipLeaveHandler.onUserLeave = null }
@@ -780,12 +895,7 @@ private fun VideoPlayerContent(
                         .fillMaxHeight()
                         .pointerInput(Unit) {
                             detectTapGestures(
-                                onDoubleTap = {
-                                    val newPos = (player.currentPosition - 10_000).coerceAtLeast(0)
-                                    player.seekTo(newPos)
-                                    showSeekFeedback = context.getString(R.string.seek_back_feedback)
-                                    resetHideTimer()
-                                },
+                                onDoubleTap = { seekBy(-1) },
                                 onTap = { resetHideTimer() }
                             )
                         }
@@ -805,12 +915,7 @@ private fun VideoPlayerContent(
                         .fillMaxHeight()
                         .pointerInput(Unit) {
                             detectTapGestures(
-                                onDoubleTap = {
-                                    val newPos = (player.currentPosition + 10_000).coerceAtMost(player.duration)
-                                    player.seekTo(newPos)
-                                    showSeekFeedback = context.getString(R.string.seek_forward_feedback)
-                                    resetHideTimer()
-                                },
+                                onDoubleTap = { seekBy(1) },
                                 onTap = { resetHideTimer() }
                             )
                         }
@@ -829,7 +934,7 @@ private fun VideoPlayerContent(
         // Buffering spinner — shown while ExoPlayer is loading and there's no error.
         if (isBuffering && playbackError == null) {
             CircularProgressIndicator(
-                color = Amber,
+                color = VideoAccent,
                 modifier = Modifier.align(Alignment.Center).size(48.dp)
             )
         }
@@ -848,14 +953,14 @@ private fun VideoPlayerContent(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         stringResource(R.string.player_playback_failed),
-                        color = White,
+                        color = OnVideo,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         err,
-                        color = White.copy(alpha = 0.7f),
+                        color = OnVideo.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -865,7 +970,7 @@ private fun VideoPlayerContent(
                         player.prepare()
                         player.play()
                     }) {
-                        Text(stringResource(R.string.btn_retry), color = Amber, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.btn_retry), color = VideoAccent, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -875,7 +980,19 @@ private fun VideoPlayerContent(
             visible = showSeekFeedback != null,
             enter = fadeIn(tween(150)),
             exit = fadeOut(tween(300)),
-            modifier = Modifier.align(Alignment.Center)
+            // Seek jumps show on the side that was double-tapped (the gesture halves
+            // are LTR in every locale, hence the absolute alignment).
+            modifier = Modifier
+                .align(
+                    when (seekFeedbackSide) {
+                        -1 -> AbsoluteAlignment.CenterLeft
+                        1 -> AbsoluteAlignment.CenterRight
+                        else -> Alignment.Center
+                    }
+                )
+                .padding(horizontal = 28.dp)
+                // Side feedback sits above the previous/next buttons, not on them.
+                .offset(y = if (seekFeedbackSide != 0) (-104).dp else 0.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -887,7 +1004,10 @@ private fun VideoPlayerContent(
                     showSeekFeedback ?: "",
                     color = Color.White,
                     fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    // LTR so the arrows keep pointing the way the video moves; an RTL
+                    // paragraph would mirror » into «.
+                    style = TextStyle(textDirection = TextDirection.Ltr)
                 )
             }
         }
@@ -926,6 +1046,12 @@ private fun VideoPlayerContent(
             }
         }
 
+        val chromeAlpha by animateFloatAsState(
+            targetValue = if (scrubbing) 0f else 1f,
+            animationSpec = tween(160),
+            label = "chromeAlpha"
+        )
+
         AnimatedVisibility(
             visible = showControls && !isInPipMode,
             enter = fadeIn(tween(200)),
@@ -950,36 +1076,57 @@ private fun VideoPlayerContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
-                        .align(Alignment.TopCenter),
+                        .align(Alignment.TopCenter)
+                        .graphicsLayer { alpha = chromeAlpha },
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { onDeleteRequest(); resetHideTimer() }) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.menu_delete), tint = LedRed)
+                    if (title != null) {
+                        Text(
+                            title,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            // File names read in their own direction in the Arabic UI too.
+                            style = TextStyle(textDirection = TextDirection.Content),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        )
+                    }
+                    onDeleteRequest?.let { requestDelete ->
+                        IconButton(onClick = { requestDelete(); resetHideTimer() }) {
+                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.menu_delete), tint = LedRed)
+                        }
                     }
                     IconButton(onClick = {
                         resizeModeIndex = (resizeModeIndex + 1) % resizeModes.size
+                        seekFeedbackSide = 0
                         showSeekFeedback = resizeModes[resizeModeIndex].second
                         hideHandler.postDelayed({ showSeekFeedback = null }, 700)
                         resetHideTimer()
                     }) {
-                        Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = White)
+                        Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = OnVideo)
                     }
                     IconButton(onClick = { toggleOrientation(activity); resetHideTimer() }) {
-                        Icon(Icons.Default.ScreenRotation, contentDescription = stringResource(R.string.player_rotate), tint = White)
+                        Icon(Icons.Default.ScreenRotation, contentDescription = stringResource(R.string.player_rotate), tint = OnVideo)
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         IconButton(onClick = {
-                            enterPip(activity, isPlaying, hasPrevious, hasNext); resetHideTimer()
+                            enterPip(activity, player.pipAspectRatio(), isPlaying, hasPrevious, hasNext); resetHideTimer()
                         }) {
-                            Icon(Icons.Default.PictureInPicture, contentDescription = stringResource(R.string.player_pip), tint = White)
+                            Icon(Icons.Default.PictureInPicture, contentDescription = stringResource(R.string.player_pip), tint = OnVideo)
                         }
                     }
                 }
 
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
-                        modifier = Modifier.align(Alignment.Center),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .graphicsLayer { alpha = chromeAlpha },
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1000,7 +1147,7 @@ private fun VideoPlayerContent(
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = stringResource(R.string.player_previous),
-                                tint = if (hasPrevious) White else White.copy(alpha = 0.3f),
+                                tint = if (hasPrevious) OnVideo else OnVideo.copy(alpha = 0.3f),
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -1018,7 +1165,7 @@ private fun VideoPlayerContent(
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                tint = White,
+                                tint = OnVideo,
                                 modifier = Modifier.size(42.dp)
                             )
                         }
@@ -1040,7 +1187,7 @@ private fun VideoPlayerContent(
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = stringResource(R.string.player_next),
-                                tint = if (hasNext) White else White.copy(alpha = 0.3f),
+                                tint = if (hasNext) OnVideo else OnVideo.copy(alpha = 0.3f),
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -1053,32 +1200,44 @@ private fun VideoPlayerContent(
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    // Seek bar + timestamps stay LTR in every locale; the speed
-                    // row below is free to follow the layout direction.
+                    // Time · seek bar · duration (tap it for time remaining). Kept
+                    // LTR in every locale; the speed row below follows the layout.
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(currentPosition.toTimeString(), color = White, fontSize = 12.sp)
-                            Text(duration.toTimeString(), color = White.copy(alpha = 0.7f), fontSize = 12.sp)
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Slider(
-                            value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = { fraction ->
-                                player.seekTo((fraction * duration).toLong())
-                                resetHideTimer()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Amber,
-                                activeTrackColor = Amber,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            TimeLabel(
+                                text = { (if (scrubbing) scrubTarget else uiPosition).toTimeString() },
+                                color = Color.White
                             )
-                        )
+                            ScrubBar(
+                                position = { uiPosition },
+                                buffered = { bufferedPosition },
+                                duration = duration,
+                                accent = VideoAccent,
+                                onScrubStart = ::beginScrub,
+                                onScrub = { scrubTarget = it },
+                                onScrubEnd = ::endScrub,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 4.dp)
+                            )
+                            TimeLabel(
+                                text = {
+                                    if (showRemaining) "\u2212" + (duration - uiPosition).coerceAtLeast(0L).toTimeString()
+                                    else duration.toTimeString()
+                                },
+                                color = Color.White.copy(alpha = 0.75f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable {
+                                        showRemaining = !showRemaining
+                                        resetHideTimer()
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -1097,7 +1256,7 @@ private fun VideoPlayerContent(
                             Icon(
                                 Icons.Default.RepeatOne,
                                 contentDescription = stringResource(R.string.player_repeat_one),
-                                tint = if (repeatOne) Amber else White.copy(alpha = 0.4f)
+                                tint = if (repeatOne) VideoAccent else OnVideo.copy(alpha = 0.4f)
                             )
                         }
                         Box {
@@ -1106,7 +1265,7 @@ private fun VideoPlayerContent(
                             ) {
                                 Text(
                                     text = if (playbackSpeed == 1f) stringResource(R.string.player_speed_1x) else "${playbackSpeed}\u00D7",
-                                    color = Amber,
+                                    color = VideoAccent,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1115,14 +1274,14 @@ private fun VideoPlayerContent(
                             DropdownMenu(
                                 expanded = showSpeedMenu,
                                 onDismissRequest = { showSpeedMenu = false },
-                                modifier = Modifier.background(Black)
+                                modifier = Modifier.background(VideoMenu)
                             ) {
                                 speeds.forEach { speed ->
                                     DropdownMenuItem(
                                         text = {
                                             Text(
                                                 text = if (speed == 1f) stringResource(R.string.player_speed_normal) else "${speed}\u00D7",
-                                                color = if (speed == playbackSpeed) Amber else White.copy(alpha = 0.7f),
+                                                color = if (speed == playbackSpeed) VideoAccent else OnVideo.copy(alpha = 0.7f),
                                                 fontWeight = if (speed == playbackSpeed) FontWeight.Bold else FontWeight.Normal
                                             )
                                         },
@@ -1141,6 +1300,12 @@ private fun VideoPlayerContent(
         }
     }
 }
+
+// The video player always sits on black, so it keeps the dark-mode palette in both
+// themes (the light palette's dark text and deep amber would vanish on video).
+private val OnVideo = Color.White
+private val VideoAccent = DarkPalette.accent
+private val VideoMenu = DarkPalette.surface
 
 @Composable
 private fun SwipeableContent(
@@ -1254,15 +1419,6 @@ private fun VolumeOrBrightnessIndicator(value: Float, label: String, icon: Strin
     }
 }
 
-private fun Long.toTimeString(): String {
-    val totalSeconds = this / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds)
-    else "%02d:%02d".format(minutes, seconds)
-}
-
 private fun Context.getSystemVolume(): Float {
     val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
     val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -1295,28 +1451,42 @@ private fun ComponentActivity.isInPictureInPictureModeCompat(): Boolean {
     return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
 }
 
+/**
+ * The PiP window takes the video's own shape (portrait reels get a tall window)
+ * instead of letterboxing everything into 16:9. Android only accepts ratios
+ * between 1:2.39 and 2.39:1, so extreme videos are clamped just inside that.
+ */
+private fun Player.pipAspectRatio(): Rational {
+    val size = videoSize
+    if (size.width <= 0 || size.height <= 0) return Rational(16, 9)
+    val ratio = (size.width * size.pixelWidthHeightRatio / size.height).coerceIn(0.42f, 2.38f)
+    return Rational((ratio * 1000).roundToInt(), 1000)
+}
+
 @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
 private fun buildPipParams(
     activity: ComponentActivity,
+    aspectRatio: Rational,
     isPlaying: Boolean,
     hasPrevious: Boolean,
     hasNext: Boolean
 ): android.app.PictureInPictureParams {
     return android.app.PictureInPictureParams.Builder()
-        .setAspectRatio(Rational(16, 9))
+        .setAspectRatio(aspectRatio)
         .setActions(PipActions.buildActions(activity, isPlaying, hasPrevious, hasNext))
         .build()
 }
 
 private fun enterPip(
     activity: ComponentActivity,
+    aspectRatio: Rational,
     isPlaying: Boolean = true,
     hasPrevious: Boolean = false,
     hasNext: Boolean = false
 ) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         activity.enterPictureInPictureMode(
-            buildPipParams(activity, isPlaying, hasPrevious, hasNext)
+            buildPipParams(activity, aspectRatio, isPlaying, hasPrevious, hasNext)
         )
     }
 }
@@ -1325,13 +1495,14 @@ private fun enterPip(
 @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
 private fun updatePipParams(
     activity: ComponentActivity,
+    aspectRatio: Rational,
     isPlaying: Boolean,
     hasPrevious: Boolean,
     hasNext: Boolean
 ) {
     runCatching {
         activity.setPictureInPictureParams(
-            buildPipParams(activity, isPlaying, hasPrevious, hasNext)
+            buildPipParams(activity, aspectRatio, isPlaying, hasPrevious, hasNext)
         )
     }
 }

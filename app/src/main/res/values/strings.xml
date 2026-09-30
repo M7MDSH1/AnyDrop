@@ -71,6 +71,11 @@
     <string name="filter_videos">VIDEOS</string>
     <string name="filter_images">IMAGES</string>
     <string name="library_empty">Your tape collection is empty.\nDownload something to get started!</string>
+    <string name="library_search_hint">Search your library…</string>
+    <string name="search_clear_desc">Clear search</string>
+    <string name="tapes_count_filtered">TAPES: %1$d / %2$d</string>
+    <string name="library_no_results">Nothing matches “%1$s”</string>
+    <string name="library_clear_search">CLEAR SEARCH</string>
 
     <!-- Audio -->
     <string name="audio_title">AUDIO</string>
@@ -166,8 +171,8 @@
     <string name="resize_zoom">Zoom</string>
     <string name="swipe_next">NEXT ▶</string>
     <string name="swipe_prev">◀ PREV</string>
-    <string name="seek_back_feedback">« 10s</string>
-    <string name="seek_forward_feedback">10s »</string>
+    <string name="seek_back_feedback">« %1$ds</string>
+    <string name="seek_forward_feedback">%1$ds »</string>
     <string name="player_error_generic">This video can\'t be played.</string>
     <string name="pip_previous">Previous</string>
     <string name="pip_play">Play</string>

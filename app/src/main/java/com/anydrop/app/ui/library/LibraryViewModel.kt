@@ -8,10 +8,12 @@ import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.MediaFilter
 import com.anydrop.app.data.repository.SortMode
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
@@ -28,11 +30,21 @@ class LibraryViewModel @Inject constructor(
 
     val sortMode: StateFlow<SortMode> = libraryRepository.sortMode
 
-    // Visible items = all items with the media-type filter + sort applied.
+    val searchQuery: StateFlow<String> = libraryRepository.searchQuery
+
+    // Visible items = all items with the media-type filter, search and sort applied.
     val mediaItems: StateFlow<List<MediaItem>> =
+        combine(_allItems, filter, sortMode, searchQuery) { items, filter, sort, query ->
+            libraryRepository.orderedMedia(items, filter, sort, query)
+        }.flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // How many items the current filter shows before the search narrows them ("3 / 120").
+    val unsearchedCount: StateFlow<Int> =
         combine(_allItems, filter, sortMode) { items, filter, sort ->
-            libraryRepository.orderedMedia(items, filter, sort)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+            libraryRepository.orderedMedia(items, filter, sort).size
+        }.flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
     private val _selectedItem = MutableStateFlow<MediaItem?>(null)
     val selectedItem: StateFlow<MediaItem?> = _selectedItem.asStateFlow()
@@ -52,6 +64,10 @@ class LibraryViewModel @Inject constructor(
 
     fun setFilter(f: MediaFilter) {
         libraryRepository.setFilterMode(f)
+    }
+
+    fun setSearchQuery(query: String) {
+        libraryRepository.setSearchQuery(query)
     }
 
     fun refresh() {

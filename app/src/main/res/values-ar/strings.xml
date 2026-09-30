@@ -71,6 +71,11 @@
     <string name="filter_videos">الفيديوهات</string>
     <string name="filter_images">الصور</string>
     <string name="library_empty">مجموعتك فارغة.\nنزّل شيئًا لتبدأ!</string>
+    <string name="library_search_hint">ابحث في مكتبتك…</string>
+    <string name="search_clear_desc">مسح البحث</string>
+    <string name="tapes_count_filtered">الأشرطة: %1$d من %2$d</string>
+    <string name="library_no_results">لا شيء يطابق «%1$s»</string>
+    <string name="library_clear_search">مسح البحث</string>
 
     <!-- Audio -->
     <string name="audio_title">الصوتيات</string>
@@ -166,8 +171,8 @@
     <string name="resize_zoom">تكبير</string>
     <string name="swipe_next">التالي ▶</string>
     <string name="swipe_prev">◀ السابق</string>
-    <string name="seek_back_feedback">« 10ث</string>
-    <string name="seek_forward_feedback">10ث »</string>
+    <string name="seek_back_feedback">« %1$dث</string>
+    <string name="seek_forward_feedback">%1$dث »</string>
     <string name="player_error_generic">تعذّر تشغيل هذا الفيديو.</string>
     <string name="pip_previous">السابق</string>
     <string name="pip_play">تشغيل</string>

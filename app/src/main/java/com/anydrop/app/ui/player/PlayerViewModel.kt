@@ -1,5 +1,6 @@
 package com.anydrop.app.ui.player
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -50,17 +51,18 @@ class PlayerViewModel @Inject constructor(
         val mediaId = savedStateHandle.get<String>("mediaId")
         viewModelScope.launch {
             // The player navigation order mirrors the library's current view:
-            // media type filter (ALL / VIDEOS / IMAGES) + sort (DATE / LENGTH),
-            // with audio tracks appended at the end (newest first) so swiping
-            // from the Audio tab still works. Shared via LibraryRepository so
-            // the player can never disagree with what the Library screen shows.
+            // media type filter (ALL / VIDEOS / IMAGES) + search + sort (DATE /
+            // LENGTH), with audio tracks appended at the end (newest first) so
+            // swiping from the Audio tab still works. Shared via LibraryRepository
+            // so the player can never disagree with what the Library screen shows.
             combine(
                 libraryRepository.mediaItems,
                 libraryRepository.audioItems,
                 libraryRepository.filterMode,
-                libraryRepository.sortMode
-            ) { media, audios, filter, sort ->
-                libraryRepository.orderedMedia(media, filter, sort) +
+                libraryRepository.sortMode,
+                libraryRepository.searchQuery
+            ) { media, audios, filter, sort, query ->
+                libraryRepository.orderedMedia(media, filter, sort, query) +
                     audios.sortedByDescending { it.downloadedAt }
             }
                 .collect { items ->
@@ -87,14 +89,25 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Play a video another app handed to AnyDrop ("Open with", or AnyDrop as the
+     * default video player). It is not in the library, so there is no next or
+     * previous, but watch progress is kept under its URI: reopening the same file
+     * resumes where the user stopped.
+     */
+    fun openExternal(uri: Uri, title: String) {
+        if (_currentMedia.value?.localUri == uri) return
+        startSession(MediaItem(id = uri.toString(), title = title, localUri = uri), fromLibrary = false)
+    }
+
     /** Begin a watch session for [media], resetting every per-video piece of state. */
-    private fun startSession(media: MediaItem) {
+    private fun startSession(media: MediaItem, fromLibrary: Boolean = true) {
         _currentMedia.value = media
         lastSavedPosition = 0L
         completionHandled = false
         restoreAttempted = false
         fallbackAttempted = false
-        deckSessionRepository.saveLastPlayedMediaId(media.id)
+        if (fromLibrary) deckSessionRepository.saveLastPlayedMediaId(media.id)
         viewModelScope.launch {
             _resumePosition.value = progressRepository.getPosition(media.id) ?: 0L
         }
