@@ -3,6 +3,8 @@
     <!-- App-specific external files dir (where downloads live). -->
     <external-files-path name="anydrop_downloads" path="AnyDrop/" />
     <external-files-path name="anydrop_root" path="." />
+    <!-- Downloaded app updates, handed to the system installer. -->
+    <cache-path name="updates" path="updates/" />
     <!-- Fallback internal files. -->
     <files-path name="internal" path="." />
     <!-- Public collections we export to. -->

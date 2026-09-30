@@ -131,6 +131,29 @@
     <string name="language_system">لغة النظام</string>
     <string name="language_english">الإنجليزية</string>
     <string name="language_arabic">العربية</string>
+    <string name="settings_updates">التحديثات</string>
+    <string name="update_check_tap">اضغط للبحث عن إصدار جديد</string>
+    <string name="update_checking">جارٍ البحث عن تحديثات…</string>
+    <string name="update_up_to_date">لديك أحدث إصدار (v%1$s)</string>
+    <string name="update_available_sub">الإصدار %1$s متاح — اضغط للتحديث</string>
+    <string name="update_check_failed">تعذّر البحث عن تحديثات — اضغط للمحاولة مجددًا</string>
+    <string name="update_title">تحديث متاح</string>
+    <string name="update_message">الإصدار %1$s من AnyDrop جاهز. لديك الإصدار %2$s.</string>
+    <string name="update_size">حجم التنزيل: %1$s</string>
+    <string name="update_now">تحديث</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="update_skip">تخطي</string>
+    <string name="update_install">تثبيت</string>
+    <string name="update_allow">سماح</string>
+    <string name="update_open_page">فتح الصفحة</string>
+    <string name="update_downloading">جارٍ تنزيل التحديث… %1$d%%</string>
+    <string name="update_allow_installs">لتثبيت التحديثات اسمح لـ AnyDrop بتثبيت التطبيقات: اضغط «سماح»، فعّل الخيار، ثم ارجع.</string>
+    <string name="update_failed">تعذّر تنزيل التحديث. تحقق من الاتصال وحاول مجددًا.</string>
+    <string name="update_not_anydrop">الملف الذي تم تنزيله ليس تحديثًا لـ AnyDrop.</string>
+    <string name="update_signature_mismatch">هذا التحديث موقّع بشكل مختلف عن التطبيق المثبّت، لذلك لن يثبّته أندرويد فوقه. نزّله من صفحة الإصدار.</string>
+    <string name="update_notification_title">الإصدار %1$s من AnyDrop متاح</string>
+    <string name="update_notification_text">اضغط لمعرفة الجديد والتحديث.</string>
+    <string name="notification_channel_updates">تحديثات التطبيق</string>
 
     <!-- Session signal (cookies) -->
     <string name="session_signal_subtitle">سجّل الدخول إلى المنصات لتنزيل محتواها</string>

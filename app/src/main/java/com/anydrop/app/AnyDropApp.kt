@@ -13,6 +13,7 @@ import com.anydrop.app.data.repository.DownloadTracker
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.readAppLanguageSync
+import com.anydrop.app.service.UpdateCheckWorker
 import com.anydrop.app.ui.theme.TapeDeckPaletteState
 import com.anydrop.app.util.Constants
 import com.anydrop.app.util.LocaleHelper
@@ -70,6 +71,7 @@ class AnyDropApp : Application() {
         super.onCreate()
         followDarkMode()
         createNotificationChannel()
+        UpdateCheckWorker.schedule(this)
         reconcileInterruptedDownloads()
         val imageLoader = ImageLoader.Builder(this)
             .components {

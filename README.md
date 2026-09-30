@@ -34,6 +34,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
   the link it came from**, swipe left/right between items, and a zoomable image viewer.
 - **Default video player** — AnyDrop appears in "Open with" and can be set as the
   phone's video player for files from any app.
+- **Update notifications** — AnyDrop checks this repo's releases (no account, no paid
+  service) and tells you when a new version is out, then downloads and installs it in one tap.
 - **English & Arabic**, with a **dark ↔ light** theme, both switchable from Settings.
 - **Optional login (cookies)** — only for private content: sign in inside the app, and
   disconnect or remove a site's session any time.
