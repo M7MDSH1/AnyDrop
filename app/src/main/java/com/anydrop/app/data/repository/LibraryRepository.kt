@@ -9,6 +9,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.data.model.MediaSource
+import com.anydrop.app.util.SearchText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +44,11 @@ class LibraryRepository(private val context: Context) {
     private val _filterMode = MutableStateFlow(MediaFilter.ALL)
     val filterMode: StateFlow<MediaFilter> = _filterMode.asStateFlow()
 
+    // Library search text. In memory only (a new session starts unfiltered); it
+    // lives here so the player's swipe order follows the results the user tapped.
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
     private val prefs = context.getSharedPreferences("anydrop_library", Context.MODE_PRIVATE)
     private val indexCache = LibraryIndexCache(context)
     private var lastCacheSignature = 0L
@@ -65,6 +71,10 @@ class LibraryRepository(private val context: Context) {
     fun setFilterMode(mode: MediaFilter) {
         _filterMode.value = mode
         prefs.edit().putString(KEY_FILTER, mode.name).apply()
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
     }
 
     /**
@@ -90,13 +100,20 @@ class LibraryRepository(private val context: Context) {
      *  - ALL shows videos + images; VIDEOS / IMAGES restrict to that type.
      *  - DATE: newest → oldest. LENGTH: videos only, longest → shortest
      *    (images have no duration, so they don't appear in LENGTH mode).
+     *  - A non-blank [query] keeps only the items that match every typed word.
      */
-    fun orderedMedia(items: List<MediaItem>, filter: MediaFilter, sort: SortMode): List<MediaItem> {
+    fun orderedMedia(
+        items: List<MediaItem>,
+        filter: MediaFilter,
+        sort: SortMode,
+        query: String = ""
+    ): List<MediaItem> {
+        val terms = SearchText.terms(query)
         val filtered = when (filter) {
             MediaFilter.ALL -> items
             MediaFilter.VIDEOS -> items.filter { !it.isImage && !it.isAudio }
             MediaFilter.IMAGES -> items.filter { it.isImage }
-        }
+        }.let { list -> if (terms.isEmpty()) list else list.filter { SearchText.matches(it, terms) } }
         return when (sort) {
             SortMode.DATE -> filtered.sortedByDescending { it.downloadedAt }
             SortMode.DURATION -> filtered.filter { !it.isImage }.sortedByDescending { it.durationMs }
