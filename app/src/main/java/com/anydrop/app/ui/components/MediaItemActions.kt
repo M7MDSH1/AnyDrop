@@ -212,6 +212,31 @@ fun shareMedia(context: android.content.Context, item: MediaItem) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_via)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        context.startActivity(shareChooser(context, intent))
+    } catch (_: Exception) {}
+}
+
+/**
+ * The system share sheet for [intent]. NO_USER_ACTION tells Android this is not the
+ * user leaving the app, so a playing video does not jump into picture-in-picture.
+ */
+private fun shareChooser(context: android.content.Context, intent: Intent): Intent =
+    Intent.createChooser(intent, context.getString(R.string.share_via))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+
+/** The web page the item was downloaded from, or null when it has none (e.g. a device video). */
+val MediaItem.sourceUrl: String?
+    get() = url.trim().takeIf { it.startsWith("https://") || it.startsWith("http://") }
+
+/** Share the link to the page the item was downloaded from, instead of the file. */
+fun shareSourceLink(context: android.content.Context, item: MediaItem) {
+    val link = item.sourceUrl ?: return
+    try {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, link)
+            if (item.title.isNotBlank()) putExtra(Intent.EXTRA_SUBJECT, item.title)
+        }
+        context.startActivity(shareChooser(context, intent))
     } catch (_: Exception) {}
 }

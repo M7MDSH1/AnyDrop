@@ -1,8 +1,8 @@
 package com.anydrop.app.ui.browser
 
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
@@ -19,7 +19,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +44,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Download
@@ -54,6 +62,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
@@ -64,12 +73,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,13 +92,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -103,7 +120,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.webkit.WebViewCompat
 import com.anydrop.app.R
+import com.anydrop.app.data.repository.BrowserSite
+import com.anydrop.app.data.repository.BrowserSitesRepository
 import com.anydrop.app.data.repository.DownloadQueue
 import com.anydrop.app.data.repository.DownloadRequest
 import com.anydrop.app.data.repository.LibraryRepository
@@ -116,33 +136,18 @@ import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
 import com.anydrop.app.ui.theme.Hairline
+import com.anydrop.app.ui.theme.LedRed
+import com.anydrop.app.ui.theme.LightGray
 import com.anydrop.app.ui.theme.MediumGray
 import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
 import com.anydrop.app.ui.theme.tracked
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
 import java.net.URLEncoder
 import java.util.Collections
 import javax.inject.Inject
-
-/** Sites on the browser's start page. */
-private data class Site(val name: String, val url: String, val argb: Long)
-
-private val SITES = listOf(
-    Site("Instagram", "https://www.instagram.com/", 0xFFE1306C),
-    Site("TikTok", "https://www.tiktok.com/", 0xFF25F4EE),
-    Site("YouTube", "https://m.youtube.com/", 0xFFFF3B30),
-    Site("Facebook", "https://m.facebook.com/watch/", 0xFF1877F2),
-    Site("X", "https://x.com/", 0xFF9E9E9E),
-    Site("Reddit", "https://www.reddit.com/", 0xFFFF4500),
-    Site("Vimeo", "https://vimeo.com/", 0xFF1AB7EA),
-    Site("Pinterest", "https://www.pinterest.com/", 0xFFE60023),
-    Site("Dailymotion", "https://www.dailymotion.com/", 0xFF0A7CFF),
-    Site("Twitch", "https://m.twitch.tv/", 0xFF9146FF),
-    Site("Threads", "https://www.threads.net/", 0xFFBDBDBD),
-    Site("Snapchat", "https://www.snapchat.com/spotlight", 0xFFFFD600),
-)
 
 /**
  * The in-app browser (Snaptube-style): browse any site; every page is watched for media
@@ -166,8 +171,17 @@ class BrowserState(private val appContext: Context) {
         private set
     var canGoForward by mutableStateOf(false)
         private set
-    var desktopMode by mutableStateOf(false)
-        private set
+    // Desktop mode is remembered per site (like Chrome's "Desktop site"). Bumped on every
+    // change so [desktopMode] is re-read.
+    private val desktopPrefs = appContext.getSharedPreferences("anydrop_browser_desktop", Context.MODE_PRIVATE)
+    private var desktopPrefsVersion by mutableIntStateOf(0)
+
+    /** Whether the page on screen is shown as the desktop site. */
+    val desktopMode: Boolean
+        get() {
+            desktopPrefsVersion
+            return wantsDesktop(currentUrl)
+        }
     var scan by mutableStateOf<PageScan?>(null)
         private set
 
@@ -191,6 +205,13 @@ class BrowserState(private val appContext: Context) {
         }
         val wv = WebView(context)
         MediaSniffer.configure(wv, MediaSniffer.mobileUserAgent(context))
+        // Pinch to zoom (desktop pages are shown zoomed out), without the old +/- buttons.
+        wv.settings.builtInZoomControls = true
+        wv.settings.displayZoomControls = false
+        if (MediaSniffer.documentStartSupported) {
+            WebViewCompat.addDocumentStartJavaScript(wv, PageTweaks.JS, setOf("*"))
+        }
+        applyUserAgent(wv, pendingUrl)
         wv.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 MediaSniffer.classifyNetworkUrl(request.url.toString())?.let { network.add(it) }
@@ -200,11 +221,20 @@ class BrowserState(private val appContext: Context) {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 return when (uri.scheme) {
-                    "http", "https" -> false
+                    "http", "https" -> when {
+                        PageTweaks.isAppInstallRedirect(uri) -> true
+                        // Moving to a site shown the other way (desktop/mobile): reload it with
+                        // the matching browser identity.
+                        request.isForMainFrame && applyUserAgent(view, uri.toString()) -> {
+                            view.loadUrl(uri.toString())
+                            true
+                        }
+                        else -> false
+                    }
                     "intent" -> {
-                        // Sites try to bounce you into their app; stay here and follow the web fallback.
-                        runCatching { Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME) }.getOrNull()
-                            ?.getStringExtra("browser_fallback_url")?.let { view.loadUrl(it) }
+                        // Sites try to bounce you into their app; stay here and follow only a
+                        // web fallback (never an app-store one, which would just dead-end).
+                        PageTweaks.webFallbackFor(uri.toString())?.let { view.loadUrl(it) }
                         true
                     }
                     else -> true
@@ -213,10 +243,18 @@ class BrowserState(private val appContext: Context) {
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 if (url == null || url == "about:blank") return
+                // Back/forward into a site shown the other way: fetch it again as that.
+                if (applyUserAgent(view, url)) {
+                    view.reload()
+                    return
+                }
                 if (url != currentUrl) resetFindings()
                 currentUrl = url
                 isLoading = true
-                if (!MediaSniffer.documentStartSupported) view.evaluateJavascript(MediaSniffer.CORE_JS, null)
+                if (!MediaSniffer.documentStartSupported) {
+                    view.evaluateJavascript(MediaSniffer.CORE_JS, null)
+                    view.evaluateJavascript(PageTweaks.JS, null)
+                }
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
@@ -269,7 +307,12 @@ class BrowserState(private val appContext: Context) {
         resetFindings()
         currentUrl = url
         val wv = webView
-        if (wv == null) pendingUrl = url else wv.loadUrl(url)
+        if (wv == null) {
+            pendingUrl = url
+        } else {
+            applyUserAgent(wv, url)
+            wv.loadUrl(url)
+        }
     }
 
     fun goBack() = webView?.goBack()
@@ -290,13 +333,37 @@ class BrowserState(private val appContext: Context) {
         canGoForward = false
     }
 
+    /** Switches the current site between its desktop and mobile versions, and remembers it. */
     fun toggleDesktop() {
-        desktopMode = !desktopMode
+        val url = currentUrl ?: return
+        val key = siteKey(url) ?: return
+        desktopPrefs.edit().putBoolean(key, !wantsDesktop(url)).apply()
+        desktopPrefsVersion++
         webView?.let {
-            it.settings.userAgentString =
-                if (desktopMode) MediaSniffer.desktopUserAgent(appContext) else MediaSniffer.mobileUserAgent(appContext)
+            applyUserAgent(it, url)
             it.reload()
         }
+    }
+
+    private fun wantsDesktop(url: String?): Boolean {
+        val host = siteKey(url) ?: return false
+        // The user's choice for this site (or a parent domain) wins over the defaults.
+        var domain = host
+        while (true) {
+            if (desktopPrefs.contains(domain)) return desktopPrefs.getBoolean(domain, false)
+            val dot = domain.indexOf('.')
+            if (dot < 0 || domain.indexOf('.', dot + 1) < 0) break
+            domain = domain.substring(dot + 1)
+        }
+        return DESKTOP_BY_DEFAULT.any { host == it || host.endsWith(".$it") }
+    }
+
+    /** Sets the browser identity [url] should get; true when it changed. */
+    private fun applyUserAgent(view: WebView, url: String?): Boolean {
+        val want = if (wantsDesktop(url)) MediaSniffer.desktopUserAgent(appContext) else MediaSniffer.mobileUserAgent(appContext)
+        if (view.settings.userAgentString == want) return false
+        view.settings.userAgentString = want
+        return true
     }
 
     fun pause() = webView?.onPause()
@@ -314,6 +381,17 @@ class BrowserState(private val appContext: Context) {
     }
 
     companion object {
+        /**
+         * Sites opened as their desktop version until the user says otherwise. TikTok's
+         * mobile site stops loading videos for visitors without the app and sends swipes
+         * to the Play Store; its desktop site scrolls freely.
+         */
+        private val DESKTOP_BY_DEFAULT = setOf("tiktok.com")
+
+        private fun siteKey(url: String?): String? =
+            url?.let { runCatching { Uri.parse(it).host }.getOrNull() }
+                ?.lowercase()?.removePrefix("www.")?.removePrefix("m.")?.takeIf { it.isNotEmpty() }
+
         fun toUrl(input: String): String {
             val t = input.trim()
             Regex("""https?://\S+""").find(t)?.value?.let { return it }
@@ -332,8 +410,17 @@ fun rememberBrowserState(): BrowserState {
 @HiltViewModel
 class BrowserViewModel @Inject constructor(
     private val downloadQueue: DownloadQueue,
-    private val libraryRepository: LibraryRepository
+    private val libraryRepository: LibraryRepository,
+    private val sitesRepository: BrowserSitesRepository
 ) : ViewModel() {
+
+    val sites: StateFlow<List<BrowserSite>> = sitesRepository.sites
+
+    fun addSite(name: String, url: String) = sitesRepository.add(name, url)
+    fun updateSite(old: BrowserSite, name: String, url: String) = sitesRepository.update(old, name, url)
+    fun removeSite(site: BrowserSite) = sitesRepository.remove(site)
+    fun moveSiteToTop(site: BrowserSite) = sitesRepository.moveToTop(site)
+    fun restoreDefaultSites() = sitesRepository.restoreDefaults()
 
     /** Queues media found on the page. The browser's session cookies go along with it. */
     fun download(pageUrl: String, title: String, format: FormatInfo) {
@@ -367,6 +454,10 @@ fun BrowserScreen(
 ) {
     val context = LocalContext.current
     var sheetOpen by remember { mutableStateOf(false) }
+    val sites by viewModel.sites.collectAsState()
+    // Start page editing: the site being added/edited (null = closed) and the one to remove.
+    var siteEditor by remember { mutableStateOf<SiteEditor?>(null) }
+    var siteToRemove by remember { mutableStateOf<BrowserSite?>(null) }
 
     // Pages that hand over a file directly (a "Download" link to an .mp4, say).
     state.onPageDownload = { url, mime, disposition ->
@@ -408,7 +499,17 @@ fun BrowserScreen(
     }
 
     Column(Modifier.fillMaxSize().background(DarkGray)) {
-        BrowserBar(state)
+        BrowserBar(
+            state = state,
+            onAddToStart = {
+                val url = state.currentUrl ?: return@BrowserBar
+                siteEditor = SiteEditor(
+                    original = null,
+                    name = BrowserSitesRepository.suggestName(state.pageTitle, url),
+                    url = url
+                )
+            }
+        )
         Box(Modifier.fillMaxWidth().height(2.dp)) {
             if (state.isLoading) {
                 LinearProgressIndicator(
@@ -432,7 +533,16 @@ fun BrowserScreen(
                 modifier = Modifier.fillMaxSize()
             )
             if (state.showingStart) {
-                StartPage(onOpen = state::load)
+                StartPage(
+                    sites = sites,
+                    showRestore = sites != BrowserSitesRepository.DEFAULT_SITES,
+                    onOpen = state::load,
+                    onAdd = { siteEditor = SiteEditor(original = null, name = "", url = "") },
+                    onEdit = { site -> siteEditor = SiteEditor(original = site, name = site.name, url = site.url) },
+                    onMoveToTop = viewModel::moveSiteToTop,
+                    onRemove = { site -> siteToRemove = site },
+                    onRestore = viewModel::restoreDefaultSites
+                )
             } else {
                 DownloadFab(
                     count = state.foundCount,
@@ -444,6 +554,42 @@ fun BrowserScreen(
                 )
             }
         }
+    }
+
+    siteEditor?.let { editor ->
+        SiteDialog(
+            editor = editor,
+            onDismiss = { siteEditor = null },
+            onSave = { name, url ->
+                val original = editor.original
+                if (original == null) {
+                    viewModel.addSite(name, url)
+                    if (!state.showingStart) Toast.makeText(context, R.string.browser_site_added, Toast.LENGTH_SHORT).show()
+                } else {
+                    viewModel.updateSite(original, name, url)
+                }
+                siteEditor = null
+            }
+        )
+    }
+
+    siteToRemove?.let { site ->
+        AlertDialog(
+            onDismissRequest = { siteToRemove = null },
+            containerColor = MediumGray,
+            title = { Text(stringResource(R.string.browser_remove_site_title), color = LedRed, fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.browser_remove_site_message, site.name), color = White, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.removeSite(site); siteToRemove = null }) {
+                    Text(stringResource(R.string.browser_remove), color = LedRed, fontFamily = FontFamily.Monospace)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { siteToRemove = null }) {
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                }
+            }
+        )
     }
 
     if (sheetOpen) {
@@ -473,7 +619,7 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun BrowserBar(state: BrowserState) {
+private fun BrowserBar(state: BrowserState, onAddToStart: () -> Unit) {
     val focus = LocalFocusManager.current
     val clipboard = LocalClipboardManager.current
     var editing by remember { mutableStateOf(false) }
@@ -566,7 +712,14 @@ private fun BrowserBar(state: BrowserState) {
                             colors = CheckboxDefaults.colors(checkedColor = Amber, checkmarkColor = OnAccent)
                         )
                     },
+                    enabled = !state.showingStart,
                     onClick = { menu = false; state.toggleDesktop() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.browser_add_to_start)) },
+                    leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },
+                    enabled = !state.showingStart,
+                    onClick = { menu = false; onAddToStart() }
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.browser_copy_link)) },
@@ -584,8 +737,25 @@ private fun BrowserBar(state: BrowserState) {
     }
 }
 
+/** The site being added ([original] == null) or edited in [SiteDialog]. */
+private data class SiteEditor(val original: BrowserSite?, val name: String, val url: String)
+
+/**
+ * The user's own start page: tap a site to open it, long-press it to edit, move or
+ * remove it, and use the last tile to add one. The shipped sites can be removed too,
+ * and restored in one tap.
+ */
 @Composable
-private fun StartPage(onOpen: (String) -> Unit) {
+private fun StartPage(
+    sites: List<BrowserSite>,
+    showRestore: Boolean,
+    onOpen: (String) -> Unit,
+    onAdd: () -> Unit,
+    onEdit: (BrowserSite) -> Unit,
+    onMoveToTop: (BrowserSite) -> Unit,
+    onRemove: (BrowserSite) -> Unit,
+    onRestore: () -> Unit
+) {
     Column(
         Modifier
             .fillMaxSize()
@@ -626,37 +796,243 @@ private fun StartPage(onOpen: (String) -> Unit) {
                 .padding(vertical = 14.dp, horizontal = 6.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            SITES.chunked(4).forEach { row ->
+            // null stands for the trailing "add site" tile.
+            (sites + listOf<BrowserSite?>(null)).chunked(4).forEach { row ->
                 Row(Modifier.fillMaxWidth()) {
                     row.forEach { site ->
-                        Column(
-                            Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { onOpen(site.url) }
-                                .padding(vertical = 6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            val color = Color(site.argb)
-                            Box(
-                                Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(color.copy(alpha = 0.16f))
-                                    .border(1.dp, color.copy(alpha = 0.5f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(site.name.take(1), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Text(site.name, color = White.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1)
+                        if (site == null) {
+                            AddSiteTile(onClick = onAdd, modifier = Modifier.weight(1f))
+                        } else {
+                            SiteTile(
+                                site = site,
+                                canMoveToTop = site != sites.first(),
+                                onOpen = { onOpen(site.url) },
+                                onEdit = { onEdit(site) },
+                                onMoveToTop = { onMoveToTop(site) },
+                                onRemove = { onRemove(site) },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                     repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(R.string.browser_sites_hint),
+            color = White.copy(alpha = 0.4f),
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center
+        )
+        if (showRestore) {
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onRestore) {
+                Icon(Icons.Filled.RestartAlt, null, tint = Amber, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.browser_restore_sites), color = Amber, fontSize = 12.sp)
+            }
+        }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SiteTile(
+    site: BrowserSite,
+    canMoveToTop: Boolean,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    onMoveToTop: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var menu by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    Box(modifier) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .combinedClickable(
+                    onClick = onOpen,
+                    onLongClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        menu = true
+                    }
+                )
+                .padding(vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val color = Color(site.argb)
+            Box(
+                Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.16f))
+                    .border(1.dp, color.copy(alpha = 0.5f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(site.initial(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                site.name,
+                color = White.copy(alpha = 0.85f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.browser_edit)) },
+                leadingIcon = { Icon(Icons.Filled.Edit, null) },
+                onClick = { menu = false; onEdit() }
+            )
+            if (canMoveToTop) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.browser_move_top)) },
+                    leadingIcon = { Icon(Icons.Filled.VerticalAlignTop, null) },
+                    onClick = { menu = false; onMoveToTop() }
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.browser_remove), color = LedRed) },
+                leadingIcon = { Icon(Icons.Filled.Delete, null, tint = LedRed) },
+                onClick = { menu = false; onRemove() }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddSiteTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .border(1.dp, LightGray, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.Add, null, tint = Amber)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.browser_add_site), color = Amber, fontSize = 11.sp, maxLines = 1)
+    }
+}
+
+/** First letter (or emoji) of the site's name for its tile. */
+private fun BrowserSite.initial(): String {
+    val n = name.trim()
+    if (n.isEmpty()) return "?"
+    return String(Character.toChars(n.codePointAt(0))).uppercase()
+}
+
+/** Add or edit a start page site: its web address (checked as you type) and a name. */
+@Composable
+private fun SiteDialog(
+    editor: SiteEditor,
+    onDismiss: () -> Unit,
+    onSave: (name: String, url: String) -> Unit
+) {
+    var url by remember(editor) { mutableStateOf(editor.url) }
+    var name by remember(editor) { mutableStateOf(editor.name) }
+    var urlEdited by remember(editor) { mutableStateOf(false) }
+    // A blank "add site" dialog opens ready to type the address.
+    val urlFocus = remember { FocusRequester() }
+    LaunchedEffect(editor) { if (editor.url.isEmpty()) urlFocus.requestFocus() }
+    val normalized = BrowserSitesRepository.normalizeUrl(url)
+    val showError = urlEdited && url.isNotBlank() && normalized == null
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = Amber,
+        unfocusedBorderColor = LightGray,
+        errorBorderColor = LedRed,
+        cursorColor = Amber,
+        focusedTextColor = White,
+        unfocusedTextColor = White,
+        errorTextColor = White,
+        focusedLabelColor = Amber,
+        unfocusedLabelColor = White.copy(alpha = 0.6f),
+        errorLabelColor = LedRed,
+        errorSupportingTextColor = LedRed,
+        focusedPlaceholderColor = White.copy(alpha = 0.35f),
+        unfocusedPlaceholderColor = White.copy(alpha = 0.35f)
+    )
+    // Reads the fields when tapped. (A local fun captured `normalized` and the Compose
+    // compiler kept an early copy of it, which saved a half-typed address.)
+    val save: () -> Unit = {
+        BrowserSitesRepository.normalizeUrl(url)?.let { address ->
+            onSave(name.trim().ifEmpty { BrowserSitesRepository.defaultName(address) }, address)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MediumGray,
+        title = {
+            Text(
+                stringResource(if (editor.original == null) R.string.browser_add_site else R.string.browser_edit_site),
+                color = Amber,
+                fontFamily = FontFamily.Monospace
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it.replace("\n", ""); urlEdited = true },
+                    label = { Text(stringResource(R.string.browser_site_url)) },
+                    placeholder = { Text("example.com", style = TextStyle(textDirection = TextDirection.Ltr)) },
+                    singleLine = true,
+                    isError = showError,
+                    supportingText = if (showError) {
+                        { Text(stringResource(R.string.browser_site_url_invalid)) }
+                    } else null,
+                    // Web addresses always read left to right, even in the Arabic UI.
+                    textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, textDirection = TextDirection.Ltr),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth().focusRequester(urlFocus)
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.replace("\n", "").take(40) },
+                    label = { Text(stringResource(R.string.browser_site_name)) },
+                    placeholder = normalized?.let { address ->
+                        { Text(BrowserSitesRepository.defaultName(address)) }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = save, enabled = normalized != null) {
+                Text(
+                    stringResource(if (editor.original == null) R.string.btn_add else R.string.btn_save),
+                    color = if (normalized != null) Amber else White.copy(alpha = 0.3f),
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+            }
+        }
+    )
 }
 
 @Composable

@@ -241,6 +241,23 @@
     <string name="browser_reload">إعادة التحميل</string>
     <string name="browser_stop">إيقاف التحميل</string>
     <string name="browser_added">أُضيف إلى التنزيلات</string>
+    <string name="btn_save">حفظ</string>
+    <string name="share_video">مشاركة الفيديو</string>
+    <string name="share_link">مشاركة الرابط</string>
+    <string name="browser_add_site">إضافة موقع</string>
+    <string name="browser_edit_site">تعديل الموقع</string>
+    <string name="browser_site_name">الاسم</string>
+    <string name="browser_site_url">عنوان الموقع</string>
+    <string name="browser_site_url_invalid">أدخل عنوانًا مثل example.com</string>
+    <string name="browser_edit">تعديل</string>
+    <string name="browser_move_top">نقل إلى البداية</string>
+    <string name="browser_remove">إزالة</string>
+    <string name="browser_remove_site_title">إزالة الموقع</string>
+    <string name="browser_remove_site_message">هل تريد إزالة %1$s من صفحة البداية؟</string>
+    <string name="browser_sites_hint">اضغط مطولًا على أي موقع لتعديله أو نقله أو إزالته</string>
+    <string name="browser_restore_sites">استعادة المواقع الافتراضية</string>
+    <string name="browser_add_to_start">إضافة إلى صفحة البداية</string>
+    <string name="browser_site_added">أُضيف إلى صفحة البداية</string>
 
     <!-- Session signal: disconnect / delete -->
     <string name="session_disconnect">قطع الاتصال</string>
