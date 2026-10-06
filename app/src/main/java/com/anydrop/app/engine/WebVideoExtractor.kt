@@ -35,6 +35,10 @@ data class MediaCandidate(
     val height: Int = 0,
     val code: String? = null,
     val quality: String? = null,
+    /** Position in a multi-photo/video post (carousel), or -1. */
+    val slide: Int = -1,
+    /** Cover picture of a video slide, for previews. */
+    val cover: String? = null,
 ) {
     val pixels: Int get() = width * height
     val isHls: Boolean get() = url.substringBefore('?').lowercase().endsWith(".m3u8")
@@ -122,10 +126,11 @@ object MediaSniffer {
     playback_url: 1, playbackUrl: 1, stream_url: 1, hls_url: 1, hlsUrl: 1, hls: 1, mp4: 1, mp4_url: 1,
     file: 1, src: 1, url: 1, source: 1, video: 1, play_addr: 1, playAddr: 1, downloadAddr: 1 };
   // `inherit`: carousel slides carry their own `code`, but belong to the parent post.
-  function walk(o, ctx, depth, inherit) {
+  // `slide`: position in the post's carousel, so slides keep their order and identity.
+  function walk(o, ctx, depth, inherit, slide) {
     if (!o || depth > 60) return;
     var i;
-    if (Array.isArray(o)) { for (i = 0; i < o.length; i++) walk(o[i], ctx, depth + 1, inherit); return; }
+    if (Array.isArray(o)) { for (i = 0; i < o.length; i++) walk(o[i], ctx, depth + 1, inherit, slide); return; }
     if (typeof o !== 'object') return;
     var code = ctx;
     if (!inherit) {
@@ -133,27 +138,29 @@ object MediaSniffer {
       else if (typeof o.shortcode === 'string') code = o.shortcode;
     }
     if (Array.isArray(o.carousel_media)) {
-      for (i = 0; i < o.carousel_media.length; i++) walk(o.carousel_media[i], code, depth + 1, true);
+      for (i = 0; i < o.carousel_media.length; i++) walk(o.carousel_media[i], code, depth + 1, true, i);
     }
     var sidecar = o.edge_sidecar_to_children && o.edge_sidecar_to_children.edges;
     if (Array.isArray(sidecar)) {
-      for (i = 0; i < sidecar.length; i++) walk(sidecar[i] && sidecar[i].node, code, depth + 1, true);
+      for (i = 0; i < sidecar.length; i++) walk(sidecar[i] && sidecar[i].node, code, depth + 1, true, i);
     }
     var vv = o.video_versions;
     if (vv && vv.length) {
       var best = largest(vv);
-      if (best) add(best.url, 100, 'ig', { code: code, w: best.width || o.original_width, h: best.height || o.original_height });
+      var cover = o.image_versions2 && o.image_versions2.candidates ? largest(o.image_versions2.candidates) : null;
+      if (best) add(best.url, 100, 'ig', { code: code, w: best.width || o.original_width, h: best.height || o.original_height,
+        slide: slide, cover: cover && cover.url });
     } else if (o.image_versions2 && o.image_versions2.candidates && !o.carousel_media) {
       // Instagram/Threads photo (or one photo slide of a carousel).
       var img = largest(o.image_versions2.candidates);
-      if (img) addImg(img.url, { code: code, w: img.width, h: img.height });
+      if (img) addImg(img.url, { code: code, w: img.width, h: img.height, slide: slide });
     }
     if (typeof o.video_url === 'string' && (o.is_video === true || /Video/.test(o.__typename || ''))) {
       var d = o.dimensions || {};
-      add(o.video_url, 98, 'ig', { code: code, w: d.width, h: d.height });
+      add(o.video_url, 98, 'ig', { code: code, w: d.width, h: d.height, slide: slide, cover: o.display_url });
     } else if (typeof o.display_url === 'string' && o.is_video === false && !o.edge_sidecar_to_children) {
       var dd = o.dimensions || {};
-      addImg(o.display_url, { code: code, w: dd.width, h: dd.height });
+      addImg(o.display_url, { code: code, w: dd.width, h: dd.height, slide: slide });
     }
     if (o['@type'] === 'VideoObject' && typeof o.contentUrl === 'string') add(o.contentUrl, 82, 'ld');
     for (var k in o) {
@@ -166,7 +173,7 @@ object MediaSniffer {
         else if (SD[k]) add(val, 88, 'fb', { q: 'SD', code: code });
         else if (KEYS[k] && isMedia(clean(val))) add(val, 70, 'json', { code: code });
       } else if (val && typeof val === 'object') {
-        walk(val, code, depth + 1, inherit);
+        walk(val, code, depth + 1, inherit, slide);
       }
     }
   }
@@ -328,6 +335,8 @@ object MediaSniffer {
             height = h.optInt("h", 0),
             code = h.optString("code").takeIf { it.isNotEmpty() && it != "null" },
             quality = h.optString("q").takeIf { it.isNotEmpty() && it != "null" },
+            slide = h.optInt("slide", -1),
+            cover = h.optString("cover").takeIf { it.startsWith("http") },
         )
     }
 
@@ -345,7 +354,8 @@ object MediaSniffer {
         list = list.sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.pixels })
         val top = list.firstOrNull()?.score ?: return emptyList()
         if (top >= 85) list = list.filter { it.score >= 70 }
-        return list.take(8)
+        // Every slide of a carousel stays; other guesses are capped.
+        return list.filterIndexed { i, c -> c.slide >= 0 || i < 8 }
     }
 
     private fun rankImages(pageUrl: String, all: List<MediaCandidate>): List<MediaCandidate> {
@@ -434,7 +444,7 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
             c.isHls -> "Auto"
             else -> "Original"
         }
-        if (several && c.score >= 95) label = "Video ${i + 1} · $label"
+        if (several && c.score >= 95) label = "Video ${(if (c.slide >= 0) c.slide else i) + 1} · $label"
         val n = (used[label] ?: 0) + 1
         used[label] = n
         if (n > 1) label = "$label ($n)"
@@ -446,7 +456,9 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
             vcodec = "page",
             acodec = "page",
             directUrl = c.url,
-            userAgent = userAgent
+            userAgent = userAgent,
+            slide = if (c.score >= 95) c.slide else -1,
+            previewUrl = c.cover.orEmpty()
         )
     }
     val audio = videos.firstOrNull()?.let { first ->
@@ -471,7 +483,9 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
             vcodec = "none",
             acodec = "none",
             isImage = true,
-            imageUrl = c.url
+            imageUrl = c.url,
+            slide = c.slide,
+            previewUrl = c.url
         )
     }
     return videoFormats + listOfNotNull(audio) + imageFormats

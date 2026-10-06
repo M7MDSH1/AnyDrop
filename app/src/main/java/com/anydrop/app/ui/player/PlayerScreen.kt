@@ -48,6 +48,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
@@ -146,6 +148,9 @@ fun PlayerScreen(
     val currentMedia by viewModel.currentMedia.collectAsState()
     val nextMediaId by viewModel.nextMediaId.collectAsState()
     val previousMediaId by viewModel.previousMediaId.collectAsState()
+    // The heart; null hides it (a file from another app isn't in the library).
+    val isFavorite by viewModel.isFavorite.collectAsState()
+    val favorite: Boolean? = if (externalFile) null else isFavorite
 
     // ---- Delete flow (video / image / audio) -------------------------------
     // Confirm → delete → advance to the neighbouring item, or exit when the
@@ -222,7 +227,9 @@ fun PlayerScreen(
             hasPrevious = previousMediaId != null,
             onNext = { nextMediaId?.let(onNavigateToMedia) },
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
-            onDeleteRequest = { showDeleteConfirm = true }
+            onDeleteRequest = { showDeleteConfirm = true },
+            favorite = favorite,
+            onToggleFavorite = viewModel::toggleFavorite
         )
         return
     }
@@ -265,7 +272,9 @@ fun PlayerScreen(
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
             onDeleteRequest = if (externalFile) null else ({ showDeleteConfirm = true }),
             title = if (externalFile) currentMedia!!.title else null,
-            shareItem = currentMedia!!
+            shareItem = currentMedia!!,
+            favorite = favorite,
+            onToggleFavorite = viewModel::toggleFavorite
         )
     }
 }
@@ -448,7 +457,9 @@ private fun ImageViewerContent(
     hasPrevious: Boolean = false,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
-    onDeleteRequest: () -> Unit = {}
+    onDeleteRequest: () -> Unit = {},
+    favorite: Boolean? = null,
+    onToggleFavorite: () -> Unit = {}
 ) {
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 96.dp.toPx() }
@@ -510,17 +521,19 @@ private fun ImageViewerContent(
                 )
         )
 
-        IconButton(
-            onClick = onDeleteRequest,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
         ) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = stringResource(R.string.menu_delete),
-                tint = LedRed
-            )
+            if (favorite != null) FavoriteButton(favorite, onToggleFavorite, idleTint = White)
+            IconButton(onClick = onDeleteRequest) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.menu_delete),
+                    tint = LedRed
+                )
+            }
         }
 
         // Affordance hint: show which direction is available while the drag moves.
@@ -562,7 +575,9 @@ private fun VideoPlayerContent(
     onPrevious: () -> Unit = {},
     onDeleteRequest: (() -> Unit)? = null,
     title: String? = null,
-    shareItem: com.anydrop.app.data.model.MediaItem? = null
+    shareItem: com.anydrop.app.data.model.MediaItem? = null,
+    favorite: Boolean? = null,
+    onToggleFavorite: () -> Unit = {}
 ) {
     val context: Context = activity
 
@@ -1100,6 +1115,9 @@ private fun VideoPlayerContent(
                                 .padding(end = 8.dp)
                         )
                     }
+                    if (favorite != null) {
+                        FavoriteButton(favorite, { onToggleFavorite(); resetHideTimer() }, idleTint = OnVideo)
+                    }
                     shareItem?.let { item ->
                         PlayerShareButton(
                             item = item,
@@ -1321,6 +1339,18 @@ private fun VideoPlayerContent(
 private val OnVideo = Color.White
 private val VideoAccent = DarkPalette.accent
 private val VideoMenu = DarkPalette.surface
+
+/** The player's heart: red when the item is a favorite. */
+@Composable
+private fun FavoriteButton(favorite: Boolean, onToggle: () -> Unit, idleTint: Color) {
+    IconButton(onClick = onToggle) {
+        Icon(
+            if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add),
+            tint = if (favorite) LedRed else idleTint
+        )
+    }
+}
 
 @Composable
 private fun SwipeableContent(

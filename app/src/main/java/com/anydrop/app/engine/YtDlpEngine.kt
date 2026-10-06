@@ -59,7 +59,11 @@ class YtDlpEngine(
         /** Media file found on the web page itself (no login needed); downloaded with [downloadDirect]. */
         val directUrl: String = "",
         /** Browser identity used to find [directUrl]; the download reuses it so the CDN sees the same client. */
-        val userAgent: String = ""
+        val userAgent: String = "",
+        /** Position in a multi-photo/video post (carousel), or -1 for a single-media post. */
+        val slide: Int = -1,
+        /** Picture to show for this entry in pickers (photo itself, or a video's cover). */
+        val previewUrl: String = ""
     ) {
         val isFromPage: Boolean get() = directUrl.isNotBlank()
     }
@@ -214,14 +218,16 @@ class YtDlpEngine(
      *  1. yt-dlp (all qualities for 1800+ sites);
      *  2. the web extractor — a hidden browser that reads the media straight from the page.
      *     It needs no account, which is what makes Instagram work without logging in.
-     * Instagram/Threads use the page first (yt-dlp needs a login there); everything else
-     * tries yt-dlp first and falls back to the page when yt-dlp can't get it.
+     * Instagram/Threads use the page first, logged in or not: only the page lists every
+     * photo and video of a carousel (yt-dlp returns the first), and with the in-app login
+     * the page is the logged-in one. When the page shows nothing (a private post seen
+     * anonymously) yt-dlp with the saved cookies takes over. Everything else tries yt-dlp
+     * first and falls back to the page when yt-dlp can't get it.
      */
     suspend fun getFormats(url: String, cookieFile: File? = null): List<FormatInfo> {
         val host = hostOf(url)
         val instagramLike = host.isOn("instagram.com", "instagr.am", "threads.net", "threads.com")
-        val loggedIn = cookieFile != null && hasCookiesFor(cookieFile, if (host.contains("threads")) "threads" else "instagram.com")
-        val pageFirst = instagramLike && !loggedIn
+        val pageFirst = instagramLike
 
         if (pageFirst) {
             webFormats(url, desktop = true)?.let { return it }
@@ -252,9 +258,6 @@ class YtDlpEngine(
         failure?.let { throw friendlyFailure(it) }
         return emptyList()
     }
-
-    private fun hasCookiesFor(cookieFile: File, domain: String): Boolean =
-        runCatching { cookieFile.readText().contains(domain) }.getOrDefault(false)
 
     /** Turns raw yt-dlp errors into something a person can act on. */
     private fun friendlyFailure(e: Exception): Exception {

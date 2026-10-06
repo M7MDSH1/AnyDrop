@@ -267,19 +267,28 @@ class TapeDeckViewModel @Inject constructor(
     }
 
     /**
-     * Download several selected images (carousel/multi-image posts) in sequence.
-     * Each is saved with a distinct name (index-suffixed via the unique-id naming).
+     * Download the chosen slides of a multi-photo/video post, each as its own file
+     * ("Title [img2].jpg", "Title [vid3].mp4"; numbered by the slide's place in the post).
      */
-    fun downloadImages(images: List<FormatInfo>) {
+    fun downloadPostItems(items: List<FormatInfo>) {
         val urlValue = _url.value.trim()
-        if (urlValue.isBlank() || images.isEmpty()) return
-        val items = images.mapIndexed { idx, img ->
-            val request = requestFor(img, urlValue)
-            request to libraryRepository.getImageOutputPath(urlValue, request.title, "img${idx + 1}")
+        if (urlValue.isBlank() || items.isEmpty()) return
+        val batch = items.mapIndexed { idx, item ->
+            val request = requestFor(item, urlValue)
+            val n = (if (item.slide >= 0) item.slide else idx) + 1
+            val path = if (item.isImage) {
+                libraryRepository.getImageOutputPath(urlValue, request.title, "img$n")
+            } else {
+                val label = "vid$n"
+                val copies = libraryRepository.findVideoCopies(urlValue, request.title, label)
+                if (copies.isEmpty()) libraryRepository.getOutputPath(urlValue, request.title, label)
+                else libraryRepository.getSuffixedVideoOutputPath(urlValue, request.title, label, copies)
+            }
+            request to path
         }
-        currentNotificationTag = items.last().second
+        currentNotificationTag = batch.last().second
         _downloadState.value = DownloadState.Progress(0)
-        downloadQueue.launchBatch(items)
+        downloadQueue.launchBatch(batch)
     }
 
     /** STOP on the deck: stops the download this screen started most recently. */
@@ -355,7 +364,8 @@ fun handleSharedUrl(url: String) {
         val max = settingsRepository.maxQualityHeight
         if (max >= SettingsRepository.MAX_QUALITY_BEST) return formats
         val capped = formats.mapNotNull { f ->
-            if (f.isAudioOnly || f.isImage) f
+            // A carousel slide has one version only: capping would drop the slide itself.
+            if (f.isAudioOnly || f.isImage || f.slide >= 0) f
             else if (YtDlpFormatParser.extractHeight(f.resolution) <= max) f
             else null
         }

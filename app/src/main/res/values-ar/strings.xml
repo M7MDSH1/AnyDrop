@@ -33,10 +33,11 @@
     <!-- Share sheet -->
     <string name="share_select_what">اختر ما تريد تنزيله</string>
     <string name="share_fetching">جارٍ الجلب…</string>
-    <string name="share_images_count">%1$d صورة</string>
-    <string name="share_image_number">الصورة %1$d</string>
     <string name="share_record">●  تسجيل</string>
     <string name="share_record_count">●  تسجيل (%1$d)</string>
+    <string name="post_items_count">%1$d عناصر</string>
+    <string name="post_items_mix">%1$d فيديو · %2$d صورة</string>
+    <string name="post_item_video">فيديو</string>
 
     <!-- Tape deck -->
     <string name="tape_deck_version">ديك الشريط v1.0</string>
@@ -50,8 +51,6 @@
     <string name="fetching_qualities">جارٍ جلب الجودات المتاحة…</string>
     <string name="link_detected">تم اكتشاف رابط</string>
     <string name="load_link">تحميل</string>
-    <string name="deck_images_tap_select">%1$d صورة · اضغط للاختيار</string>
-    <string name="download_selected_count">تنزيل المحدد (%1$d)</string>
     <string name="select_quality">اختر الجودة</string>
     <string name="paste_url_hint">الصق الرابط هنا…</string>
     <string name="paste_btn">لصق</string>
@@ -76,6 +75,25 @@
     <string name="tapes_count_filtered">الأشرطة: %1$d من %2$d</string>
     <string name="library_no_results">لا شيء يطابق «%1$s»</string>
     <string name="library_clear_search">مسح البحث</string>
+    <string name="scope_all">كل الوسائط</string>
+    <string name="favorites">المفضلة</string>
+    <string name="favorite_add">إضافة إلى المفضلة</string>
+    <string name="favorite_remove">إزالة من المفضلة</string>
+    <string name="favorites_empty">لا توجد عناصر مفضلة بعد.\nاضغط ♡ على صورة أو فيديو لتحفظه هنا.</string>
+    <string name="new_collection">مجموعة جديدة</string>
+    <string name="new_collection_title">مجموعة جديدة</string>
+    <string name="rename_collection_title">إعادة تسمية المجموعة</string>
+    <string name="collection_name_hint">الاسم، مثل: العائلة</string>
+    <string name="btn_create">إنشاء</string>
+    <string name="collection_rename">إعادة تسمية</string>
+    <string name="collection_delete">حذف المجموعة</string>
+    <string name="collection_delete_title">حذف المجموعة</string>
+    <string name="collection_delete_message">حذف «%1$s»؟ ستبقى الصور والفيديوهات التي فيها في مكتبتك.</string>
+    <string name="add_to_collection">إضافة إلى مجموعة</string>
+    <string name="add_to_collection_title">إضافة إلى مجموعة</string>
+    <string name="remove_from_collection">إزالة من هذه المجموعة</string>
+    <string name="added_to_collection">أُضيف إلى %1$s</string>
+    <string name="collection_empty">هذه المجموعة فارغة.\nفي «كل الوسائط» اضغط مطولًا على الصور أو الفيديوهات، ثم اضغط زر المجلد لإضافتها.</string>
 
     <!-- Audio -->
     <string name="audio_title">الصوتيات</string>

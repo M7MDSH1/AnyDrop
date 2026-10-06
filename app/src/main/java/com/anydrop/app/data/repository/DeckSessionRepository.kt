@@ -57,7 +57,9 @@ class DeckSessionRepository @Inject constructor(
                             isImage = o.optBoolean("isImage"),
                             imageUrl = o.optString("imageUrl"),
                             directUrl = o.optString("directUrl"),
-                            userAgent = o.optString("userAgent")
+                            userAgent = o.optString("userAgent"),
+                            slide = o.optInt("slide", -1),
+                            previewUrl = o.optString("previewUrl")
                         )
                     )
                 }
@@ -104,6 +106,9 @@ class DeckSessionRepository @Inject constructor(
                         // Media found on a web page: without these a restored session couldn't download it.
                         put("directUrl", f.directUrl)
                         put("userAgent", f.userAgent)
+                        // Carousel slides, so a restored deck still offers the whole post.
+                        put("slide", f.slide)
+                        put("previewUrl", f.previewUrl)
                     }
                 )
             }
