@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.2.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.3.0**
 
 ---
 
@@ -14,7 +14,10 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **No login needed** for public posts — Instagram reels, posts and carousels (and any
   site yt-dlp can't handle) are read straight from the web page, like a browser would.
 - **Audio-only** extraction (.m4a) at selectable bitrates.
-- **Images** — including multi-image / carousel posts with a select-what-you-want grid.
+- **Images** — single photos and photo posts.
+- **Whole posts** — share a carousel that mixes photos and videos and AnyDrop fetches
+  every item, shows them in a grid (videos marked ▶) and downloads the ones you pick,
+  or all of them in one tap.
 - **Download tracker** — run several downloads at once and follow each one's real
   progress, speed and time left, with STOP / RETRY / OPEN.
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
@@ -27,11 +30,15 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **Library** — browse all device videos & images, **search** (title, creator, site,
   file name — Arabic spelling variants included), filter (All / Videos / Images), sort
   by date or length, multi-select delete, and a per-item menu (Share / Delete / Info).
+- **Favorites & collections** — tap ♡ on any photo or video (in the library or the
+  player) to keep it in **Favorites**, and make your own collections (e.g. "Family"):
+  select items, tap the folder button, and the collection shows only what you added.
+  Rename or delete a collection with a long-press — the files themselves stay put.
 - **Audio tab** — plays device audio with background playback + media notification.
 - **Built-in player** — a smooth seek bar with live frame preview while you drag,
   stacking double-tap seek, gestures (volume, brightness), playback speed, PiP shaped
   like the video, aspect-ratio toggle, resume where you left off, **share the video or
-  the link it came from**, swipe left/right between items, and a zoomable image viewer.
+  the link it came from**, a ♡ favorite button, swipe left/right between items, and a zoomable image viewer.
 - **Default video player** — AnyDrop appears in "Open with" and can be set as the
   phone's video player for files from any app.
 - **Update notifications** — AnyDrop checks this repo's releases (no account, no paid
