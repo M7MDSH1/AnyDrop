@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
@@ -35,14 +36,15 @@ import com.anydrop.app.ui.theme.MediumGray
 import com.anydrop.app.ui.theme.White
 import java.io.File
 
-/** The per-item 3-dot dropdown menu: Share / Delete / Info. */
+/** The per-item 3-dot dropdown menu: Share / (Add to collection) / Delete / Info. */
 @Composable
 fun MediaItemDropdown(
     item: MediaItem,
     expanded: Boolean,
     onDismiss: () -> Unit,
     onDelete: () -> Unit,
-    onInfo: () -> Unit
+    onInfo: () -> Unit,
+    onAddToCollection: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
@@ -54,6 +56,13 @@ fun MediaItemDropdown(
                 shareMedia(context, item)
             }
         )
+        onAddToCollection?.let { add ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.add_to_collection), fontFamily = FontFamily.Monospace) },
+                leadingIcon = { Icon(Icons.Default.CreateNewFolder, null, tint = Amber) },
+                onClick = { onDismiss(); add() }
+            )
+        }
         DropdownMenuItem(
             text = { Text(stringResource(R.string.menu_delete), fontFamily = FontFamily.Monospace) },
             leadingIcon = { Icon(Icons.Default.Delete, null, tint = LedRed) },

@@ -57,6 +57,8 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.engine.postItems
+import com.anydrop.app.ui.components.PostItemsPicker
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.repository.readAppLanguageSync
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
@@ -165,6 +167,7 @@ private fun ShareSheet(
     ) {
         val images = formats.filter { it.isImage && it.imageUrl.isNotBlank() }
         val videoAudio = formats.filter { !it.isImage }
+        val postItems = remember(formats) { formats.postItems() }
 
         Column(
             modifier = Modifier
@@ -232,9 +235,12 @@ private fun ShareSheet(
                     )
                 }
 
-                // A carousel of photos only; mixed photo/video posts use the list below.
-                images.size > 1 && videoAudio.isEmpty() -> {
-                    ShareImagePicker(images = images) { chosen -> ensureNotificationPermission { viewModel.downloadImages(chosen) } }
+                // A post with several photos/videos (a carousel): pick any of its slides, or all.
+                postItems.isNotEmpty() -> {
+                    PostItemsPicker(
+                        items = postItems,
+                        onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPostItems(chosen) } }
+                    )
                 }
 
                 else -> {
@@ -343,103 +349,6 @@ private fun ShareQualityList(
 /** Stable key for selection (id if present, else resolution+ext). */
 private fun FormatInfo.uniqueKey(): String =
     if (id.isNotBlank()) id else "$resolution-$extension-$imageUrl"
-
-/** Compact multi-image picker with select + a single download button. */
-@Composable
-private fun ShareImagePicker(
-    images: List<FormatInfo>,
-    onDownloadSelected: (List<FormatInfo>) -> Unit
-) {
-    val selected = remember { mutableStateListOf<Int>() }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                stringResource(R.string.share_images_count, images.size),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp
-            )
-            Text(
-                stringResource(
-                    if (selected.size == images.size) R.string.clear_all else R.string.select_all
-                ),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier.clickable {
-                    if (selected.size == images.size) selected.clear()
-                    else { selected.clear(); selected.addAll(images.indices) }
-                }
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-
-        val rows = (images.size + 2) / 3
-        val gridHeight = (rows.coerceAtMost(4) * 116).dp
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier.fillMaxWidth().height(gridHeight),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            itemsIndexed(images) { index, img ->
-                val isSel = selected.contains(index)
-                Box(
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Black)
-                        .then(if (isSel) Modifier.border(2.dp, Amber, RoundedCornerShape(8.dp)) else Modifier)
-                        .clickable { if (isSel) selected.remove(index) else selected.add(index) }
-                ) {
-                    AsyncImage(
-                        model = img.imageUrl,
-                        contentDescription = stringResource(R.string.share_image_number, index + 1),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    if (isSel) {
-                        Text(
-                            "✓",
-                            color = Black,
-                            fontSize = 13.sp,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Amber)
-                                .padding(horizontal = 5.dp)
-                        )
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (selected.isEmpty()) MediumGray else Amber)
-                .clickable(enabled = selected.isNotEmpty()) {
-                    onDownloadSelected(selected.sorted().map { idx -> images[idx] })
-                }
-                .padding(vertical = 14.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                stringResource(R.string.share_record_count, selected.size),
-                color = if (selected.isEmpty()) White.copy(alpha = 0.4f) else Black,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = tracked(2f)
-            )
-        }
-    }
-}
 
 @Composable
 private fun rememberCoroutineScopeCompat() = androidx.compose.runtime.rememberCoroutineScope()

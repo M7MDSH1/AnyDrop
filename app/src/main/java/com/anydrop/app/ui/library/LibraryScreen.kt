@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +42,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -81,6 +86,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.anydrop.app.R
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.data.repository.LibraryScope
+import com.anydrop.app.data.repository.MediaCollection
 import com.anydrop.app.data.repository.MediaFilter
 import com.anydrop.app.data.repository.SortMode
 import com.anydrop.app.ui.components.DeleteConfirmDialog
@@ -108,6 +115,10 @@ fun LibraryScreen(
     val filter by viewModel.filter.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val unsearchedCount by viewModel.unsearchedCount.collectAsState()
+    val scope by viewModel.scope.collectAsState()
+    val collections by viewModel.collections.collectAsState()
+    val scopeCounts by viewModel.scopeCounts.collectAsState()
+    val favoriteIndex by viewModel.favoriteIndex.collectAsState()
     val listState = rememberLazyGridState()
     val focusManager = LocalFocusManager.current
 
@@ -116,11 +127,25 @@ fun LibraryScreen(
     val selectionMode = selectedIds.isNotEmpty()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var infoItem by remember { mutableStateOf<MediaItem?>(null) }
+    // Collections: items waiting for a collection to be picked, the name dialog
+    // (new collection, possibly for those items, or a rename), the one to delete.
+    var addTargets by remember { mutableStateOf<List<MediaItem>?>(null) }
+    var nameDialog by remember { mutableStateOf<NameDialog?>(null) }
+    var collectionToDelete by remember { mutableStateOf<MediaCollection?>(null) }
+    val openCollection = (scope as? LibraryScope.Collection)?.let { open -> collections.firstOrNull { it.id == open.id } }
 
     val context = LocalContext.current
 
     fun toggleSelect(item: MediaItem) {
         selectedIds = if (selectedIds.contains(item.id)) selectedIds - item.id else selectedIds + item.id
+    }
+
+    fun selectedItems() = mediaItems.filter { selectedIds.contains(it.id) }
+
+    fun addTo(collection: MediaCollection, items: List<MediaItem>) {
+        viewModel.addToCollection(collection.id, items)
+        Toast.makeText(context, context.getString(R.string.added_to_collection, collection.name), Toast.LENGTH_SHORT).show()
+        selectedIds = emptySet()
     }
 
     // A search that hides selected items drops them from the selection, so the
@@ -172,6 +197,45 @@ fun LibraryScreen(
     infoItem?.let { item ->
         MediaInfoDialog(item = item, onDismiss = { infoItem = null })
     }
+    addTargets?.let { targets ->
+        AddToCollectionDialog(
+            collections = collections,
+            counts = scopeCounts,
+            onPick = { collection -> addTargets = null; addTo(collection, targets) },
+            onNew = { addTargets = null; nameDialog = NameDialog.Create(targets) },
+            onDismiss = { addTargets = null }
+        )
+    }
+    nameDialog?.let { dialog ->
+        when (dialog) {
+            is NameDialog.Create -> CollectionNameDialog(
+                title = stringResource(R.string.new_collection_title),
+                initial = "",
+                confirmLabel = stringResource(R.string.btn_create),
+                onConfirm = { name ->
+                    nameDialog = null
+                    val created = viewModel.createCollection(name)
+                    if (dialog.items.isNotEmpty()) addTo(created, dialog.items)
+                    else viewModel.setScope(LibraryScope.Collection(created.id))
+                },
+                onDismiss = { nameDialog = null }
+            )
+            is NameDialog.Rename -> CollectionNameDialog(
+                title = stringResource(R.string.rename_collection_title),
+                initial = dialog.collection.name,
+                confirmLabel = stringResource(R.string.btn_save),
+                onConfirm = { name -> nameDialog = null; viewModel.renameCollection(dialog.collection.id, name) },
+                onDismiss = { nameDialog = null }
+            )
+        }
+    }
+    collectionToDelete?.let { collection ->
+        DeleteCollectionDialog(
+            name = collection.name,
+            onConfirm = { collectionToDelete = null; viewModel.deleteCollection(collection.id) },
+            onDismiss = { collectionToDelete = null }
+        )
+    }
 
     // Request media-read permissions so we can list ALL device videos & images,
     // then refresh. On Android 13+ these are READ_MEDIA_VIDEO / READ_MEDIA_IMAGES.
@@ -207,10 +271,12 @@ fun LibraryScreen(
             .padding(16.dp)
     ) {
         if (selectionMode) {
-            // Selection action bar: count + trash + cancel.
+            // Selection action bar: cancel, count, then favorite / add to (or remove from)
+            // a collection / delete for everything selected.
+            val selection = selectedItems()
+            val allFavorite = selection.isNotEmpty() && selection.all { it in favoriteIndex }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = { selectedIds = emptySet() }) {
@@ -220,8 +286,28 @@ fun LibraryScreen(
                     stringResource(R.string.selected_count, selectedIds.size),
                     color = Amber,
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
                 )
+                IconButton(onClick = { viewModel.toggleFavorite(selection) }) {
+                    Icon(
+                        if (allFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = stringResource(if (allFavorite) R.string.favorite_remove else R.string.favorite_add),
+                        tint = if (allFavorite) LedRed else White
+                    )
+                }
+                if (openCollection != null) {
+                    IconButton(onClick = {
+                        viewModel.removeFromCollection(openCollection.id, selection)
+                        selectedIds = emptySet()
+                    }) {
+                        Icon(Icons.Filled.FolderOff, contentDescription = stringResource(R.string.remove_from_collection), tint = White)
+                    }
+                } else {
+                    IconButton(onClick = { addTargets = selection }) {
+                        Icon(Icons.Filled.CreateNewFolder, contentDescription = stringResource(R.string.add_to_collection), tint = White)
+                    }
+                }
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_desc), tint = LedRed)
                 }
@@ -243,7 +329,19 @@ fun LibraryScreen(
             onQueryChange = viewModel::setSearchQuery
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ScopeChips(
+            scope = scope,
+            collections = collections,
+            counts = scopeCounts,
+            onSelect = { selectedIds = emptySet(); viewModel.setScope(it) },
+            onNewCollection = { nameDialog = NameDialog.Create(emptyList()) },
+            onRename = { nameDialog = NameDialog.Rename(it) },
+            onDelete = { collectionToDelete = it }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -338,7 +436,13 @@ fun LibraryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = stringResource(R.string.library_empty),
+                    text = stringResource(
+                        when (scope) {
+                            LibraryScope.All -> R.string.library_empty
+                            LibraryScope.Favorites -> R.string.favorites_empty
+                            is LibraryScope.Collection -> R.string.collection_empty
+                        }
+                    ),
                     color = White.copy(alpha = 0.3f),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 14.sp,
@@ -359,10 +463,13 @@ fun LibraryScreen(
                         showDuration = sortMode == SortMode.DURATION,
                         selected = selectedIds.contains(item.id),
                         selectionMode = selectionMode,
+                        favorite = item in favoriteIndex,
                         onClick = {
                             if (selectionMode) toggleSelect(item) else onPlayMedia(item)
                         },
                         onLongClick = { toggleSelect(item) },
+                        onToggleFavorite = { viewModel.toggleFavorite(listOf(item)) },
+                        onAddToCollection = { addTargets = listOf(item) },
                         onDelete = { selectedIds = setOf(item.id); showDeleteConfirm = true },
                         onInfo = { infoItem = item }
                     )
@@ -370,6 +477,12 @@ fun LibraryScreen(
             }
         }
     }
+}
+
+/** The collection name dialog: a new collection (for [Create.items], if any) or a rename. */
+private sealed interface NameDialog {
+    data class Create(val items: List<MediaItem>) : NameDialog
+    data class Rename(val collection: MediaCollection) : NameDialog
 }
 
 /**
@@ -476,8 +589,11 @@ private fun LibraryCard(
     showDuration: Boolean = false,
     selected: Boolean = false,
     selectionMode: Boolean = false,
+    favorite: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
+    onToggleFavorite: () -> Unit = {},
+    onAddToCollection: () -> Unit = {},
     onDelete: () -> Unit = {},
     onInfo: () -> Unit = {}
 ) {
@@ -566,6 +682,14 @@ private fun LibraryCard(
                     style = TextStyle(textDirection = TextDirection.Content),
                     modifier = Modifier.weight(1f).padding(vertical = 8.dp)
                 )
+                IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add),
+                        tint = if (favorite) LedRed else White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Box {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.menu_desc), tint = White.copy(alpha = 0.6f))
@@ -575,7 +699,8 @@ private fun LibraryCard(
                         expanded = menuOpen,
                         onDismiss = { menuOpen = false },
                         onDelete = onDelete,
-                        onInfo = onInfo
+                        onInfo = onInfo,
+                        onAddToCollection = onAddToCollection
                     )
                 }
             }

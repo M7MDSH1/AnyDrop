@@ -67,6 +67,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.engine.postItems
+import com.anydrop.app.ui.components.PostItemsPicker
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AmberBright
 import com.anydrop.app.ui.theme.Black
@@ -294,15 +296,13 @@ fun TapeDeckScreen(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        // Multi-image picker: when the URL is a carousel of photos only, show a
-        // checkable preview grid so the user can pick one, several, or all images.
-        // (Mixed carousels with videos use the regular list, which shows every item.)
-        val imageEntries = availableFormats.filter { it.isImage && it.imageUrl.isNotBlank() }
-        val multiImage = imageEntries.size > 1 && availableFormats.all { it.isImage }
-        if (multiImage) {
-            MultiImagePicker(
-                images = imageEntries,
-                onDownloadSelected = { chosen -> ensureNotificationPermission { viewModel.downloadImages(chosen) } }
+        // A post with several photos/videos (a carousel): pick any of its slides, or all.
+        val postItems = remember(availableFormats) { availableFormats.postItems() }
+        val multiItem = postItems.isNotEmpty()
+        if (multiItem) {
+            PostItemsPicker(
+                items = postItems,
+                onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPostItems(chosen) } }
             )
             Spacer(modifier = Modifier.height(12.dp))
         } else if (availableFormats.isNotEmpty()) {
@@ -355,7 +355,7 @@ fun TapeDeckScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        if (!multiImage) {
+        if (!multiItem) {
             RecordButton(
                 enabled = canDownload,
                 onRecord = { ensureNotificationPermission { viewModel.startDownload() } }
@@ -374,100 +374,6 @@ fun TapeDeckScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-    }
-}
-
-@Composable
-private fun MultiImagePicker(
-    images: List<com.anydrop.app.engine.YtDlpEngine.FormatInfo>,
-    onDownloadSelected: (List<com.anydrop.app.engine.YtDlpEngine.FormatInfo>) -> Unit
-) {
-    val selected = remember { mutableStateListOf<Int>() }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                stringResource(R.string.deck_images_tap_select, images.size),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                letterSpacing = tracked(1f)
-            )
-            Text(
-                stringResource(
-                    if (selected.size == images.size) R.string.clear_all else R.string.select_all
-                ),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                modifier = Modifier.clickable {
-                    if (selected.size == images.size) selected.clear()
-                    else { selected.clear(); selected.addAll(images.indices) }
-                }
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        // Fixed height: a LazyVerticalGrid inside a vertically-scrolling Column must
-        // NOT use heightIn (infinite-height crash). Height scales with row count.
-        val rows = (images.size + 2) / 3
-        val gridHeight = (rows.coerceAtMost(4) * 116).dp
-        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
-            modifier = Modifier.fillMaxWidth().height(gridHeight),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            itemsIndexed(images) { index, img ->
-                val isSel = selected.contains(index)
-                Box(
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Black)
-                        .then(if (isSel) Modifier.border(2.dp, Amber, RoundedCornerShape(6.dp)) else Modifier)
-                        .clickable {
-                            if (isSel) selected.remove(index) else selected.add(index)
-                        }
-                ) {
-                    AsyncImage(
-                        model = img.imageUrl,
-                        contentDescription = stringResource(R.string.share_image_number, index + 1),
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (isSel) {
-                        Text(
-                            "✓",
-                            color = OnAccent,
-                            fontSize = 14.sp,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(4.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Amber)
-                                .padding(horizontal = 5.dp)
-                        )
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        androidx.compose.material3.Button(
-            onClick = { onDownloadSelected(selected.sorted().map { idx -> images[idx] }) },
-            enabled = selected.isNotEmpty(),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Amber, contentColor = Black),
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                stringResource(R.string.download_selected_count, selected.size),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp
-            )
-        }
     }
 }
 

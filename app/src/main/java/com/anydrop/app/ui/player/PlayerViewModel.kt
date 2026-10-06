@@ -5,15 +5,19 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.data.repository.CollectionsRepository
 import com.anydrop.app.data.repository.DeckSessionRepository
 import com.anydrop.app.data.repository.DeletionResult
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.MediaRefIndex
 import com.anydrop.app.data.repository.PlaybackProgressRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,6 +25,7 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val libraryRepository: LibraryRepository,
+    private val collectionsRepository: CollectionsRepository,
     private val progressRepository: PlaybackProgressRepository,
     private val deckSessionRepository: DeckSessionRepository
 ) : ViewModel() {
@@ -37,6 +42,16 @@ class PlayerViewModel @Inject constructor(
     private val _previousMediaId = MutableStateFlow<String?>(null)
     val previousMediaId: StateFlow<String?> = _previousMediaId.asStateFlow()
 
+    /** Whether the item on screen is a favorite (the heart in the player). */
+    val isFavorite: StateFlow<Boolean> =
+        combine(_currentMedia, collectionsRepository.favorites) { media, favorites ->
+            media != null && media in MediaRefIndex(favorites)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun toggleFavorite() {
+        _currentMedia.value?.let { collectionsRepository.toggleFavorite(listOf(it)) }
+    }
+
     // ---- Per-video session state. All of it is reset on every mediaId change
     // so nothing (resume position, save tick anchor, completion flag, restore
     // flag) leaks from one video into the next if this VM is ever reused.
@@ -51,19 +66,26 @@ class PlayerViewModel @Inject constructor(
         val mediaId = savedStateHandle.get<String>("mediaId")
         viewModelScope.launch {
             // The player navigation order mirrors the library's current view:
-            // media type filter (ALL / VIDEOS / IMAGES) + search + sort (DATE /
-            // LENGTH), with audio tracks appended at the end (newest first) so
-            // swiping from the Audio tab still works. Shared via LibraryRepository
-            // so the player can never disagree with what the Library screen shows.
-            combine(
+            // all / favorites / a collection, media type filter (ALL / VIDEOS / IMAGES),
+            // search and sort (DATE / LENGTH), with audio tracks appended at the end
+            // (newest first) so swiping from the Audio tab still works. Shared via the
+            // repositories so the player can never disagree with the Library screen.
+            val scope = combine(
+                libraryRepository.scope,
+                collectionsRepository.favorites,
+                collectionsRepository.collections
+            ) { scope, _, _ -> scope }
+            val media = combine(
                 libraryRepository.mediaItems,
-                libraryRepository.audioItems,
                 libraryRepository.filterMode,
                 libraryRepository.sortMode,
-                libraryRepository.searchQuery
-            ) { media, audios, filter, sort, query ->
-                libraryRepository.orderedMedia(media, filter, sort, query) +
-                    audios.sortedByDescending { it.downloadedAt }
+                libraryRepository.searchQuery,
+                scope
+            ) { items, filter, sort, query, scope ->
+                collectionsRepository.filter(libraryRepository.orderedMedia(items, filter, sort, query), scope)
+            }
+            combine(media, libraryRepository.audioItems) { items, audios ->
+                items + audios.sortedByDescending { it.downloadedAt }
             }
                 .collect { items ->
                     _allMedia.value = items

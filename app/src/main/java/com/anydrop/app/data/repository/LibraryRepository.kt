@@ -77,6 +77,15 @@ class LibraryRepository(private val context: Context) {
         _searchQuery.value = query
     }
 
+    // Which part of the library is shown: everything, favorites or one collection.
+    // In memory like the search, and shared so the player swipes through the same set.
+    private val _scope = MutableStateFlow<LibraryScope>(LibraryScope.All)
+    val scope: StateFlow<LibraryScope> = _scope.asStateFlow()
+
+    fun setScope(scope: LibraryScope) {
+        _scope.value = scope
+    }
+
     /**
      * Show the previously cached index immediately (no MediaStore scan) so the
      * grid is never empty on a cold start; the background refresh replaces it

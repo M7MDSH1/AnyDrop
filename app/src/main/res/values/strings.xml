@@ -33,10 +33,11 @@
     <!-- Share sheet -->
     <string name="share_select_what">Select what to download</string>
     <string name="share_fetching">Fetching…</string>
-    <string name="share_images_count">%1$d IMAGES</string>
-    <string name="share_image_number">Image %1$d</string>
     <string name="share_record">●  RECORD</string>
     <string name="share_record_count">●  RECORD (%1$d)</string>
+    <string name="post_items_count">%1$d ITEMS</string>
+    <string name="post_items_mix">%1$d videos · %2$d photos</string>
+    <string name="post_item_video">Video</string>
 
     <!-- Tape deck -->
     <string name="tape_deck_version">TAPE DECK v1.0</string>
@@ -50,8 +51,6 @@
     <string name="fetching_qualities">Fetching available qualities…</string>
     <string name="link_detected">LINK DETECTED</string>
     <string name="load_link">LOAD</string>
-    <string name="deck_images_tap_select">%1$d IMAGES · tap to select</string>
-    <string name="download_selected_count">DOWNLOAD SELECTED (%1$d)</string>
     <string name="select_quality">SELECT QUALITY</string>
     <string name="paste_url_hint">Paste URL here…</string>
     <string name="paste_btn">PASTE</string>
@@ -76,6 +75,25 @@
     <string name="tapes_count_filtered">TAPES: %1$d / %2$d</string>
     <string name="library_no_results">Nothing matches “%1$s”</string>
     <string name="library_clear_search">CLEAR SEARCH</string>
+    <string name="scope_all">All media</string>
+    <string name="favorites">Favorites</string>
+    <string name="favorite_add">Add to favorites</string>
+    <string name="favorite_remove">Remove from favorites</string>
+    <string name="favorites_empty">No favorites yet.\nTap ♡ on a photo or video to keep it here.</string>
+    <string name="new_collection">New collection</string>
+    <string name="new_collection_title">NEW COLLECTION</string>
+    <string name="rename_collection_title">RENAME COLLECTION</string>
+    <string name="collection_name_hint">Name, e.g. Family</string>
+    <string name="btn_create">CREATE</string>
+    <string name="collection_rename">Rename</string>
+    <string name="collection_delete">Delete collection</string>
+    <string name="collection_delete_title">DELETE COLLECTION</string>
+    <string name="collection_delete_message">Delete “%1$s”? The photos and videos in it stay in your library.</string>
+    <string name="add_to_collection">Add to collection</string>
+    <string name="add_to_collection_title">ADD TO COLLECTION</string>
+    <string name="remove_from_collection">Remove from this collection</string>
+    <string name="added_to_collection">Added to %1$s</string>
+    <string name="collection_empty">This collection is empty.\nIn All media, long-press photos or videos, then tap the folder button to add them.</string>
 
     <!-- Audio -->
     <string name="audio_title">AUDIO</string>
