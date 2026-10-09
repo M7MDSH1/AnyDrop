@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.3.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.4.0**
 
 ---
 
@@ -18,6 +18,12 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **Whole posts** — share a carousel that mixes photos and videos and AnyDrop fetches
   every item, shows them in a grid (videos marked ▶) and downloads the ones you pick,
   or all of them in one tap.
+- **This video or the whole page** — a link can fetch just its video, or everything on
+  its page: the page's own video in every quality, the other clips it plays and the
+  videos it links to (like the suggestions under a player), to pick from.
+- **Cover, length and quality for every video** — videos read off a page are checked
+  for their real length and resolution and get a cover frame, so the real video stands
+  out from ads and previews.
 - **Download tracker** — run several downloads at once and follow each one's real
   progress, speed and time left, with STOP / RETRY / OPEN.
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
@@ -26,7 +32,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **Built-in browser** — browse any site and download the videos it plays. The start
   page is yours: add, edit, reorder or remove sites. Desktop mode is remembered per
   site and fits desktop pages to the screen; TikTok opens as its desktop site so its
-  feed scrolls without the app.
+  feed scrolls without the app. Tap the address bar to open a link you just copied or
+  a page from your **history** (by day, removable, kept on the device only).
 - **Library** — browse all device videos & images, **search** (title, creator, site,
   file name — Arabic spelling variants included), filter (All / Videos / Images), sort
   by date or length, multi-select delete, and a per-item menu (Share / Delete / Info).
