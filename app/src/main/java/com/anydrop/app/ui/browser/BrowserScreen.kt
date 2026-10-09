@@ -29,7 +29,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -49,6 +53,8 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.ContentCopy
@@ -100,6 +106,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -124,14 +131,20 @@ import androidx.webkit.WebViewCompat
 import com.anydrop.app.R
 import com.anydrop.app.data.repository.BrowserSite
 import com.anydrop.app.data.repository.BrowserSitesRepository
+import com.anydrop.app.data.repository.BrowserHistoryRepository
+import com.anydrop.app.data.repository.DownloadRepository
+import com.anydrop.app.data.repository.HistoryEntry
+import com.anydrop.app.data.repository.HistoryList
 import com.anydrop.app.data.repository.DownloadQueue
 import com.anydrop.app.data.repository.DownloadRequest
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.engine.MediaCandidate
+import com.anydrop.app.engine.MediaProbe
 import com.anydrop.app.engine.MediaSniffer
 import com.anydrop.app.engine.PageScan
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.toFormatInfos
+import com.anydrop.app.ui.components.MediaThumb
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -146,6 +159,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
 import java.net.URLEncoder
+import java.text.DateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.util.Collections
 import javax.inject.Inject
 
@@ -248,7 +265,10 @@ class BrowserState(private val appContext: Context) {
                     view.reload()
                     return
                 }
-                if (url != currentUrl) resetFindings()
+                if (url != currentUrl) {
+                    resetFindings()
+                    pageTitle = ""
+                }
                 currentUrl = url
                 isLoading = true
                 if (!MediaSniffer.documentStartSupported) {
@@ -305,6 +325,7 @@ class BrowserState(private val appContext: Context) {
     fun load(input: String) {
         val url = toUrl(input)
         resetFindings()
+        pageTitle = ""
         currentUrl = url
         val wv = webView
         if (wv == null) {
@@ -395,7 +416,8 @@ class BrowserState(private val appContext: Context) {
         fun toUrl(input: String): String {
             val t = input.trim()
             Regex("""https?://\S+""").find(t)?.value?.let { return it }
-            if (!t.contains(' ') && Regex("""^[\w-]+(\.[\w-]+)+(/.*)?$""").matches(t)) return "https://$t"
+            if (!t.contains(' ') && Regex("""^(localhost|127\.0\.0\.1)(:\d+)?(/.*)?$""").matches(t)) return "http://$t"
+            if (!t.contains(' ') && Regex("""^[\w-]+(\.[\w-]+)+(:\d+)?(/.*)?$""").matches(t)) return "https://$t"
             return "https://www.google.com/search?q=" + URLEncoder.encode(t, "UTF-8")
         }
     }
@@ -411,10 +433,23 @@ fun rememberBrowserState(): BrowserState {
 class BrowserViewModel @Inject constructor(
     private val downloadQueue: DownloadQueue,
     private val libraryRepository: LibraryRepository,
-    private val sitesRepository: BrowserSitesRepository
+    private val sitesRepository: BrowserSitesRepository,
+    private val historyRepository: BrowserHistoryRepository,
+    private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
     val sites: StateFlow<List<BrowserSite>> = sitesRepository.sites
+
+    /** Pages visited, newest first. */
+    val history: StateFlow<List<HistoryEntry>> = historyRepository.entries
+
+    fun recordVisit(url: String, title: String) = historyRepository.record(url, title)
+    fun removeHistory(entry: HistoryEntry) = historyRepository.remove(entry)
+    fun clearHistory() = historyRepository.clear()
+
+    /** Length, real resolution and a cover for the video files found on the page. */
+    suspend fun probe(formats: List<FormatInfo>, pageUrl: String): List<FormatInfo> =
+        runCatching { downloadRepository.probePageMedia(formats, pageUrl) }.getOrDefault(formats)
 
     fun addSite(name: String, url: String) = sitesRepository.add(name, url)
     fun updateSite(old: BrowserSite, name: String, url: String) = sitesRepository.update(old, name, url)
@@ -458,6 +493,14 @@ fun BrowserScreen(
     // Start page editing: the site being added/edited (null = closed) and the one to remove.
     var siteEditor by remember { mutableStateOf<SiteEditor?>(null) }
     var siteToRemove by remember { mutableStateOf<BrowserSite?>(null) }
+    val history by viewModel.history.collectAsState()
+    var historyOpen by remember { mutableStateOf(false) }
+    val address = remember { AddressBarState() }
+    val focusManager = LocalFocusManager.current
+    val openAddress: (String) -> Unit = { target ->
+        focusManager.clearFocus()
+        state.load(target)
+    }
 
     // Pages that hand over a file directly (a "Download" link to an .mp4, say).
     state.onPageDownload = { url, mime, disposition ->
@@ -489,6 +532,16 @@ fun BrowserScreen(
 
     // System back walks the page history before leaving the tab.
     BackHandler(enabled = state.canGoBack && !state.showingStart) { state.goBack() }
+    // ...but first closes the address bar's suggestions.
+    BackHandler(enabled = address.editing) { focusManager.clearFocus() }
+
+    // Every page that stays open a moment goes into the history (redirect hops don't), and
+    // gets its title once the page names itself.
+    LaunchedEffect(state.currentUrl, state.pageTitle) {
+        val visited = state.currentUrl ?: return@LaunchedEffect
+        delay(800)
+        viewModel.recordVisit(visited, state.pageTitle)
+    }
 
     // Keep looking while the page plays: many sites only fetch the video when it starts.
     LaunchedEffect(state.currentUrl) {
@@ -501,6 +554,8 @@ fun BrowserScreen(
     Column(Modifier.fillMaxSize().background(DarkGray)) {
         BrowserBar(
             state = state,
+            address = address,
+            onHistory = { historyOpen = true },
             onAddToStart = {
                 val url = state.currentUrl ?: return@BrowserBar
                 siteEditor = SiteEditor(
@@ -535,6 +590,8 @@ fun BrowserScreen(
             if (state.showingStart) {
                 StartPage(
                     sites = sites,
+                    recent = history.take(5),
+                    onOpenHistory = { historyOpen = true },
                     showRestore = sites != BrowserSitesRepository.DEFAULT_SITES,
                     onOpen = state::load,
                     onAdd = { siteEditor = SiteEditor(original = null, name = "", url = "") },
@@ -553,7 +610,32 @@ fun BrowserScreen(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
                 )
             }
+            if (address.editing) {
+                AddressSuggestions(
+                    query = if (address.typed) address.field.text else "",
+                    clip = address.clip,
+                    history = history,
+                    onOpen = openAddress,
+                    onSeeAll = {
+                        focusManager.clearFocus()
+                        historyOpen = true
+                    }
+                )
+            }
         }
+    }
+
+    if (historyOpen) {
+        HistorySheet(
+            entries = history,
+            onOpen = { target ->
+                historyOpen = false
+                openAddress(target)
+            },
+            onRemove = viewModel::removeHistory,
+            onClear = viewModel::clearHistory,
+            onDismiss = { historyOpen = false }
+        )
     }
 
     siteEditor?.let { editor ->
@@ -594,7 +676,15 @@ fun BrowserScreen(
 
     if (sheetOpen) {
         val scan = state.scan
-        val formats = remember(scan) { scan?.toFormatInfos().orEmpty() }
+        val found = remember(scan) { scan?.toFormatInfos().orEmpty() }
+        // The page is re-read while it plays; only look inside the files again when they change.
+        val files = found.map { it.id + it.directUrl + it.imageUrl }
+        var formats by remember(files) { mutableStateOf(found) }
+        LaunchedEffect(files) {
+            if (found.any(MediaProbe::needsProbe)) {
+                formats = viewModel.probe(found, scan?.pageUrl ?: state.currentUrl.orEmpty())
+            }
+        }
         ModalBottomSheet(
             onDismissRequest = { sheetOpen = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -619,11 +709,11 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun BrowserBar(state: BrowserState, onAddToStart: () -> Unit) {
+private fun BrowserBar(state: BrowserState, address: AddressBarState, onHistory: () -> Unit, onAddToStart: () -> Unit) {
     val focus = LocalFocusManager.current
     val clipboard = LocalClipboardManager.current
-    var editing by remember { mutableStateOf(false) }
-    var field by remember { mutableStateOf(TextFieldValue("")) }
+    val editing = address.editing
+    val field = address.field
     var menu by remember { mutableStateOf(false) }
     val display = state.currentUrl?.removePrefix("https://")?.removePrefix("http://")?.removePrefix("www.")?.trimEnd('/').orEmpty()
 
@@ -658,7 +748,12 @@ private fun BrowserBar(state: BrowserState, onAddToStart: () -> Unit) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                 BasicTextField(
                     value = if (editing) field else TextFieldValue(display),
-                    onValueChange = { if (editing) field = it },
+                    onValueChange = {
+                        if (editing) {
+                            if (it.text != field.text) address.typed = true
+                            address.field = it
+                        }
+                    },
                     singleLine = true,
                     textStyle = TextStyle(color = White, fontSize = 13.sp, fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
                     cursorBrush = SolidColor(Amber),
@@ -670,9 +765,13 @@ private fun BrowserBar(state: BrowserState, onAddToStart: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().onFocusChanged { f ->
                         if (f.isFocused && !editing) {
                             val full = state.currentUrl.orEmpty()
-                            field = TextFieldValue(full, TextRange(0, full.length))
+                            address.field = TextFieldValue(full, TextRange(0, full.length))
+                            address.typed = false
+                            // Offer what was just copied (a link copied in another app, say).
+                            address.clip = runCatching { clipboard.getText()?.text }.getOrNull()
+                                ?.trim()?.takeIf { it.isNotEmpty() && it.length <= 2000 && it != full }
                         }
-                        editing = f.isFocused
+                        address.editing = f.isFocused
                     }
                 )
                 if (!editing && display.isEmpty()) {
@@ -682,7 +781,10 @@ private fun BrowserBar(state: BrowserState, onAddToStart: () -> Unit) {
             if (editing && field.text.isNotEmpty()) {
                 Icon(
                     Icons.Filled.Close, null,
-                    Modifier.size(18.dp).clip(CircleShape).clickable { field = TextFieldValue("") },
+                    Modifier.size(18.dp).clip(CircleShape).clickable {
+                        address.field = TextFieldValue("")
+                        address.typed = true
+                    },
                     tint = White.copy(alpha = 0.6f)
                 )
             }
@@ -702,6 +804,11 @@ private fun BrowserBar(state: BrowserState, onAddToStart: () -> Unit) {
                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null) },
                     enabled = state.canGoForward,
                     onClick = { menu = false; state.goForward() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.browser_history)) },
+                    leadingIcon = { Icon(Icons.Filled.History, null) },
+                    onClick = { menu = false; onHistory() }
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.browser_desktop_site)) },
@@ -748,6 +855,8 @@ private data class SiteEditor(val original: BrowserSite?, val name: String, val 
 @Composable
 private fun StartPage(
     sites: List<BrowserSite>,
+    recent: List<HistoryEntry>,
+    onOpenHistory: () -> Unit,
     showRestore: Boolean,
     onOpen: (String) -> Unit,
     onAdd: () -> Unit,
@@ -831,6 +940,37 @@ private fun StartPage(
                 Icon(Icons.Filled.RestartAlt, null, tint = Amber, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.browser_restore_sites), color = Amber, fontSize = 12.sp)
+            }
+        }
+        if (recent.isNotEmpty()) {
+            Spacer(Modifier.height(22.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.browser_recent),
+                    color = White.copy(alpha = 0.6f),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = tracked(2f),
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    stringResource(R.string.browser_see_all),
+                    color = Amber,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenHistory).padding(horizontal = 8.dp, vertical = 6.dp)
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Black)
+                    .border(1.dp, Hairline, RoundedCornerShape(14.dp))
+                    .padding(vertical = 4.dp)
+            ) {
+                recent.forEach { entry -> HistoryRow(entry, onOpen = { onOpen(entry.url) }) }
             }
         }
     }
@@ -1111,13 +1251,17 @@ private fun MediaSheet(
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        KindIcon(
-                            when {
-                                f.isImage -> Icons.Filled.Image
-                                f.isAudioOnly -> Icons.Filled.MusicNote
-                                else -> Icons.Filled.Videocam
-                            }
-                        )
+                        // Videos show their cover and length, so the one playing stands out from ads.
+                        if (f.isAudioOnly) {
+                            KindIcon(Icons.Filled.MusicNote)
+                        } else {
+                            MediaThumb(
+                                cover = f.previewUrl.ifBlank { f.imageUrl },
+                                durationSec = f.durationSec,
+                                isVideo = !f.isImage,
+                                modifier = Modifier.width(72.dp).aspectRatio(16f / 9f)
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(f.resolution, color = White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
@@ -1176,3 +1320,254 @@ private fun SheetButton(label: String, filled: Boolean, onClick: () -> Unit) {
         )
     }
 }
+
+/** The address bar's typing state, shared with the suggestions shown under it while typing. */
+@Stable
+private class AddressBarState {
+    var editing by mutableStateOf(false)
+    var field by mutableStateOf(TextFieldValue(""))
+    /** False until the user changes the text (the bar opens holding the current address). */
+    var typed by mutableStateOf(false)
+    /** What was on the clipboard when typing started, offered as the first suggestion. */
+    var clip by mutableStateOf<String?>(null)
+}
+
+/**
+ * Shown over the page while typing an address: the link (or text) just copied, then history
+ * matching what's typed (the most recent pages before anything is typed).
+ */
+@Composable
+private fun AddressSuggestions(
+    query: String,
+    clip: String?,
+    history: List<HistoryEntry>,
+    onOpen: (String) -> Unit,
+    onSeeAll: () -> Unit
+) {
+    val matches = remember(query, history) { HistoryList.search(history, query, 8) }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(DarkGray)
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 8.dp)
+    ) {
+        if (clip != null && query.isBlank()) {
+            SuggestionLabel(stringResource(R.string.browser_copied))
+            val isLink = Regex("""^(https?://)?[\w-]+(\.[\w-]+)+(/\S*)?$""", RegexOption.IGNORE_CASE).matches(clip) ||
+                Regex("""https?://\S+""").containsMatchIn(clip)
+            SuggestionRow(
+                icon = Icons.Filled.ContentPaste,
+                title = stringResource(if (isLink) R.string.browser_go_copied_link else R.string.browser_search_copied),
+                subtitle = clip,
+                onClick = { onOpen(clip) }
+            )
+        }
+        if (matches.isNotEmpty()) {
+            SuggestionLabel(stringResource(if (query.isBlank()) R.string.browser_recent else R.string.browser_from_history))
+            matches.forEach { entry ->
+                SuggestionRow(
+                    icon = Icons.Filled.History,
+                    title = entry.title.ifBlank { displayAddress(entry.url) },
+                    subtitle = displayAddress(entry.url),
+                    onClick = { onOpen(entry.url) }
+                )
+            }
+        }
+        if (history.isNotEmpty()) {
+            TextButton(onClick = onSeeAll, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Icon(Icons.Filled.History, null, tint = Amber, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.browser_see_all_history), color = Amber, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            }
+        } else if (clip == null) {
+            Text(
+                stringResource(R.string.browser_history_empty),
+                color = White.copy(alpha = 0.5f),
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionLabel(text: String) {
+    Text(
+        text,
+        color = White.copy(alpha = 0.5f),
+        fontSize = 10.sp,
+        fontFamily = FontFamily.Monospace,
+        letterSpacing = tracked(2f),
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun SuggestionRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = Amber, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                subtitle,
+                color = White.copy(alpha = 0.5f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(textDirection = TextDirection.Ltr)
+            )
+        }
+    }
+}
+
+/** Everything the browser visited, by day: tap to open, remove one, or clear it all. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HistorySheet(
+    entries: List<HistoryEntry>,
+    onOpen: (String) -> Unit,
+    onRemove: (HistoryEntry) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var confirmClear by remember { mutableStateOf(false) }
+    val locale = LocalConfiguration.current.locales[0]
+    val today = stringResource(R.string.browser_today)
+    val yesterday = stringResource(R.string.browser_yesterday)
+    val days = remember(entries, locale) {
+        val now = System.currentTimeMillis()
+        val dateFormat = DateFormat.getDateInstance(DateFormat.MEDIUM, locale)
+        entries.groupBy { e ->
+            when (HistoryList.daysAgo(e.visitedAt, now, TimeZone.getDefault().getOffset(now).toLong())) {
+                0L -> today
+                1L -> yesterday
+                else -> dateFormat.format(Date(e.visitedAt))
+            }
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = DarkGray
+    ) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    stringResource(R.string.browser_history_title),
+                    color = Amber,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = tracked(2f),
+                    modifier = Modifier.weight(1f)
+                )
+                if (entries.isNotEmpty()) {
+                    TextButton(onClick = { confirmClear = true }) {
+                        Text(stringResource(R.string.browser_history_clear), color = LedRed, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+            if (entries.isEmpty()) {
+                Text(
+                    stringResource(R.string.browser_history_empty),
+                    color = White.copy(alpha = 0.6f),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp)
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+                    days.forEach { (day, list) ->
+                        item(key = "day:$day") { SuggestionLabel(day) }
+                        items(list, key = { it.url }) { entry ->
+                            HistoryRow(entry, onOpen = { onOpen(entry.url) }, onRemove = { onRemove(entry) }, locale = locale)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            containerColor = MediumGray,
+            title = { Text(stringResource(R.string.browser_history_clear_title), color = LedRed, fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.browser_history_clear_message), color = White, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(onClick = { onClear(); confirmClear = false }) {
+                    Text(stringResource(R.string.browser_history_clear), color = LedRed, fontFamily = FontFamily.Monospace)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClear = false }) {
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                }
+            }
+        )
+    }
+}
+
+/** A visited page: the site's letter, its title, address and (with [locale]) the time of the visit. */
+@Composable
+private fun HistoryRow(
+    entry: HistoryEntry,
+    onOpen: () -> Unit,
+    onRemove: (() -> Unit)? = null,
+    locale: Locale? = null
+) {
+    val host = BrowserSitesRepository.hostOf(entry.url)
+    val color = Color(BrowserSitesRepository.tintFor(entry.url))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(start = 16.dp, end = if (onRemove != null) 4.dp else 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.16f))
+                .border(1.dp, color.copy(alpha = 0.5f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            val letter = host.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+            Text(letter, color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.title.ifBlank { displayAddress(entry.url) }, color = White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val time = locale?.let { DateFormat.getTimeInstance(DateFormat.SHORT, it).format(Date(entry.visitedAt)) }
+            Text(
+                // Each part keeps its own direction ("localhost", "1:26 ص") inside the Arabic layout.
+                listOfNotNull(host.ifBlank { null }, time).joinToString(" · ") { "\u2068$it\u2069" },
+                color = White.copy(alpha = 0.5f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (onRemove != null) {
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.Close, stringResource(R.string.browser_history_remove), tint = White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+/** "https://www.example.com/a/" → "example.com/a". */
+private fun displayAddress(url: String): String =
+    url.removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')

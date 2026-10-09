@@ -13,8 +13,10 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDL.CanceledException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
@@ -38,11 +40,20 @@ class YtDlpEngine(
 
     private val webExtractor = WebVideoExtractor(context)
 
-    private companion object {
-        const val TAG = "YtDlpEngine"
-        const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
-        val VIDEO_EXTS = listOf("mp4", "mkv", "webm", "mov", "m4v")
-        val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
+    companion object {
+        private const val TAG = "YtDlpEngine"
+        private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+        private val VIDEO_EXTS = listOf("mp4", "mkv", "webm", "mov", "m4v")
+        private val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
+        /** [FormatInfo.group] of the page's own video in whole-page results. */
+        const val MAIN_GROUP = "main"
+
+        /** Same web address, ignoring the scheme, "www.", a trailing slash and #fragment. */
+        fun sameAddress(a: String, b: String): Boolean {
+            fun norm(u: String) = u.trim().substringBefore('#').removePrefix("https://").removePrefix("http://")
+                .removePrefix("www.").removePrefix("m.").trimEnd('/')
+            return a.isNotBlank() && norm(a) == norm(b)
+        }
     }
 
     data class FormatInfo(
@@ -63,10 +74,38 @@ class YtDlpEngine(
         /** Position in a multi-photo/video post (carousel), or -1 for a single-media post. */
         val slide: Int = -1,
         /** Picture to show for this entry in pickers (photo itself, or a video's cover). */
-        val previewUrl: String = ""
+        val previewUrl: String = "",
+        /** Length in seconds, 0 when unknown. */
+        val durationSec: Int = 0,
+        /** This entry's own title when a page holds several different videos; blank = the page's title. */
+        val title: String = "",
+        /** Whole-page results: the entries of one video share this key. Blank elsewhere. */
+        val group: String = "",
+        /** A video linked from the page (e.g. a suggestion under the player); it downloads from this page. */
+        val pageUrl: String = ""
     ) {
         val isFromPage: Boolean get() = directUrl.isNotBlank()
+
+        /** A linked video whose qualities aren't known yet; the best one is picked when it downloads. */
+        val isLink: Boolean get() = vcodec == LINK_CODEC
+
+        companion object {
+            const val LINK_CODEC = "link"
+        }
     }
+
+    /** What a fetch found, plus the page's own details (empty when the site gave none). */
+    data class FetchResult(
+        val formats: List<FormatInfo>,
+        val title: String = "",
+        val uploader: String = "",
+        val webpageUrl: String = "",
+        /**
+         * yt-dlp's catch-all extractor found no video, only the page's picture (as on a page
+         * with several players): worth reading the page itself before settling for that.
+         */
+        val coverOnly: Boolean = false
+    )
 
     fun init() {
         YoutubeDL.getInstance().init(context)
@@ -194,23 +233,6 @@ class YtDlpEngine(
 
     class UnsupportedSiteException(message: String) : Exception(message)
 
-    // Metadata of the most recently fetched media (empty if not provided by site).
-    @Volatile
-    var lastFetchedTitle: String = ""
-        private set
-
-    @Volatile
-    var lastFetchedUploader: String = ""
-        private set
-
-    @Volatile
-    var lastFetchedUploaderUrl: String = ""
-        private set
-
-    @Volatile
-    var lastFetchedWebpageUrl: String = ""
-        private set
-
     // ── Format discovery ─────────────────────────────────────────────────────
 
     /**
@@ -224,7 +246,7 @@ class YtDlpEngine(
      * anonymously) yt-dlp with the saved cookies takes over. Everything else tries yt-dlp
      * first and falls back to the page when yt-dlp can't get it.
      */
-    suspend fun getFormats(url: String, cookieFile: File? = null): List<FormatInfo> {
+    suspend fun getFormats(url: String, cookieFile: File? = null): FetchResult {
         val host = hostOf(url)
         val instagramLike = host.isOn("instagram.com", "instagr.am", "threads.net", "threads.com")
         val pageFirst = instagramLike
@@ -234,18 +256,19 @@ class YtDlpEngine(
         }
 
         var failure: Exception? = null
-        val formats = try {
+        val result = try {
             ytdlpFormats(url, cookieFile)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             failure = e
-            emptyList()
+            FetchResult(emptyList())
         }
-        if (formats.isNotEmpty()) return formats
+        if (result.formats.isNotEmpty() && !result.coverOnly) return result
 
-        // yt-dlp came up empty: look at the page like a browser would. (Not for YouTube:
-        // its player streams are split and signed, the page has nothing directly usable.)
+        // yt-dlp came up empty (or with just the page's picture): look at the page like a
+        // browser would. (Not for YouTube: its player streams are split and signed, the page
+        // has nothing directly usable.)
         if (!pageFirst && !isYoutubeUrl(url)) {
             val desktop = instagramLike || host.isOn("facebook.com", "fb.watch", "fb.com")
             webFormats(url, desktop)?.let { return it }
@@ -255,9 +278,95 @@ class YtDlpEngine(
             }
         }
 
+        if (result.formats.isNotEmpty()) return result
         failure?.let { throw friendlyFailure(it) }
-        return emptyList()
+        return FetchResult(emptyList())
     }
+
+    private fun usesDesktopPage(host: String) =
+        host.isOn("instagram.com", "instagr.am", "threads.net", "threads.com", "facebook.com", "fb.watch", "fb.com", "tiktok.com")
+
+    /**
+     * Everything on the page, for "whole page" mode: the page's own video (all qualities, via
+     * yt-dlp when it knows the site), every other video file the page plays, its photos (post
+     * pages) and the videos it links to, like the suggestions under a player. Each video is one
+     * [FormatInfo.group]; linked ones are only resolved when chosen ([FormatInfo.isLink]).
+     */
+    suspend fun getPageMedia(url: String, cookieFile: File? = null): FetchResult = coroutineScope {
+        val host = hostOf(url)
+        val pageOnly = host.isOn("instagram.com", "instagr.am", "threads.net", "threads.com")
+        val main = async {
+            if (pageOnly) null
+            else try {
+                ytdlpFormats(url, cookieFile)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Whole page: yt-dlp has nothing for the page itself", e)
+                null
+            }
+        }
+        val page = async {
+            try {
+                webExtractor.extract(url, usesDesktopPage(host), timeoutMs = 30_000, wholePage = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Whole page: web extraction failed", e)
+                null
+            }
+        }
+        // Just the page's picture from yt-dlp is no video; the page's own reading has the real ones.
+        val mainResult = main.await()?.let { if (it.coverOnly) it.copy(formats = emptyList()) else it }
+        val scan = page.await()
+
+        // yt-dlp's title when it found the page's video; otherwise the page's own (a catch-all
+        // extractor names its guesses "Title (1)").
+        val title = mainResult?.takeIf { it.formats.isNotEmpty() }?.title?.ifBlank { null }
+            ?: scan?.title?.ifBlank { null } ?: mainResult?.title.orEmpty()
+        val mainVideo = mainResult?.formats.orEmpty()
+            .filter { !it.isAudioOnly && !it.isImage }
+            .map { it.copy(group = MAIN_GROUP, title = title) }
+        val mainImages = mainResult?.formats.orEmpty()
+            .filter { it.isImage }
+            .mapIndexed { i, f -> f.copy(group = "img:$i", title = title, previewUrl = f.previewUrl.ifBlank { f.imageUrl }) }
+        val onPage = scan?.toFormatInfos().orEmpty()
+            .filter { !it.isAudioOnly }
+            // yt-dlp already listed the page's photos; the page's copies would only repeat them.
+            .filter { !(it.isImage && mainImages.isNotEmpty()) }
+            .mapIndexed { i, f -> f.copy(group = if (f.isImage) "pimg:$i" else "page:$i") }
+        val linked = scan?.links.orEmpty()
+            .filter { link -> !sameAddress(link.url, url) && !sameAddress(link.url, scan?.pageUrl.orEmpty()) }
+            .map { link ->
+                FormatInfo(
+                    id = "",
+                    extension = "mp4",
+                    resolution = "Best",
+                    filesize = 0L,
+                    vcodec = FormatInfo.LINK_CODEC,
+                    acodec = FormatInfo.LINK_CODEC,
+                    previewUrl = link.thumb.orEmpty(),
+                    durationSec = link.duration,
+                    title = link.title,
+                    group = link.url,
+                    pageUrl = link.url
+                )
+            }
+        val all = mainVideo + mainImages + onPage + linked
+        if (all.isEmpty() && mainResult == null && scan == null) {
+            throw UnsupportedSiteException(context.getString(R.string.error_no_media_found))
+        }
+        FetchResult(
+            formats = all,
+            title = title,
+            uploader = mainResult?.uploader?.ifBlank { null } ?: scan?.uploader.orEmpty(),
+            webpageUrl = mainResult?.webpageUrl?.ifBlank { null } ?: scan?.pageUrl ?: url
+        )
+    }
+
+    /** Fills in length, real resolution and a cover for media found on [pageUrl] (see [MediaProbe]). */
+    suspend fun probePageMedia(formats: List<FormatInfo>, pageUrl: String): List<FormatInfo> =
+        MediaProbe.fill(context, formats, pageUrl)
 
     /** Turns raw yt-dlp errors into something a person can act on. */
     private fun friendlyFailure(e: Exception): Exception {
@@ -279,7 +388,7 @@ class YtDlpEngine(
     private val Exception.isLoginMessage: Boolean get() = message == loginRequiredMessage
     private val loginRequiredMessage = "login-required"
 
-    private suspend fun webFormats(url: String, desktop: Boolean, timeoutMs: Long = 25_000): List<FormatInfo>? {
+    private suspend fun webFormats(url: String, desktop: Boolean, timeoutMs: Long = 25_000): FetchResult? {
         val scan = try {
             webExtractor.extract(url, desktop, timeoutMs)
         } catch (e: CancellationException) {
@@ -290,16 +399,10 @@ class YtDlpEngine(
         }
         if (scan.videos.isEmpty() && scan.images.isEmpty()) return null
         Log.i(TAG, "Found on page: ${scan.videos.size} video(s), ${scan.images.size} image(s)")
-
-        lastFetchedTitle = scan.title
-        lastFetchedUploader = scan.uploader
-        lastFetchedUploaderUrl = ""
-        lastFetchedWebpageUrl = scan.pageUrl
-
-        return scan.toFormatInfos()
+        return FetchResult(scan.toFormatInfos(), scan.title, scan.uploader, scan.pageUrl)
     }
 
-    private suspend fun ytdlpFormats(url: String, cookieFile: File? = null): List<FormatInfo> {
+    private suspend fun ytdlpFormats(url: String, cookieFile: File? = null): FetchResult {
         return withContext(Dispatchers.IO) {
             val isTiktok = isTiktokUrl(url)
             val clients = if (isYoutubeUrl(url)) youtubeClientFallbackOrder else listOf<String?>(null)
@@ -309,9 +412,11 @@ class YtDlpEngine(
                 request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
                 try {
                     val info = YoutubeDL.getInstance().getInfo(request)
-                    lastFetchedTitle = info.title?.trim().orEmpty()
-                    lastFetchedUploader = runCatching { info.uploader?.trim().orEmpty() }.getOrDefault("")
-                    lastFetchedWebpageUrl = runCatching { info.webpageUrl?.trim().orEmpty() }.getOrDefault("")
+                    val title = info.title?.trim().orEmpty()
+                    val uploader = runCatching { info.uploader?.trim().orEmpty() }.getOrDefault("")
+                    val webpageUrl = runCatching { info.webpageUrl?.trim().orEmpty() }.getOrDefault("")
+                    val cover = runCatching { info.thumbnail?.trim().orEmpty() }.getOrDefault("")
+                    val duration = runCatching { info.duration }.getOrDefault(0).coerceAtLeast(0)
                     val raw = info.formats?.filter { it.formatId != null } ?: emptyList()
 
                     fun hasVideo(vc: String?) = !vc.isNullOrEmpty() && vc != "none"
@@ -391,8 +496,16 @@ class YtDlpEngine(
                             .ifEmpty { imageEntriesFromThumbnail(info) }
                     } else emptyList()
 
-                    val formats = videoFormats + audioFormats + imageFormats + thumbImages
-                    if (formats.isNotEmpty()) return@withContext formats
+                    // The video's cover and length go on its entries, so pickers can show them.
+                    val formats = (videoFormats + audioFormats).map { it.copy(previewUrl = cover, durationSec = duration) } +
+                        imageFormats + thumbImages
+                    // yt-dlp's catch-all extractors (any page with a player) vs. a site's own one.
+                    val generic = runCatching { info.extractorKey }.getOrNull()
+                        .let { it.isNullOrBlank() || it.contains("Generic", ignoreCase = true) || it == "HTML5MediaEmbed" }
+                    Log.i(TAG, "yt-dlp (${runCatching { info.extractorKey }.getOrNull()}): ${videoFormats.size} video, ${audioFormats.size} audio, ${imageFormats.size} image, ${thumbImages.size} from thumbnails")
+                    if (formats.isNotEmpty()) {
+                        return@withContext FetchResult(formats, title, uploader, webpageUrl, coverOnly = thumbImages.isNotEmpty() && generic)
+                    }
                     Log.w(TAG, "Client '$client' returned no usable formats, trying next")
                 } catch (e: Exception) {
                     Log.w(TAG, "getFormats failed with client '$client' (${index + 1}/${clients.size})", e)
@@ -405,12 +518,12 @@ class YtDlpEngine(
                     }
                     if (e.isNoVideoFormats()) {
                         val imgs = imageFallbackViaThumbnails(url, cookieFile, client, isTiktok)
-                        if (imgs.isNotEmpty()) return@withContext imgs
+                        if (imgs.isNotEmpty()) return@withContext FetchResult(imgs)
                     }
                     if (clients.size == 1) throw e
                 }
             }
-            emptyList()
+            FetchResult(emptyList())
         }
     }
 

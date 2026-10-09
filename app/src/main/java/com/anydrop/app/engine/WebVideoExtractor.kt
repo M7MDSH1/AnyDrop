@@ -39,6 +39,10 @@ data class MediaCandidate(
     val slide: Int = -1,
     /** Cover picture of a video slide, for previews. */
     val cover: String? = null,
+    /** Length in seconds, 0 when unknown. */
+    val duration: Int = 0,
+    /** The video's own title, when the page names it. */
+    val title: String? = null,
 ) {
     val pixels: Int get() = width * height
     val isHls: Boolean get() = url.substringBefore('?').lowercase().endsWith(".m3u8")
@@ -53,7 +57,12 @@ data class PageScan(
     val videos: List<MediaCandidate>,
     val images: List<MediaCandidate>,
     val userAgent: String,
+    /** Videos the page links to (suggestions, playlists); only collected in whole-page scans. */
+    val links: List<PageLink> = emptyList(),
 )
+
+/** A video the page links to, with what the page shows of it. */
+data class PageLink(val url: String, val thumb: String?, val duration: Int, val title: String)
 
 /**
  * Finds media the way a browser sees it. This is what lets Instagram (and any other site)
@@ -120,6 +129,39 @@ object MediaSniffer {
     }
     return best;
   }
+  // What a page's data says about a video next to its address: cover, length, title.
+  function urlOf(v) { return typeof v === 'string' ? v : (v && typeof v === 'object' ? (v.url || v.uri || v.src || null) : null); }
+  var THUMB_KEYS = ['thumbnailUrl', 'thumbnail_url', 'thumbnail', 'poster', 'poster_url', 'posterUrl', 'cover', 'coverUrl',
+    'cover_url', 'preview_image', 'previewImage', 'image', 'display_url', 'thumb', 'preferred_thumbnail'];
+  function thumbOf(o) {
+    for (var i = 0; i < THUMB_KEYS.length; i++) {
+      var v = o[THUMB_KEYS[i]];
+      if (Array.isArray(v)) v = v[0];
+      if (v && typeof v === 'object' && v.image) v = v.image;
+      var s = clean(urlOf(v));
+      if (s && !isMedia(s)) return s;
+    }
+    return null;
+  }
+  function secs(v) {
+    if (typeof v === 'number') return isFinite(v) && v > 0 ? (v > 86400 ? v / 1000 : v) : 0;
+    if (typeof v !== 'string' || !v) return 0;
+    var m = /^P(?:\d+D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?${'$'}/i.exec(v);
+    if (m && (m[1] || m[2] || m[3])) return (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0);
+    m = /^(?:(\d+):)?(\d{1,2}):(\d{2})${'$'}/.exec(v);
+    if (m) return (+m[1] || 0) * 3600 + (+m[2]) * 60 + (+m[3]);
+    return /^\d+(\.\d+)?${'$'}/.test(v) ? secs(parseFloat(v)) : 0;
+  }
+  function durOf(o) {
+    var d = secs(o.duration) || secs(o.video_duration) || secs(o.length_seconds) || secs(o.lengthSeconds) ||
+      secs(o.length_in_second) || secs(o.durationSeconds) || secs(o.duration_seconds);
+    if (!d) { var ms = o.playable_duration_in_ms || o.duration_ms || o.durationMs; if (typeof ms === 'number' && ms > 0) d = ms / 1000; }
+    return d ? Math.round(d) : null;
+  }
+  function titleOf(o) {
+    var t = o.title || o.name || o.headline;
+    return typeof t === 'string' && t.length > 1 && t.length < 300 ? t : null;
+  }
   var HD = { browser_native_hd_url: 1, playable_url_quality_hd: 1, hd_src: 1, hd_src_no_ratelimit: 1 };
   var SD = { browser_native_sd_url: 1, playable_url: 1, sd_src: 1, sd_src_no_ratelimit: 1 };
   var KEYS = { video_url: 1, videoUrl: 1, contentUrl: 1, content_url: 1, download_url: 1, downloadUrl: 1,
@@ -149,7 +191,7 @@ object MediaSniffer {
       var best = largest(vv);
       var cover = o.image_versions2 && o.image_versions2.candidates ? largest(o.image_versions2.candidates) : null;
       if (best) add(best.url, 100, 'ig', { code: code, w: best.width || o.original_width, h: best.height || o.original_height,
-        slide: slide, cover: cover && cover.url });
+        slide: slide, cover: cover && cover.url, dur: durOf(o) });
     } else if (o.image_versions2 && o.image_versions2.candidates && !o.carousel_media) {
       // Instagram/Threads photo (or one photo slide of a carousel).
       var img = largest(o.image_versions2.candidates);
@@ -157,21 +199,23 @@ object MediaSniffer {
     }
     if (typeof o.video_url === 'string' && (o.is_video === true || /Video/.test(o.__typename || ''))) {
       var d = o.dimensions || {};
-      add(o.video_url, 98, 'ig', { code: code, w: d.width, h: d.height, slide: slide, cover: o.display_url });
+      add(o.video_url, 98, 'ig', { code: code, w: d.width, h: d.height, slide: slide, cover: o.display_url, dur: durOf(o) });
     } else if (typeof o.display_url === 'string' && o.is_video === false && !o.edge_sidecar_to_children) {
       var dd = o.dimensions || {};
       addImg(o.display_url, { code: code, w: dd.width, h: dd.height, slide: slide });
     }
-    if (o['@type'] === 'VideoObject' && typeof o.contentUrl === 'string') add(o.contentUrl, 82, 'ld');
+    if (o['@type'] === 'VideoObject' && typeof o.contentUrl === 'string') {
+      add(o.contentUrl, 82, 'ld', { cover: thumbOf(o), dur: durOf(o), title: titleOf(o) });
+    }
     for (var k in o) {
       if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
       if (k === 'carousel_media' || k === 'edge_sidecar_to_children') continue; // walked above
       var val = o[k];
       if (typeof val === 'string') {
         if (val.length < 10 || val.length > 5000) continue;
-        if (HD[k]) add(val, 95, 'fb', { q: 'HD', code: code });
-        else if (SD[k]) add(val, 88, 'fb', { q: 'SD', code: code });
-        else if (KEYS[k] && isMedia(clean(val))) add(val, 70, 'json', { code: code });
+        if (HD[k]) add(val, 95, 'fb', { q: 'HD', code: code, cover: thumbOf(o), dur: durOf(o) });
+        else if (SD[k]) add(val, 88, 'fb', { q: 'SD', code: code, cover: thumbOf(o), dur: durOf(o) });
+        else if (KEYS[k] && isMedia(clean(val))) add(val, 70, 'json', { code: code, cover: thumbOf(o), dur: durOf(o), title: titleOf(o) });
       } else if (val && typeof val === 'object') {
         walk(val, code, depth + 1, inherit, slide);
       }
@@ -198,7 +242,78 @@ object MediaSniffer {
     var m = document.querySelector('meta[property="' + p + '"],meta[name="' + p + '"]');
     return m ? m.getAttribute('content') : null;
   }
-  ad.collect = function () {
+  // Videos the page links to (the suggestions under a player, a channel's grid): a link with
+  // a thumbnail that looks like a video page or shows a length like "12:34".
+  var VIDEO_LINK = /\/watch\b|[?&]v=|\/shorts\/|\/videos?\/|\/reels?\/|\/embed\/|\/clips?\/|\/tv\/|\/p\/[\w-]+|youtu\.be\/|vimeo\.com\/\d+|\/status\/\d+|\/movies?\/|\/episodes?\/|\/play\//i;
+  var CLOCK = /(?:^|[^\d:])((?:\d{1,2}:)?\d{1,2}:\d{2})(?![\d:])/;
+  var CLOCKS = /(?:\d{1,2}:)?\d{1,2}:\d{2}/g;
+  function imgSrc(img) {
+    var s = img.currentSrc || img.src || '';
+    if (!s || s.indexOf('data:') === 0) {
+      s = img.getAttribute('data-src') || img.getAttribute('data-thumb') || img.getAttribute('data-original') ||
+        img.getAttribute('data-lazy-src') || '';
+    }
+    return clean(s);
+  }
+  function thumbIn(a) {
+    var imgs = a.querySelectorAll('img'), i, r, s;
+    for (i = 0; i < imgs.length && i < 4; i++) {
+      r = imgs[i].getBoundingClientRect();
+      s = imgSrc(imgs[i]);
+      if (s && r.width >= 60 && r.height >= 34) return { url: s, alt: imgs[i].alt || '' };
+    }
+    var bg = a.querySelectorAll('[style*="background-image"]');
+    for (i = 0; i < bg.length && i < 4; i++) {
+      var m = /url\(["']?([^"')]+)["']?\)/.exec(bg[i].getAttribute('style') || '');
+      r = bg[i].getBoundingClientRect();
+      s = m && clean(m[1]);
+      if (s && r.width >= 60 && r.height >= 34) return { url: s, alt: '' };
+    }
+    return null;
+  }
+  // The length shown on the link's own card: the link, or a wrapper around it alone.
+  function clockIn(el) {
+    for (var k = 0; el && k < 3; k++, el = el.parentElement) {
+      if (k > 0 && el.querySelectorAll('a[href]').length > 1) break;
+      var t = el.innerText || '';
+      if (t.length > 600) break;
+      var m = CLOCK.exec(t);
+      if (m) return secs(m[1]);
+    }
+    return 0;
+  }
+  function titleIn(a, alt) {
+    var t = a.getAttribute('title') || a.getAttribute('aria-label') || '';
+    if (!t) {
+      var card = (a.closest && a.closest('article,li,[class*="item"],[class*="card"],[class*="renderer"]')) || a.parentElement;
+      var h = card && card.querySelector('h1,h2,h3,h4,[class*="title"],[id*="title"]');
+      t = (h && (h.getAttribute('title') || h.innerText)) || alt || a.innerText || '';
+    }
+    t = t.replace(CLOCKS, ' ').replace(/\s+/g, ' ').trim();
+    return t.length > 140 ? t.substring(0, 140) : t;
+  }
+  ad.links = function () {
+    var out = [], seen = {}, here = location.href.split('#')[0];
+    var as = document.querySelectorAll('a[href]');
+    for (var i = 0; i < as.length && out.length < 60; i++) {
+      var a = as[i], href = clean(a.href);
+      if (!href) continue;
+      href = href.split('#')[0];
+      if (href === here || seen[href] || junk(href)) continue;
+      var th = thumbIn(a);
+      if (isMedia(href)) { add(href, 66, 'link', { cover: th && th.url, title: th ? titleIn(a, th.alt) : null }); continue; }
+      if (!th) continue;
+      var dur = clockIn(a);
+      if (!dur && !VIDEO_LINK.test(href)) continue;
+      seen[href] = 1;
+      out.push({ url: href, thumb: th.url, dur: dur ? Math.round(dur) : null, title: titleIn(a, th.alt) });
+    }
+    return out;
+  };
+  ad.scroll = function () {
+    try { window.scrollBy(0, Math.max(600, (window.innerHeight || 800) * 0.9)); } catch (e) {}
+  };
+  ad.collect = function (whole) {
     try {
       var scripts = document.querySelectorAll('script[type="application/json"],script[type="application/ld+json"],script#__NEXT_DATA__');
       for (var i = 0; i < scripts.length; i++) {
@@ -214,16 +329,26 @@ object MediaSniffer {
       var vids = document.querySelectorAll('video,video source');
       for (var j = 0; j < vids.length; j++) {
         var el = vids[j];
+        var v = el.tagName === 'VIDEO' ? el : el.parentElement;
         var s = el.currentSrc || el.src || el.getAttribute('src') || el.getAttribute('data-src');
-        if (s && s.indexOf('blob:') !== 0) add(s, 78, 'video', { w: el.videoWidth || null, h: el.videoHeight || null });
+        if (s && s.indexOf('blob:') !== 0) {
+          add(s, 78, 'video', {
+            w: (v && v.videoWidth) || null, h: (v && v.videoHeight) || null,
+            cover: v && v.poster ? clean(v.poster) : null,
+            dur: v && isFinite(v.duration) && v.duration > 0 ? Math.round(v.duration) : null
+          });
+        }
       }
       if (ad.hits.length === 0 && !ad.htmlScanned && document.readyState === 'complete') {
         ad.htmlScanned = true;
         scanText(document.documentElement.innerHTML, 'html');
       }
     } catch (e) {}
+    var links = [];
+    if (whole) { try { links = ad.links(); } catch (e) {} }
     var hits = ad.hits.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, 150);
     return JSON.stringify({
+      links: links,
       title: meta('og:title') || document.title || '',
       thumb: meta('og:image') || meta('twitter:image') || null,
       url: location.href,
@@ -275,7 +400,11 @@ object MediaSniffer {
 """.trimIndent()
 
     val COLLECT_JS = "$CORE_JS\nwindow.__ad.collect();"
+    /** Also collects the videos the page links to. */
+    val COLLECT_PAGE_JS = "$CORE_JS\nwindow.__ad.collect(true);"
     val KICK_JS = "$CORE_JS\nwindow.__ad.kick(); true;"
+    /** Scrolls down a screen, so pages that load their lists lazily show more. */
+    val SCROLL_JS = "$CORE_JS\nwindow.__ad.scroll(); true;"
 
     private val JUNK = Regex("""googlevideo\.com|doubleclick|googlesyndication|googleads|adservice|imasdk|adnxs|moatads|/ads/|[?&](bytestart|byteend|range)=""")
     private val IG_CODE = Regex("""(?:instagram\.com|threads\.(?:net|com))/(?:[^/?#]+/)?(?:p|reel|reels|tv|post)/([A-Za-z0-9_-]+)""")
@@ -297,13 +426,23 @@ object MediaSniffer {
         }
     }
 
-    /** Parses what COLLECT_JS returned and merges it with network hits. */
-    fun parse(raw: String?, network: List<MediaCandidate>, fallbackUrl: String, userAgent: String): PageScan {
+    /**
+     * Parses what COLLECT_JS (or COLLECT_PAGE_JS, [wholePage]) returned and merges it with
+     * network hits. A whole-page scan keeps every video file instead of only the best guesses.
+     */
+    fun parse(
+        raw: String?,
+        network: List<MediaCandidate>,
+        fallbackUrl: String,
+        userAgent: String,
+        wholePage: Boolean = false
+    ): PageScan {
         var title = ""
         var thumb: String? = null
         var url = fallbackUrl
         val videos = mutableListOf<MediaCandidate>()
         val images = mutableListOf<MediaCandidate>()
+        val links = mutableListOf<PageLink>()
         try {
             val obj = when (val decoded = raw?.let { JSONTokener(it).nextValue() }) {
                 is String -> JSONObject(decoded)
@@ -316,14 +455,27 @@ object MediaSniffer {
                 url = obj.optString("url").takeIf { it.startsWith("http") } ?: fallbackUrl
                 obj.optJSONArray("hits")?.let { videos += it.toCandidates() }
                 obj.optJSONArray("imgs")?.let { images += it.toCandidates() }
+                obj.optJSONArray("links")?.let { links += it.toLinks() }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not parse page scan: ${e.message}")
         }
         videos += network
         val (cleanTitle, uploader) = cleanTitle(title, url)
-        return PageScan(url, cleanTitle, uploader, thumb, rank(url, videos), rankImages(url, images), userAgent)
+        val ranked = if (wholePage) rankAll(videos) else rank(url, videos)
+        return PageScan(url, cleanTitle, uploader, thumb, ranked, rankImages(url, images), userAgent, links)
     }
+
+    private fun JSONArray.toLinks(): List<PageLink> = (0 until length()).mapNotNull { i ->
+        val o = optJSONObject(i) ?: return@mapNotNull null
+        val url = o.optString("url").takeIf { it.startsWith("http") } ?: return@mapNotNull null
+        PageLink(
+            url = url,
+            thumb = o.optString("thumb").takeIf { it.startsWith("http") },
+            duration = o.optInt("dur", 0).coerceAtLeast(0),
+            title = o.optString("title").takeIf { it != "null" }.orEmpty().trim()
+        )
+    }.distinctBy { it.url }.take(40)
 
     private fun JSONArray.toCandidates(): List<MediaCandidate> = (0 until length()).mapNotNull { i ->
         val h = optJSONObject(i) ?: return@mapNotNull null
@@ -337,7 +489,23 @@ object MediaSniffer {
             quality = h.optString("q").takeIf { it.isNotEmpty() && it != "null" },
             slide = h.optInt("slide", -1),
             cover = h.optString("cover").takeIf { it.startsWith("http") },
+            duration = h.optInt("dur", 0).coerceAtLeast(0),
+            title = h.optString("title").takeIf { it.isNotBlank() && it != "null" }?.trim(),
         )
+    }
+
+    /**
+     * Whole-page ranking: every distinct video file, best first. Weak guesses (addresses spotted
+     * in raw text) only stay when nothing better was found.
+     */
+    fun rankAll(all: List<MediaCandidate>): List<MediaCandidate> {
+        var list = all.filter { it.url.startsWith("http") }
+            .groupBy { it.url }
+            .map { (_, same) -> same.maxBy { it.score } }
+            .sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.duration }.thenByDescending { it.pixels })
+        val strong = list.filter { it.score >= 60 }
+        if (strong.isNotEmpty()) list = strong
+        return list.take(30)
     }
 
     /** Best candidates first; drops weak guesses when a strong match exists. */
@@ -351,7 +519,8 @@ object MediaSniffer {
             val matched = list.filter { it.code == code }
             if (matched.isNotEmpty()) list = matched
         }
-        list = list.sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.pixels })
+        // Among equally likely files the longer one wins: an ad or a preview is a short clip.
+        list = list.sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.duration }.thenByDescending { it.pixels })
         val top = list.firstOrNull()?.score ?: return emptyList()
         if (top >= 85) list = list.filter { it.score >= 70 }
         // Every slide of a carousel stays; other guesses are capped.
@@ -435,6 +604,8 @@ object MediaSniffer {
 /** What was found on a page, in the same shape as yt-dlp's formats (used by the deck and the browser). */
 fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
     val several = videos.count { it.score >= 95 } > 1
+    // The page's picture (og:image) is only trusted as a cover when the page has one video.
+    val pageCover = thumbnail.takeIf { videos.size == 1 }.orEmpty()
     val used = mutableMapOf<String, Int>()
     val videoFormats = videos.mapIndexed { i, c ->
         val short = minOf(c.width, c.height).takeIf { it > 0 } ?: maxOf(c.width, c.height)
@@ -458,7 +629,9 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
             directUrl = c.url,
             userAgent = userAgent,
             slide = if (c.score >= 95) c.slide else -1,
-            previewUrl = c.cover.orEmpty()
+            previewUrl = c.cover ?: pageCover,
+            durationSec = c.duration,
+            title = c.title.orEmpty()
         )
     }
     val audio = videos.firstOrNull()?.let { first ->
@@ -496,11 +669,15 @@ class WebVideoExtractor(context: Context) {
 
     private val appContext = context.applicationContext
 
-    suspend fun extract(pageUrl: String, desktop: Boolean, timeoutMs: Long = 25_000): PageScan =
+    /**
+     * [wholePage] keeps every video file and also collects the videos the page links to. The page
+     * is scrolled a few screens down first, so lists that load as you scroll show up.
+     */
+    suspend fun extract(pageUrl: String, desktop: Boolean, timeoutMs: Long = 25_000, wholePage: Boolean = false): PageScan =
         withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val ua = if (desktop) MediaSniffer.desktopUserAgent(appContext) else MediaSniffer.mobileUserAgent(appContext)
-                val session = HeadlessSession(appContext, pageUrl, ua, timeoutMs) { scan ->
+                val session = HeadlessSession(appContext, pageUrl, ua, timeoutMs, wholePage) { scan ->
                     if (cont.isActive) cont.resume(scan)
                 }
                 cont.invokeOnCancellation { Handler(Looper.getMainLooper()).post { session.finish(null) } }
@@ -509,13 +686,18 @@ class WebVideoExtractor(context: Context) {
         }
 }
 
+/** Screens a whole-page scan scrolls down before it reads the page for the last time. */
+private const val MAX_SCROLLS = 5
+
 private class HeadlessSession(
     private val context: Context,
     private val pageUrl: String,
     private val userAgent: String,
     private val timeoutMs: Long,
+    private val wholePage: Boolean,
     private val onDone: (PageScan) -> Unit,
 ) {
+    private var scrolls = 0
     private val handler = Handler(Looper.getMainLooper())
     private val network = Collections.synchronizedList(mutableListOf<MediaCandidate>())
     private var webView: WebView? = null
@@ -567,15 +749,33 @@ private class HeadlessSession(
     private val poll: Runnable = object : Runnable {
         override fun run() {
             val wv = webView ?: return
-            wv.evaluateJavascript(MediaSniffer.COLLECT_JS) { raw ->
+            wv.evaluateJavascript(if (wholePage) MediaSniffer.COLLECT_PAGE_JS else MediaSniffer.COLLECT_JS) { raw ->
                 if (finished) return@evaluateJavascript
                 val snapshot = synchronized(network) { network.toList() }
-                val scan = MediaSniffer.parse(raw, snapshot, pageUrl, userAgent)
+                val scan = MediaSniffer.parse(raw, snapshot, pageUrl, userAgent, wholePage)
                 lastScan = scan
                 val now = SystemClock.elapsedRealtime()
                 val elapsed = now - startedAt
                 val sinceFinish = if (pageFinishedAt > 0) now - pageFinishedAt else 0L
                 val best = scan.videos.firstOrNull()?.score ?: 0
+                if (wholePage) {
+                    // Let the player start, then scroll a few screens so lazy lists load, then stop.
+                    when {
+                        elapsed > timeoutMs -> finish(scan)
+                        pageFinishedAt > 0 && scrolls >= MAX_SCROLLS && sinceFinish > 7000 -> finish(scan)
+                        else -> {
+                            if (!kicked && pageFinishedAt > 0 && sinceFinish > 1500) {
+                                kicked = true
+                                wv.evaluateJavascript(MediaSniffer.KICK_JS, null)
+                            } else if (kicked && scrolls < MAX_SCROLLS) {
+                                scrolls++
+                                wv.evaluateJavascript(MediaSniffer.SCROLL_JS, null)
+                            }
+                            handler.postDelayed(this, 900)
+                        }
+                    }
+                    return@evaluateJavascript
+                }
                 when {
                     best >= 95 && elapsed > 1500 -> finish(scan)
                     scan.images.isNotEmpty() && pageFinishedAt > 0 && sinceFinish > 2500 -> finish(scan)

@@ -8,12 +8,16 @@ import androidx.core.content.FileProvider
 import com.anydrop.app.R
 import com.anydrop.app.appDownloadScope
 import com.anydrop.app.data.model.DownloadState
+import com.anydrop.app.engine.MediaSniffer
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.YtDlpFormatParser
 import com.anydrop.app.service.DownloadService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,7 +72,8 @@ class DownloadQueue @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadRepository: DownloadRepository,
     private val libraryRepository: LibraryRepository,
-    private val cookieRepository: CookieRepository
+    private val cookieRepository: CookieRepository,
+    private val settingsRepository: SettingsRepository
 ) {
     private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
@@ -174,6 +179,7 @@ class DownloadQueue @Inject constructor(
         val format = request.format
         val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
         return when {
+            format.isLink -> linkFlow(request, outputPath, cookieFile)
             format.isImage -> downloadRepository.downloadImage(request.url, outputPath, format.id, cookieFile, format.imageUrl)
             format.isFromPage -> downloadRepository.downloadDirect(
                 request.webpageUrl.ifBlank { request.url }, format, outputPath, request.cookieHeader
@@ -186,6 +192,40 @@ class DownloadQueue @Inject constructor(
                 downloadRepository.downloadWithMerge(request.url, outputPath, format.id, height, cookieFile)
             }
         }
+    }
+
+    /**
+     * A video linked from a page (picked in "whole page" mode without choosing a quality): its
+     * page is read now and the best quality the Maximum quality setting allows is downloaded.
+     */
+    private fun linkFlow(request: DownloadRequest, outputPath: String, cookieFile: File?): Flow<DownloadState> = flow {
+        emit(DownloadState.Progress(0, phase = context.getString(R.string.progress_finding_video)))
+        val formats = try {
+            downloadRepository.getFormats(request.url, cookieFile).formats
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emit(DownloadState.Error(e.message ?: context.getString(R.string.error_no_media_found)))
+            return@flow
+        }
+        val best = bestVideo(formats)
+        if (best == null) {
+            emit(DownloadState.Error(context.getString(R.string.error_no_media_found)))
+            return@flow
+        }
+        val resolved = request.copy(
+            format = best,
+            cookieHeader = if (best.isFromPage) MediaSniffer.cookieHeaderFor(best.directUrl) else null
+        )
+        // The tracker shows the quality found, and RETRY starts from it instead of looking again.
+        update(outputPath) { it.copy(quality = best.resolution, request = resolved) }
+        emitAll(flowFor(resolved, outputPath))
+    }
+
+    private fun bestVideo(formats: List<FormatInfo>): FormatInfo? {
+        val videos = formats.filter { !it.isImage && !it.isAudioOnly && !it.isLink }
+        val max = settingsRepository.maxQualityHeight
+        return videos.firstOrNull { YtDlpFormatParser.extractHeight(it.resolution) in 1..max } ?: videos.firstOrNull()
     }
 
     private suspend fun run(request: DownloadRequest, tag: String) {
