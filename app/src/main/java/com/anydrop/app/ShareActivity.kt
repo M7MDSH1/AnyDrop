@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -57,7 +58,14 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.engine.distinctPageVideos
+import com.anydrop.app.engine.isWholePage
+import com.anydrop.app.engine.pageItems
 import com.anydrop.app.engine.postItems
+import com.anydrop.app.ui.components.FetchModeToggle
+import com.anydrop.app.ui.components.MediaSummaryCard
+import com.anydrop.app.ui.components.MediaThumb
+import com.anydrop.app.ui.components.PageMediaPicker
 import com.anydrop.app.ui.components.PostItemsPicker
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.repository.readAppLanguageSync
@@ -144,6 +152,13 @@ private fun ShareSheet(
     val formats by viewModel.availableFormats.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
+    val fetchWholePage by viewModel.fetchWholePage.collectAsState()
+    val pageTitle by viewModel.pageTitle.collectAsState()
+    val resolving by viewModel.resolving.collectAsState()
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
 
     // Kick off the fetch in the background as soon as the sheet appears.
     androidx.compose.runtime.LaunchedEffect(sharedUrl) {
@@ -167,7 +182,8 @@ private fun ShareSheet(
     ) {
         val images = formats.filter { it.isImage && it.imageUrl.isNotBlank() }
         val videoAudio = formats.filter { !it.isImage }
-        val postItems = remember(formats) { formats.postItems() }
+        val pageItems = remember(formats) { if (formats.isWholePage) formats.pageItems() else emptyList() }
+        val postItems = remember(formats) { if (formats.isWholePage) emptyList() else formats.postItems() }
 
         Column(
             modifier = Modifier
@@ -190,7 +206,9 @@ private fun ShareSheet(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp
             )
-            if (formats.any { it.isFromPage }) {
+            Spacer(Modifier.height(12.dp))
+            FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
+            if (formats.any { it.isFromPage } && !formats.isWholePage) {
                 Spacer(Modifier.height(10.dp))
                 Text(
                     stringResource(R.string.found_on_page),
@@ -216,7 +234,7 @@ private fun ShareSheet(
                             CircularProgressIndicator(color = Amber, modifier = Modifier.size(40.dp))
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                stringResource(R.string.share_fetching),
+                                stringResource(if (fetchWholePage) R.string.fetching_whole_page else R.string.share_fetching),
                                 color = White.copy(alpha = 0.6f),
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp
@@ -235,6 +253,19 @@ private fun ShareSheet(
                     )
                 }
 
+                // Whole page: everything on it, to pick from.
+                pageItems.isNotEmpty() -> {
+                    PageMediaPicker(
+                        items = pageItems,
+                        pageTitle = pageTitle,
+                        pageUrl = sharedUrl,
+                        resolving = resolving,
+                        onResolve = viewModel::resolvePageItem,
+                        onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } },
+                        maxListHeight = 380.dp
+                    )
+                }
+
                 // A post with several photos/videos (a carousel): pick any of its slides, or all.
                 postItems.isNotEmpty() -> {
                     PostItemsPicker(
@@ -244,7 +275,18 @@ private fun ShareSheet(
                 }
 
                 else -> {
+                    // One video: its cover, length and title above the qualities. Several different
+                    // video files from a page (the video, an ad...) each show their own instead.
+                    val severalVideos = remember(formats) { formats.distinctPageVideos() > 1 }
+                    val video = formats.firstOrNull { !it.isImage && !it.isAudioOnly }
+                    if (!severalVideos && video != null &&
+                        (video.previewUrl.isNotBlank() || video.durationSec > 0 || pageTitle.isNotBlank())
+                    ) {
+                        MediaSummaryCard(cover = video.previewUrl, durationSec = video.durationSec, title = pageTitle)
+                        Spacer(Modifier.height(12.dp))
+                    }
                     ShareQualityList(
+                        showCovers = severalVideos,
                         // Mixed carousels list their photos too; otherwise just video/audio.
                         formats = if (images.size > 1) formats else videoAudio.ifEmpty { formats },
                         onRecord = { fmt ->
@@ -276,7 +318,8 @@ private fun ShareSheet(
 @Composable
 private fun ShareQualityList(
     formats: List<FormatInfo>,
-    onRecord: (FormatInfo) -> Unit
+    onRecord: (FormatInfo) -> Unit,
+    showCovers: Boolean = false
 ) {
     var selectedId by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     // Default-select the first (usually highest quality) so RECORD works with one tap.
@@ -304,15 +347,25 @@ private fun ShareQualityList(
                         .background(Black)
                         .then(if (isSel) Modifier.border(2.dp, Amber, RoundedCornerShape(8.dp)) else Modifier)
                         .clickable { selectedId = fmt.uniqueKey() }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(horizontal = if (showCovers) 8.dp else 16.dp, vertical = if (showCovers) 8.dp else 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (showCovers && !fmt.isImage && !fmt.isAudioOnly) {
+                        MediaThumb(
+                            cover = fmt.previewUrl,
+                            durationSec = fmt.durationSec,
+                            isVideo = true,
+                            modifier = Modifier.width(78.dp).aspectRatio(16f / 9f)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                    }
                     Text(
                         "$icon  ${fmt.resolution}",
                         color = if (isSel) Amber else White,
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        modifier = Modifier.weight(1f)
                     )
                     Text(
                         fmt.extension.uppercase(),
@@ -348,7 +401,7 @@ private fun ShareQualityList(
 
 /** Stable key for selection (id if present, else resolution+ext). */
 private fun FormatInfo.uniqueKey(): String =
-    if (id.isNotBlank()) id else "$resolution-$extension-$imageUrl"
+    if (id.isNotBlank()) "$id-$directUrl" else "$resolution-$extension-$imageUrl"
 
 @Composable
 private fun rememberCoroutineScopeCompat() = androidx.compose.runtime.rememberCoroutineScope()

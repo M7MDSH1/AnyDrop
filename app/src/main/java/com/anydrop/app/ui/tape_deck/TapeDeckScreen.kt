@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -67,7 +68,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.engine.distinctPageVideos
+import com.anydrop.app.engine.isWholePage
+import com.anydrop.app.engine.pageItems
 import com.anydrop.app.engine.postItems
+import com.anydrop.app.ui.components.FetchModeToggle
+import com.anydrop.app.ui.components.MediaSummaryCard
+import com.anydrop.app.ui.components.MediaThumb
+import com.anydrop.app.ui.components.PageMediaPicker
 import com.anydrop.app.ui.components.PostItemsPicker
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.AmberBright
@@ -99,7 +107,14 @@ fun TapeDeckScreen(
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
     val tasks by viewModel.tasks.collectAsState()
+    val fetchWholePage by viewModel.fetchWholePage.collectAsState()
+    val pageTitle by viewModel.pageTitle.collectAsState()
+    val resolving by viewModel.resolving.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
 
     // One-time POST_NOTIFICATIONS request at the first download attempt (Android
     // 13+); downloads proceed regardless, in-app feedback is unaffected.
@@ -256,6 +271,9 @@ fun TapeDeckScreen(
             onGo = { if (canDownload) ensureNotificationPermission { viewModel.startDownload() } }
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+        FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
+
         Spacer(modifier = Modifier.height(12.dp))
 
         if (isLoadingFormats) {
@@ -271,7 +289,7 @@ fun TapeDeckScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    stringResource(R.string.fetching_qualities),
+                    stringResource(if (fetchWholePage) R.string.fetching_whole_page else R.string.fetching_qualities),
                     color = White.copy(alpha = 0.6f),
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
@@ -296,20 +314,43 @@ fun TapeDeckScreen(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        // A post with several photos/videos (a carousel): pick any of its slides, or all.
-        val postItems = remember(availableFormats) { availableFormats.postItems() }
-        val multiItem = postItems.isNotEmpty()
-        if (multiItem) {
+        // Whole page: everything on it, to pick from. Otherwise a post with several
+        // photos/videos (a carousel) offers its slides, and a single video its qualities.
+        val pageItems = remember(availableFormats) { if (availableFormats.isWholePage) availableFormats.pageItems() else emptyList() }
+        val postItems = remember(availableFormats) { if (availableFormats.isWholePage) emptyList() else availableFormats.postItems() }
+        val multiItem = postItems.isNotEmpty() || pageItems.isNotEmpty()
+        if (pageItems.isNotEmpty()) {
+            PageMediaPicker(
+                items = pageItems,
+                pageTitle = pageTitle,
+                pageUrl = url,
+                resolving = resolving,
+                onResolve = viewModel::resolvePageItem,
+                onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        } else if (postItems.isNotEmpty()) {
             PostItemsPicker(
                 items = postItems,
                 onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPostItems(chosen) } }
             )
             Spacer(modifier = Modifier.height(12.dp))
         } else if (availableFormats.isNotEmpty()) {
+            // Several different video files read off a page (the video, an ad, a preview...) each
+            // show their own cover and length; one video gets a single card above its qualities.
+            val severalVideos = remember(availableFormats) { availableFormats.distinctPageVideos() > 1 }
+            val video = availableFormats.firstOrNull { !it.isImage && !it.isAudioOnly }
+            if (!severalVideos && video != null &&
+                (video.previewUrl.isNotBlank() || video.durationSec > 0 || pageTitle.isNotBlank())
+            ) {
+                MediaSummaryCard(cover = video.previewUrl, durationSec = video.durationSec, title = pageTitle)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             FormatSelector(
                 formats = availableFormats,
                 selectedFormat = selectedFormat,
-                onSelect = viewModel::selectFormat
+                onSelect = viewModel::selectFormat,
+                showCovers = severalVideos
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -381,7 +422,8 @@ fun TapeDeckScreen(
 private fun FormatSelector(
     formats: List<FormatInfo>,
     selectedFormat: FormatInfo?,
-    onSelect: (FormatInfo) -> Unit
+    onSelect: (FormatInfo) -> Unit,
+    showCovers: Boolean = false
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -397,11 +439,11 @@ private fun FormatSelector(
         Spacer(modifier = Modifier.height(8.dp))
         val grouped = formats
             .filter { it.resolution != "unknown" }
-            .groupBy { it.resolution }
-            .map { (_, list) -> list.first() }
+            .distinctBy { "${it.id}|${it.resolution}|${it.directUrl}|${it.imageUrl}" }
+        val rowHeight = if (showCovers) 56 else 40
         // Tall enough for ~6 rows without an inner scroll; longer lists scroll inside.
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().height((grouped.size.coerceIn(1, 6) * 44).dp),
+            modifier = Modifier.fillMaxWidth().height((grouped.size.coerceIn(1, 6) * (rowHeight + 4)).dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(grouped) { format ->
@@ -410,15 +452,24 @@ private fun FormatSelector(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(40.dp)
+                        .height(rowHeight.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(if (isSelected) Amber.copy(alpha = 0.16f) else Black)
                         .border(1.dp, if (isSelected) Amber else Hairline, RoundedCornerShape(8.dp))
                         .clickable { onSelect(format) }
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = if (showCovers) 6.dp else 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (showCovers && !format.isImage && !format.isAudioOnly) {
+                        MediaThumb(
+                            cover = format.previewUrl,
+                            durationSec = format.durationSec,
+                            isVideo = true,
+                            modifier = Modifier.width(78.dp).aspectRatio(16f / 9f)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                    }
                     Text(
                         text = when {
                             format.isImage -> "▣ ${format.resolution}"
@@ -428,7 +479,8 @@ private fun FormatSelector(
                         color = if (isSelected) Amber else White.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else null,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.weight(1f)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(

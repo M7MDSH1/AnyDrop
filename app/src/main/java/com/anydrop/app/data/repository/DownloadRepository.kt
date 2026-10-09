@@ -24,12 +24,17 @@ class DownloadRepository(
     suspend fun getFormats(
         url: String,
         cookieFile: File? = null
-    ) = ytDlpEngine.getFormats(url, cookieFile)
+    ): YtDlpEngine.FetchResult = ytDlpEngine.getFormats(url, cookieFile)
 
-    /** Metadata of the most recently fetched media (empty if the site gave none). */
-    fun lastFetchedTitle(): String = ytDlpEngine.lastFetchedTitle
-    fun lastFetchedUploader(): String = ytDlpEngine.lastFetchedUploader
-    fun lastFetchedWebpageUrl(): String = ytDlpEngine.lastFetchedWebpageUrl
+    /** Every video on the page, and the videos it links to ("whole page" mode). */
+    suspend fun getPageMedia(
+        url: String,
+        cookieFile: File? = null
+    ): YtDlpEngine.FetchResult = ytDlpEngine.getPageMedia(url, cookieFile)
+
+    /** Length, real resolution and a cover for video files found on [pageUrl]. */
+    suspend fun probePageMedia(formats: List<YtDlpEngine.FormatInfo>, pageUrl: String): List<YtDlpEngine.FormatInfo> =
+        ytDlpEngine.probePageMedia(formats, pageUrl)
 
     fun download(
         url: String,

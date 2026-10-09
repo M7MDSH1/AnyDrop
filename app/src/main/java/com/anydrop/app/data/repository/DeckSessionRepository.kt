@@ -27,14 +27,17 @@ class DeckSessionRepository @Inject constructor(
         prefs.edit().putString(KEY_URL, url).apply()
     }
 
-    /** Persist URL + the freshly fetched format list (raw, uncapped) + selection. */
-    fun saveSession(url: String, formats: List<FormatInfo>, selectedFormatId: String) {
+    /** Persist URL + the freshly fetched format list (raw, uncapped) + selection + the page's title. */
+    fun saveSession(url: String, formats: List<FormatInfo>, selectedFormatId: String, title: String = "") {
         prefs.edit()
             .putString(KEY_URL, url)
             .putString(KEY_FORMATS, formatsToJson(formats))
             .putString(KEY_SELECTED_ID, selectedFormatId)
+            .putString(KEY_TITLE, title)
             .apply()
     }
+
+    fun lastTitle(): String = prefs.getString(KEY_TITLE, "").orEmpty()
 
     fun loadFormats(): List<FormatInfo> {
         val raw = prefs.getString(KEY_FORMATS, "").orEmpty()
@@ -59,7 +62,11 @@ class DeckSessionRepository @Inject constructor(
                             directUrl = o.optString("directUrl"),
                             userAgent = o.optString("userAgent"),
                             slide = o.optInt("slide", -1),
-                            previewUrl = o.optString("previewUrl")
+                            previewUrl = o.optString("previewUrl"),
+                            durationSec = o.optInt("durationSec"),
+                            title = o.optString("title"),
+                            group = o.optString("group"),
+                            pageUrl = o.optString("pageUrl")
                         )
                     )
                 }
@@ -85,6 +92,7 @@ class DeckSessionRepository @Inject constructor(
         private const val KEY_URL = "last_url"
         private const val KEY_FORMATS = "last_formats"
         private const val KEY_SELECTED_ID = "last_selected_format"
+        private const val KEY_TITLE = "last_title"
         private const val KEY_LAST_TAB = "last_tab"
         private const val KEY_LAST_PLAYED = "last_played_media"
 
@@ -109,6 +117,11 @@ class DeckSessionRepository @Inject constructor(
                         // Carousel slides, so a restored deck still offers the whole post.
                         put("slide", f.slide)
                         put("previewUrl", f.previewUrl)
+                        // Lengths, per-video titles and whole-page grouping, so a restored deck looks the same.
+                        put("durationSec", f.durationSec)
+                        put("title", f.title)
+                        put("group", f.group)
+                        put("pageUrl", f.pageUrl)
                     }
                 )
             }

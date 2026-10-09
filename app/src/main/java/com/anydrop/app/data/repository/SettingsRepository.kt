@@ -39,6 +39,14 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getInt(KEY_MAX_QUALITY, MAX_QUALITY_BEST)
         set(value) = prefs.edit().putInt(KEY_MAX_QUALITY, value).apply()
 
+    /**
+     * What a pasted or shared link fetches: false = that link's video (the default), true = the
+     * whole page (every video on it and the videos it links to, to pick from).
+     */
+    var fetchWholePage: Boolean
+        get() = prefs.getBoolean(KEY_WHOLE_PAGE, false)
+        set(value) = prefs.edit().putBoolean(KEY_WHOLE_PAGE, value).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -71,6 +79,7 @@ class SettingsRepository @Inject constructor(
     companion object {
         private const val KEY_MAX_QUALITY = "max_quality_height"
         private const val KEY_AUTO_DETECT = "auto_detect_links"
+        private const val KEY_WHOLE_PAGE = "fetch_whole_page"
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_YTDLP_LAST_UPDATE = "ytdlp_last_update"
 

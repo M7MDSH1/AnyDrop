@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anydrop.app.R
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
+import com.anydrop.app.engine.clockText
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.MediumGray
@@ -190,6 +191,8 @@ private fun PostItemTile(item: FormatInfo, number: Int, selected: Boolean, onCli
                     .padding(2.dp)
             )
         }
+        val clock = clockText(item.durationSec)
+        if (!item.isImage && clock.isNotEmpty()) DurationBadge(clock, Modifier.align(Alignment.BottomEnd).padding(5.dp))
         Text(
             "$number",
             color = Color.White,

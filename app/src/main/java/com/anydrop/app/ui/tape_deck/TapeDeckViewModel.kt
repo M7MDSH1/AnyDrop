@@ -16,17 +16,26 @@ import com.anydrop.app.data.repository.DownloadTask
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.TaskStatus
+import com.anydrop.app.engine.MediaProbe
 import com.anydrop.app.engine.MediaSniffer
+import com.anydrop.app.engine.YtDlpEngine.FetchResult
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.YtDlpFormatParser
+import com.anydrop.app.engine.isWholePage
+import com.anydrop.app.engine.withoutRepeatsOfMain
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -59,6 +68,9 @@ class TapeDeckViewModel @Inject constructor(
     private val _availableFormats = MutableStateFlow<List<FormatInfo>>(emptyList())
     val availableFormats: StateFlow<List<FormatInfo>> = _availableFormats.asStateFlow()
 
+    /** The fetched list as it came (before the Maximum quality cap); what the session saves. */
+    private var rawFormats: List<FormatInfo> = emptyList()
+
     private val _selectedFormat = MutableStateFlow<FormatInfo?>(null)
     val selectedFormat: StateFlow<FormatInfo?> = _selectedFormat.asStateFlow()
 
@@ -68,10 +80,31 @@ class TapeDeckViewModel @Inject constructor(
     private val _autoDetectLinks = MutableStateFlow(settingsRepository.autoDetectLinks)
     val autoDetectLinks: StateFlow<Boolean> = _autoDetectLinks.asStateFlow()
 
+    /** Fetch the link's video (false) or everything on its page (true). */
+    private val _fetchWholePage = MutableStateFlow(settingsRepository.fetchWholePage)
+    val fetchWholePage: StateFlow<Boolean> = _fetchWholePage.asStateFlow()
+
+    /** Title of the fetched page / video (blank when the site gave none). */
+    private val _pageTitle = MutableStateFlow("")
+    val pageTitle: StateFlow<String> = _pageTitle.asStateFlow()
+    private var fetchedUploader = ""
+    private var fetchedWebpageUrl = ""
+
+    /** Linked videos whose qualities are being looked up (by [FormatInfo.group]). */
+    private val _resolving = MutableStateFlow<Set<String>>(emptySet())
+    val resolving: StateFlow<Set<String>> = _resolving.asStateFlow()
+
+    /** Short messages for a toast (e.g. a linked video that has nothing to download). */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
     val isCookieImported = cookieRepository.isImported
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private var searchJob: Job? = null
+    private var probeJob: Job? = null
+    /** Bumped by every fetch, so a cancelled one can't touch the state of the one after it. */
+    private var fetchGeneration = 0
 
     // Non-null when the same video is already downloaded; UI shows the
     // REPLACE / DOWNLOAD ANYWAY / CANCEL dialog. Holds the video's display title.
@@ -133,23 +166,36 @@ class TapeDeckViewModel @Inject constructor(
         val sessionUrl = deckSessionRepository.lastUrl()
         if (sessionUrl.isBlank()) return
         _url.value = sessionUrl
+        _pageTitle.value = deckSessionRepository.lastTitle()
         val formats = deckSessionRepository.loadFormats()
         if (formats.isNotEmpty()) {
+            rawFormats = formats
             _availableFormats.value = capByMaxQuality(formats)
             val selectedId = deckSessionRepository.selectedFormatId()
             _selectedFormat.value = _availableFormats.value.firstOrNull { it.id == selectedId }
         }
     }
 
-    fun onUrlChange(newUrl: String) {
-        _url.value = newUrl
+    /** Forget what was fetched for the previous link. */
+    private fun clearFetched() {
         _downloadState.value = DownloadState.Idle
         _selectedFormat.value = null
         _availableFormats.value = emptyList()
+        rawFormats = emptyList()
+        _pageTitle.value = ""
+        fetchedUploader = ""
+        fetchedWebpageUrl = ""
+        _resolving.value = emptySet()
         _duplicatePrompt.value = null
         pendingSuffixPath = null
-        deckSessionRepository.saveSession(newUrl, emptyList(), "")
+        probeJob?.cancel()
         searchJob?.cancel()
+    }
+
+    fun onUrlChange(newUrl: String) {
+        _url.value = newUrl
+        clearFetched()
+        deckSessionRepository.saveSession(newUrl, emptyList(), "")
         if (newUrl.isNotBlank()) {
             searchJob = viewModelScope.launch {
                 delay(500)
@@ -158,13 +204,26 @@ class TapeDeckViewModel @Inject constructor(
         }
     }
 
+    /** Switch between fetching the link's video and the whole page; fetches the current link again. */
+    fun setFetchWholePage(wholePage: Boolean) {
+        if (_fetchWholePage.value == wholePage) return
+        _fetchWholePage.value = wholePage
+        settingsRepository.fetchWholePage = wholePage
+        val current = _url.value
+        clearFetched()
+        if (current.isNotBlank()) {
+            deckSessionRepository.saveSession(current, emptyList(), "")
+            searchJob = viewModelScope.launch { fetchFormats() }
+        }
+    }
+
     fun selectFormat(format: FormatInfo) {
         _selectedFormat.value = format
-        deckSessionRepository.saveSession(
-            _url.value.trim(),
-            _availableFormats.value,
-            format.id
-        )
+        saveSession(format.id)
+    }
+
+    private fun saveSession(selectedId: String = _selectedFormat.value?.id.orEmpty()) {
+        deckSessionRepository.saveSession(_url.value.trim(), rawFormats, selectedId, _pageTitle.value)
     }
 
     /** User tapped "Replace" — delete the oldest copy, re-download to the base name. */
@@ -177,7 +236,7 @@ class TapeDeckViewModel @Inject constructor(
     /** User tapped "Download anyway" — save as a numbered copy (Title_1, Title_2, ...). */
     fun confirmDownloadAnyway() {
         val urlValue = _url.value.trim()
-        val title = downloadRepository.lastFetchedTitle()
+        val title = _pageTitle.value
         val quality = _selectedFormat.value?.resolution?.ifBlank { "video" } ?: "video"
         val copies = libraryRepository.findVideoCopies(urlValue, title, quality)
         pendingSuffixPath = libraryRepository.getSuffixedVideoOutputPath(urlValue, title, quality, copies)
@@ -193,13 +252,12 @@ class TapeDeckViewModel @Inject constructor(
 
     /** What the queue needs to (re)start this download. */
     private fun requestFor(format: FormatInfo, urlValue: String): DownloadRequest {
-        val webpageUrl = downloadRepository.lastFetchedWebpageUrl().ifBlank { urlValue }
         return DownloadRequest(
             url = urlValue,
             format = format,
-            title = downloadRepository.lastFetchedTitle(),
-            creator = downloadRepository.lastFetchedUploader(),
-            webpageUrl = webpageUrl,
+            title = _pageTitle.value,
+            creator = fetchedUploader,
+            webpageUrl = fetchedWebpageUrl.ifBlank { urlValue },
             // Media found on the page is fetched with the same browser session that found it.
             cookieHeader = if (format.isFromPage) MediaSniffer.cookieHeaderFor(format.directUrl) else null
         )
@@ -291,6 +349,97 @@ class TapeDeckViewModel @Inject constructor(
         downloadQueue.launchBatch(batch)
     }
 
+    /**
+     * Download what was picked from a whole-page fetch: one entry per video, in the quality
+     * chosen for it. Linked videos download from their own page (best quality when none was
+     * chosen); each video is saved under its own title when the page gave one.
+     */
+    fun downloadPageItems(chosen: List<FormatInfo>) {
+        val urlValue = _url.value.trim()
+        if (urlValue.isBlank() || chosen.isEmpty()) return
+        val used = mutableSetOf<String>()
+        val batch = chosen.mapIndexed { idx, f ->
+            val source = f.pageUrl.ifBlank { urlValue }
+            val title = f.title.ifBlank { _pageTitle.value }
+            val request = DownloadRequest(
+                url = source,
+                format = f,
+                title = title,
+                creator = if (f.pageUrl.isBlank()) fetchedUploader else "",
+                webpageUrl = f.pageUrl.ifBlank { fetchedWebpageUrl.ifBlank { urlValue } },
+                cookieHeader = if (f.isFromPage) MediaSniffer.cookieHeaderFor(f.directUrl) else null
+            )
+            val path = if (f.isImage) {
+                libraryRepository.getImageOutputPath(source, title, "img${idx + 1}")
+            } else {
+                val label = if (f.isLink) "best" else f.resolution.ifBlank { "video" }
+                val copies = libraryRepository.findVideoCopies(source, title, label)
+                if (copies.isEmpty()) libraryRepository.getOutputPath(source, title, label)
+                else libraryRepository.getSuffixedVideoOutputPath(source, title, label, copies)
+            }
+            request to uniquePath(path, used)
+        }
+        currentNotificationTag = batch.last().second
+        _downloadState.value = DownloadState.Progress(0)
+        downloadQueue.launchBatch(batch)
+    }
+
+    /** Two picks with the same title and quality would share a file: number the repeats. */
+    private fun uniquePath(path: String, used: MutableSet<String>): String {
+        var candidate = path
+        var n = 2
+        while (candidate in used) {
+            candidate = path.substringBeforeLast('.') + "_$n." + path.substringAfterLast('.')
+            n++
+        }
+        used += candidate
+        return candidate
+    }
+
+    /**
+     * Looks up the qualities of a linked video (whole-page mode) so one can be chosen. Without
+     * this the best one is picked when it downloads.
+     */
+    fun resolvePageItem(group: String) {
+        val link = rawFormats.firstOrNull { it.group == group && it.isLink } ?: return
+        if (group in _resolving.value) return
+        _resolving.update { it + group }
+        val urlValue = _url.value.trim()
+        viewModelScope.launch {
+            try {
+                val result = downloadRepository.getFormats(link.pageUrl, cookieRepository.getCookieFile().takeIf { it.exists() })
+                val videos = result.formats.filter { !it.isAudioOnly && !it.isImage }.map { f ->
+                    f.copy(
+                        group = group,
+                        pageUrl = link.pageUrl,
+                        title = result.title.ifBlank { link.title },
+                        previewUrl = f.previewUrl.ifBlank { link.previewUrl },
+                        durationSec = f.durationSec.takeIf { it > 0 } ?: link.durationSec
+                    )
+                }
+                if (videos.isEmpty()) {
+                    _messages.tryEmit(getApplication<Application>().getString(R.string.error_no_media_found))
+                    return@launch
+                }
+                val probed = if (videos.any(MediaProbe::needsProbe)) {
+                    downloadRepository.probePageMedia(videos, result.webpageUrl.ifBlank { link.pageUrl })
+                } else videos
+                if (_url.value.trim() != urlValue) return@launch
+                val at = rawFormats.indexOfFirst { it.group == group }
+                if (at < 0) return@launch
+                rawFormats = rawFormats.filterNot { it.group == group }.toMutableList().apply { addAll(at.coerceAtMost(size), probed) }
+                _availableFormats.value = capByMaxQuality(rawFormats)
+                saveSession()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _messages.tryEmit(e.message ?: getApplication<Application>().getString(R.string.error_fetch_formats))
+            } finally {
+                _resolving.update { it - group }
+            }
+        }
+    }
+
     /** STOP on the deck: stops the download this screen started most recently. */
     fun cancelDownload() {
         currentNotificationTag?.let { downloadQueue.cancel(it) }
@@ -301,47 +450,53 @@ class TapeDeckViewModel @Inject constructor(
         _downloadState.value = DownloadState.Idle
     }
 
-fun handleSharedUrl(url: String) {
-    _url.value = url
-    _downloadState.value = DownloadState.Idle
-    _selectedFormat.value = null
-    _availableFormats.value = emptyList()
-    _duplicatePrompt.value = null
-    pendingSuffixPath = null
-    deckSessionRepository.saveSession(url, emptyList(), "")
-    searchJob?.cancel()
-    viewModelScope.launch {
-        delay(200)
-        fetchFormats()
+    fun handleSharedUrl(url: String) {
+        _url.value = url
+        clearFetched()
+        deckSessionRepository.saveSession(url, emptyList(), "")
+        searchJob = viewModelScope.launch {
+            delay(200)
+            fetchFormats()
+        }
     }
-}
 
     private suspend fun fetchFormats() {
         val urlValue = _url.value.trim()
         if (urlValue.isBlank()) return
+        val wholePage = _fetchWholePage.value
+        val generation = ++fetchGeneration
         _isLoadingFormats.value = true
         _selectedFormat.value = null
         try {
-            val formats = downloadRepository.getFormats(
-                url = urlValue,
-                cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
-            )
-            _availableFormats.value = capByMaxQuality(formats)
-            // Pre-pick the best entry so RECORD works with one tap (images are picked by the user).
-            if (_selectedFormat.value == null) {
+            val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
+            val result: FetchResult = if (wholePage) {
+                downloadRepository.getPageMedia(urlValue, cookieFile)
+            } else {
+                downloadRepository.getFormats(urlValue, cookieFile)
+            }
+            if (generation != fetchGeneration) return
+            _pageTitle.value = result.title
+            fetchedUploader = result.uploader
+            fetchedWebpageUrl = result.webpageUrl
+            rawFormats = if (wholePage) result.formats.withoutRepeatsOfMain() else result.formats
+            _availableFormats.value = capByMaxQuality(rawFormats)
+            // Pre-pick the best entry so RECORD works with one tap (images are picked by the user;
+            // a whole page is picked from its list).
+            if (_selectedFormat.value == null && !wholePage) {
                 _selectedFormat.value = _availableFormats.value.firstOrNull { !it.isImage }
             }
-            deckSessionRepository.saveSession(
-                urlValue,
-                formats,
-                _selectedFormat.value?.id.orEmpty()
-            )
-            if (formats.isEmpty()) {
+            saveSession()
+            if (rawFormats.isEmpty()) {
                 _downloadState.value = DownloadState.Error(
                     getApplication<Application>().getString(R.string.error_no_media_found)
                 )
+            } else {
+                probeInBackground(urlValue, result.webpageUrl.ifBlank { urlValue })
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
+            if (generation != fetchGeneration) return
             _availableFormats.value = emptyList()
             // Surface a clear reason (e.g. "needs login / import cookies") instead of
             // silently showing an empty list.
@@ -350,26 +505,49 @@ fun handleSharedUrl(url: String) {
                     ?: getApplication<Application>().getString(R.string.error_fetch_formats)
             )
         } finally {
-            _isLoadingFormats.value = false
+            if (generation == fetchGeneration) _isLoadingFormats.value = false
+        }
+    }
+
+    /**
+     * Video files read off a page come without a length or cover; look inside them after the
+     * list is shown (it fills in as results arrive), so ads and other clips can be told apart.
+     */
+    private fun probeInBackground(urlValue: String, pageUrl: String) {
+        probeJob?.cancel()
+        if (rawFormats.none(MediaProbe::needsProbe)) return
+        val formats = rawFormats
+        probeJob = viewModelScope.launch {
+            val probed = try {
+                downloadRepository.probePageMedia(formats, pageUrl)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch
+            }
+            if (_url.value.trim() != urlValue || rawFormats !== formats) return@launch
+            rawFormats = if (probed.isWholePage) probed.withoutRepeatsOfMain() else probed
+            _availableFormats.value = capByMaxQuality(rawFormats)
+            _selectedFormat.value = _selectedFormat.value?.let { sel ->
+                _availableFormats.value.firstOrNull { it.id == sel.id && it.directUrl == sel.directUrl && it.imageUrl == sel.imageUrl }
+            }
+            saveSession()
         }
     }
 
     /**
      * Apply the "Maximum quality" setting: drop video formats above the chosen
-     * height. Audio and image entries are never capped. If the cap would remove
-     * everything (e.g. only 4K exists and the user chose 480p), keep the original
-     * list so there is still something to download.
+     * height. Audio and image entries are never capped. A video whose every quality is
+     * above the cap (e.g. only 4K exists and the user chose 480p) keeps them all, so
+     * there is still something to download.
      */
     private fun capByMaxQuality(formats: List<FormatInfo>): List<FormatInfo> {
         val max = settingsRepository.maxQualityHeight
         if (max >= SettingsRepository.MAX_QUALITY_BEST) return formats
-        val capped = formats.mapNotNull { f ->
-            // A carousel slide has one version only: capping would drop the slide itself.
-            if (f.isAudioOnly || f.isImage || f.slide >= 0) f
-            else if (YtDlpFormatParser.extractHeight(f.resolution) <= max) f
-            else null
-        }
-        return if (capped.isEmpty()) formats else capped
+        // A carousel slide or an unresolved link has one version only: capping would drop it.
+        fun fits(f: FormatInfo) = f.isAudioOnly || f.isImage || f.slide >= 0 || f.isLink ||
+            YtDlpFormatParser.extractHeight(f.resolution) <= max
+        val keepAll = formats.groupBy { it.group }.filterValues { list -> list.none(::fits) }.keys
+        return formats.filter { fits(it) || it.group in keepAll }
     }
-
 }
