@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.4.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.5.0**
 
 ---
 
@@ -21,6 +21,12 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **This video or the whole page** — a link can fetch just its video, or everything on
   its page: the page's own video in every quality, the other clips it plays and the
   videos it links to (like the suggestions under a player), to pick from.
+- **Playlists** — a YouTube playlist or mix lists all its videos (up to 200) with
+  covers and lengths; pick some or download them all, as **video or audio only**
+  (.m4a). Opening one video of a playlist offers the whole list in one tap.
+- **Torrents** — open a magnet link or a .torrent file, pick the files you want and
+  download them; AnyDrop shares pieces only while downloading and stops when it's done.
+  Download only what you have the right to download.
 - **Cover, length and quality for every video** — videos read off a page are checked
   for their real length and resolution and get a cover frame, so the real video stands
   out from ads and previews.
@@ -36,20 +42,28 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
   a page from your **history** (by day, removable, kept on the device only).
 - **Library** — browse all device videos & images, **search** (title, creator, site,
   file name — Arabic spelling variants included), filter (All / Videos / Images), sort
-  by date or length, multi-select delete, and a per-item menu (Share / Delete / Info).
+  by date or length, multi-select delete, and a per-item menu (Share / Add to collection /
+  **Rename** / Delete / Info). Files other apps made ask for Android's permission first.
 - **Favorites & collections** — tap ♡ on any photo or video (in the library or the
   player) to keep it in **Favorites**, and make your own collections (e.g. "Family"):
   select items, tap the folder button, and the collection shows only what you added.
   Rename or delete a collection with a long-press — the files themselves stay put.
-- **Audio tab** — plays device audio with background playback + media notification.
-- **Built-in player** — a smooth seek bar with live frame preview while you drag,
-  stacking double-tap seek, gestures (volume, brightness), playback speed, PiP shaped
-  like the video, aspect-ratio toggle, resume where you left off, **share the video or
-  the link it came from**, a ♡ favorite button, swipe left/right between items, and a zoomable image viewer.
+- **Audio tab** — plays device audio with background playback + media notification;
+  rename or delete songs from their menu.
+- **Built-in player** — tap the video to show or hide the controls; a smooth seek bar
+  with live frame preview while you drag, stacking double-tap seek, gestures (volume,
+  brightness), playback speed, PiP shaped like the video, aspect-ratio toggle, resume
+  where you left off, **share the video or the link it came from**, a ♡ favorite button,
+  swipe left/right between items, and a zoomable image viewer.
+- **Movie mode** — one tap on the 🎬 icon in the player: swiping left/right moves through
+  the video instead of switching videos, previous/next disappear, and Back leaves the
+  player. It stays on until you turn it off.
 - **Default video player** — AnyDrop appears in "Open with" and can be set as the
   phone's video player for files from any app.
 - **Update notifications** — AnyDrop checks this repo's releases (no account, no paid
   service) and tells you when a new version is out, then downloads and installs it in one tap.
+  Said "later" or "skip"? **Settings → Updates** keeps an **Update** button until you
+  install it, and a **Check for updates** button once you're on the latest version.
 - **English & Arabic**, with a **dark ↔ light** theme, both switchable from Settings.
 - **Optional login (cookies)** — only for private content: sign in inside the app, and
   disconnect or remove a site's session any time.
