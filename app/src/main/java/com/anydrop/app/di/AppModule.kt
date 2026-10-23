@@ -7,6 +7,7 @@ import com.anydrop.app.data.repository.DownloadTracker
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.PlaybackProgressRepository
 import com.anydrop.app.data.repository.SettingsRepository
+import com.anydrop.app.engine.TorrentEngine
 import com.anydrop.app.engine.YtDlpEngine
 import dagger.Module
 import dagger.Provides
@@ -37,8 +38,9 @@ object AppModule {
     fun provideDownloadRepository(
         @ApplicationContext context: Context,
         ytDlpEngine: YtDlpEngine,
+        torrentEngine: TorrentEngine,
         @IoDispatcher ioDispatcher: CoroutineDispatcher
-    ): DownloadRepository = DownloadRepository(context, ytDlpEngine, ioDispatcher)
+    ): DownloadRepository = DownloadRepository(context, ytDlpEngine, torrentEngine, ioDispatcher)
 
     @Provides
     @Singleton

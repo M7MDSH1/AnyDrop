@@ -68,7 +68,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.distinctPageVideos
+import com.anydrop.app.engine.torrentFileList
+import com.anydrop.app.ui.components.TorrentPicker
 import com.anydrop.app.engine.isWholePage
 import com.anydrop.app.engine.pageItems
 import com.anydrop.app.engine.postItems
@@ -271,8 +274,12 @@ fun TapeDeckScreen(
             onGo = { if (canDownload) ensureNotificationPermission { viewModel.startDownload() } }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-        FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
+        // A torrent has no page to read: the video/page switch only shows for web links.
+        val isTorrent = remember(url) { Magnet.isTorrentLink(url) }
+        if (!isTorrent) {
+            Spacer(modifier = Modifier.height(8.dp))
+            FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -289,7 +296,13 @@ fun TapeDeckScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    stringResource(if (fetchWholePage) R.string.fetching_whole_page else R.string.fetching_qualities),
+                    stringResource(
+                        when {
+                            isTorrent -> R.string.fetching_torrent
+                            fetchWholePage -> R.string.fetching_whole_page
+                            else -> R.string.fetching_qualities
+                        }
+                    ),
                     color = White.copy(alpha = 0.6f),
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
@@ -318,8 +331,16 @@ fun TapeDeckScreen(
         // photos/videos (a carousel) offers its slides, and a single video its qualities.
         val pageItems = remember(availableFormats) { if (availableFormats.isWholePage) availableFormats.pageItems() else emptyList() }
         val postItems = remember(availableFormats) { if (availableFormats.isWholePage) emptyList() else availableFormats.postItems() }
-        val multiItem = postItems.isNotEmpty() || pageItems.isNotEmpty()
-        if (pageItems.isNotEmpty()) {
+        val torrentFiles = remember(availableFormats) { availableFormats.torrentFileList() }
+        val multiItem = postItems.isNotEmpty() || pageItems.isNotEmpty() || torrentFiles.isNotEmpty()
+        if (torrentFiles.isNotEmpty()) {
+            TorrentPicker(
+                name = pageTitle,
+                files = torrentFiles,
+                onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadTorrent(chosen) } }
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        } else if (pageItems.isNotEmpty()) {
             PageMediaPicker(
                 items = pageItems,
                 pageTitle = pageTitle,
@@ -514,7 +535,7 @@ private fun formatFileSize(bytes: Long): String {
 /** Loose link heuristic for clipboard auto-detect: http(s) URL or a known platform domain. */
 private fun String.isLinkLike(): Boolean {
     val c = lowercase()
-    return c.startsWith("http://") || c.startsWith("https://") ||
+    return c.startsWith("http://") || c.startsWith("https://") || Magnet.isMagnet(c) ||
         Constants.SUPPORTED_DOMAINS.any { c.contains(it) }
 }
 

@@ -110,6 +110,13 @@ dependencies {
     implementation(libs.youtubedl.android)
     implementation(libs.youtubedl.ffmpeg)
 
+    // Torrents (magnet links, .torrent files). The ABI splits above keep each APK to its own
+    // native library; x86_64 is only for emulator builds.
+    implementation(libs.libtorrent4j)
+    implementation(libs.libtorrent4j.arm64)
+    implementation(libs.libtorrent4j.arm)
+    implementation(libs.libtorrent4j.emulator)
+
     testImplementation(libs.junit)
     // Real org.json implementation for JVM unit tests (Android's is a stub).
     testImplementation("org.json:json:20240303")

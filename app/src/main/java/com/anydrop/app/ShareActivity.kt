@@ -58,7 +58,12 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.engine.Magnet
+import com.anydrop.app.engine.TorrentEngine
+import com.anydrop.app.engine.TorrentException
 import com.anydrop.app.engine.distinctPageVideos
+import com.anydrop.app.engine.torrentFileList
+import com.anydrop.app.ui.components.TorrentPicker
 import com.anydrop.app.engine.isWholePage
 import com.anydrop.app.engine.pageItems
 import com.anydrop.app.engine.postItems
@@ -84,11 +89,14 @@ import com.anydrop.app.ui.theme.StatusRed
 import com.anydrop.app.ui.theme.White
 import com.anydrop.app.ui.settings.AppearanceViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.launch
 import com.anydrop.app.ui.theme.tracked
 
 @AndroidEntryPoint
 class ShareActivity : ComponentActivity() {
+
+    @Inject lateinit var torrentEngine: TorrentEngine
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(
@@ -118,10 +126,37 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The link to fetch: shared text (a web or magnet link in it), a magnet: link opened with
+     * AnyDrop, or a .torrent file opened with AnyDrop (read here and handed on as its magnet).
+     */
     private fun extractUrlFromIntent(intent: Intent?): String? {
-        if (intent == null || intent.action != Intent.ACTION_SEND) return null
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
-        return Regex("""https?://[^\s]+""").find(text)?.value
+        if (intent == null) return null
+        if (intent.action == Intent.ACTION_SEND) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
+            return Magnet.find(text) ?: Regex("""https?://[^\s]+""").find(text)?.value
+        }
+        if (intent.action != Intent.ACTION_VIEW) return null
+        val data = intent.data ?: return null
+        if (data.scheme.equals("magnet", ignoreCase = true)) return data.toString()
+        return try {
+            val bytes = contentResolver.openInputStream(data)?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(16 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0 || out.size() > 10 * 1024 * 1024) break
+                    out.write(buf, 0, n)
+                }
+                out.toByteArray()
+            } ?: return null
+            torrentEngine.open(bytes).second
+        } catch (e: TorrentException) {
+            Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
+            null
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 
@@ -183,6 +218,8 @@ private fun ShareSheet(
         val images = formats.filter { it.isImage && it.imageUrl.isNotBlank() }
         val videoAudio = formats.filter { !it.isImage }
         val pageItems = remember(formats) { if (formats.isWholePage) formats.pageItems() else emptyList() }
+        val torrentFiles = remember(formats) { formats.torrentFileList() }
+        val isTorrent = remember(sharedUrl) { Magnet.isTorrentLink(sharedUrl) }
         val postItems = remember(formats) { if (formats.isWholePage) emptyList() else formats.postItems() }
 
         Column(
@@ -206,8 +243,10 @@ private fun ShareSheet(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp
             )
-            Spacer(Modifier.height(12.dp))
-            FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
+            if (!isTorrent) {
+                Spacer(Modifier.height(12.dp))
+                FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
+            }
             if (formats.any { it.isFromPage } && !formats.isWholePage) {
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -234,7 +273,13 @@ private fun ShareSheet(
                             CircularProgressIndicator(color = Amber, modifier = Modifier.size(40.dp))
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                stringResource(if (fetchWholePage) R.string.fetching_whole_page else R.string.share_fetching),
+                                stringResource(
+                                    when {
+                                        isTorrent -> R.string.fetching_torrent
+                                        fetchWholePage -> R.string.fetching_whole_page
+                                        else -> R.string.share_fetching
+                                    }
+                                ),
                                 color = White.copy(alpha = 0.6f),
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp
@@ -250,6 +295,16 @@ private fun ShareSheet(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         lineHeight = 17.sp
+                    )
+                }
+
+                // A torrent: pick its files.
+                torrentFiles.isNotEmpty() -> {
+                    TorrentPicker(
+                        name = pageTitle,
+                        files = torrentFiles,
+                        onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadTorrent(chosen) } },
+                        maxListHeight = 320.dp
                     )
                 }
 

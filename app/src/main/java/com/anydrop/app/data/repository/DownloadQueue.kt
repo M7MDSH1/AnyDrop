@@ -3,12 +3,14 @@ package com.anydrop.app.data.repository
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.anydrop.app.R
 import com.anydrop.app.appDownloadScope
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.MediaSniffer
+import com.anydrop.app.engine.TorrentFileKind
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.YtDlpFormatParser
 import com.anydrop.app.service.DownloadService
@@ -134,14 +136,19 @@ class DownloadQueue @Inject constructor(
     /** Opens a finished download in whatever app handles it. */
     fun open(tag: String) {
         val task = _tasks.value.firstOrNull { it.tag == tag } ?: return
-        val file = File(task.filePath)
-        if (!file.exists()) return
         val mime = when (task.kind) {
             TaskKind.IMAGE -> "image/*"
             TaskKind.AUDIO -> "audio/*"
             TaskKind.VIDEO -> "video/*"
         }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        // Torrent files end up in the gallery only (a content:// address).
+        val uri = if (task.filePath.startsWith("content://")) {
+            Uri.parse(task.filePath)
+        } else {
+            val file = File(task.filePath)
+            if (!file.exists()) return
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -179,6 +186,7 @@ class DownloadQueue @Inject constructor(
         val format = request.format
         val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
         return when {
+            format.isTorrent -> downloadRepository.downloadTorrent(request.url, format.torrentFiles, ::torrentFolder)
             format.isLink -> linkFlow(request, outputPath, cookieFile)
             format.isImage -> downloadRepository.downloadImage(request.url, outputPath, format.id, cookieFile, format.imageUrl)
             format.isFromPage -> downloadRepository.downloadDirect(
@@ -222,6 +230,14 @@ class DownloadQueue @Inject constructor(
         emitAll(flowFor(resolved, outputPath))
     }
 
+    /** Where a torrent's finished files go, by kind (null = not kept). */
+    private fun torrentFolder(kind: TorrentFileKind): File? = when (kind) {
+        TorrentFileKind.VIDEO -> libraryRepository.getVideoDir()
+        TorrentFileKind.AUDIO -> libraryRepository.getAudioDir()
+        TorrentFileKind.IMAGE -> libraryRepository.getImageDir()
+        TorrentFileKind.OTHER -> null
+    }
+
     private fun bestVideo(formats: List<FormatInfo>): FormatInfo? {
         val videos = formats.filter { !it.isImage && !it.isAudioOnly && !it.isLink }
         val max = settingsRepository.maxQualityHeight
@@ -258,7 +274,8 @@ class DownloadQueue @Inject constructor(
                         it.copy(
                             status = TaskStatus.DONE, percent = 100, phase = "", speed = "", eta = "",
                             filePath = path,
-                            sizeText = File(path).length().takeIf { l -> l > 0 }?.let(::sizeLabel) ?: it.sizeText
+                            sizeText = (File(path).length().takeIf { l -> l > 0 } ?: state.mediaItem.fileSize.takeIf { l -> l > 0 })
+                                ?.let(::sizeLabel) ?: it.sizeText
                         )
                     }
                     DownloadService.finishDownload(context, tag, request.title.ifBlank { context.getString(R.string.download_complete) })

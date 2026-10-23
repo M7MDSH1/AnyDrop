@@ -337,4 +337,28 @@
     <string name="browser_search_copied">ابحث عن النص الذي نسخته</string>
     <string name="browser_today">اليوم</string>
     <string name="browser_yesterday">أمس</string>
+    <string name="fetching_torrent">جارٍ طلب قائمة ملفات التورنت من الأجهزة الأخرى…</string>
+    <string name="torrent_title">تورنت</string>
+    <string name="torrent_summary">الملفات: %1$d · %2$s</string>
+    <string name="torrent_no_media">لا يحتوي هذا التورنت على فيديوهات أو موسيقى أو صور للتنزيل.</string>
+    <string name="torrent_note">يُنزَّل مباشرة من أجهزة الآخرين. أثناء التنزيل يشارك AnyDrop الأجزاء التي لديه كأي تطبيق تورنت، ويتوقف عند الانتهاء. نزّل فقط ما يحق لك تنزيله.</string>
+    <string name="torrent_record">●  تسجيل (%1$d) · %2$s</string>
+    <string name="torrent_bad_link">هذا ليس رابطًا مغناطيسيًا صالحًا.</string>
+    <string name="torrent_bad_file">تعذّرت قراءة ملف التورنت هذا.</string>
+    <string name="torrent_no_peers">لم يُعثر على أحد يشارك هذا التورنت. حاول لاحقًا.</string>
+    <string name="torrent_failed">فشل تنزيل التورنت.</string>
+    <string name="torrent_unsupported">التورنت غير مدعوم على هذا الهاتف.</string>
+    <string name="torrent_finding_peers">جارٍ البحث عن أجهزة تشاركه…</string>
+    <string name="torrent_checking">جارٍ فحص الأجزاء المنزّلة…</string>
+    <string name="torrent_peers">الأجهزة المتصلة: %1$d</string>
+    <string name="torrent_saving">جارٍ الحفظ في مكتبتك…</string>
+    <string name="torrent_nothing_saved">انتهى التورنت لكن تعذّر حفظ ملفاته.</string>
+    <plurals name="torrent_other_files">
+        <item quantity="zero">لا ملفات أخرى.</item>
+        <item quantity="one">ملف آخر لن يُنزَّل (مثل الترجمة).</item>
+        <item quantity="two">ملفان آخران لن يُنزَّلا (مثل الترجمة).</item>
+        <item quantity="few">%d ملفات أخرى لن تُنزَّل (مثل الترجمة).</item>
+        <item quantity="many">%d ملفًا آخر لن يُنزَّل (مثل الترجمة).</item>
+        <item quantity="other">%d ملف آخر لن يُنزَّل (مثل الترجمة).</item>
+    </plurals>
 </resources>

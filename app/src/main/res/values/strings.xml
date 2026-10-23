@@ -337,4 +337,24 @@
     <string name="browser_search_copied">Search for the text you copied</string>
     <string name="browser_today">TODAY</string>
     <string name="browser_yesterday">YESTERDAY</string>
+    <string name="fetching_torrent">Asking other devices for the torrent\'s file list…</string>
+    <string name="torrent_title">TORRENT</string>
+    <string name="torrent_summary">Files: %1$d · %2$s</string>
+    <string name="torrent_no_media">This torrent has no videos, music or pictures to download.</string>
+    <string name="torrent_note">Downloads straight from other people\'s devices. While it runs, AnyDrop also shares the parts it has, like any torrent app, and stops when it finishes. Only download what you have the right to.</string>
+    <string name="torrent_record">●  RECORD (%1$d) · %2$s</string>
+    <string name="torrent_bad_link">That isn\'t a valid magnet link.</string>
+    <string name="torrent_bad_file">Couldn\'t read that .torrent file.</string>
+    <string name="torrent_no_peers">No one sharing this torrent could be found. Try again later.</string>
+    <string name="torrent_failed">The torrent download failed.</string>
+    <string name="torrent_unsupported">Torrents aren\'t supported on this phone.</string>
+    <string name="torrent_finding_peers">Finding peers…</string>
+    <string name="torrent_checking">Checking downloaded parts…</string>
+    <string name="torrent_peers">Peers: %1$d</string>
+    <string name="torrent_saving">Saving to your library…</string>
+    <string name="torrent_nothing_saved">The torrent finished, but none of its files could be saved.</string>
+    <plurals name="torrent_other_files">
+        <item quantity="one">+%d other file (like subtitles) isn\'t downloaded.</item>
+        <item quantity="other">+%d other files (like subtitles) aren\'t downloaded.</item>
+    </plurals>
 </resources>

@@ -138,6 +138,7 @@ import com.anydrop.app.data.repository.HistoryList
 import com.anydrop.app.data.repository.DownloadQueue
 import com.anydrop.app.data.repository.DownloadRequest
 import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.MediaCandidate
 import com.anydrop.app.engine.MediaProbe
 import com.anydrop.app.engine.MediaSniffer
@@ -205,6 +206,9 @@ class BrowserState(private val appContext: Context) {
     /** Called when a page starts a file download itself (e.g. a "download video" link). */
     var onPageDownload: ((url: String, mime: String?, contentDisposition: String?) -> Unit)? = null
 
+    /** Called when the page opens a magnet link. */
+    var onTorrentLink: ((String) -> Unit)? = null
+
     private val network = Collections.synchronizedList(mutableListOf<MediaCandidate>())
     private var pendingUrl: String? = null
     private var clearHistoryOnBlank = false
@@ -247,6 +251,10 @@ class BrowserState(private val appContext: Context) {
                             true
                         }
                         else -> false
+                    }
+                    "magnet" -> {
+                        onTorrentLink?.invoke(uri.toString())
+                        true
                     }
                     "intent" -> {
                         // Sites try to bounce you into their app; stay here and follow only a
@@ -323,6 +331,10 @@ class BrowserState(private val appContext: Context) {
     }
 
     fun load(input: String) {
+        if (Magnet.isMagnet(input.trim())) {
+            onTorrentLink?.invoke(input.trim())
+            return
+        }
         val url = toUrl(input)
         resetFindings()
         pageTitle = ""
@@ -502,8 +514,16 @@ fun BrowserScreen(
         state.load(target)
     }
 
+    // Torrents open on the deck, where their files can be picked.
+    state.onTorrentLink = onAnalyze
     // Pages that hand over a file directly (a "Download" link to an .mp4, say).
-    state.onPageDownload = { url, mime, disposition ->
+    state.onPageDownload = pageDownload@{ url, mime, disposition ->
+        val torrent = mime.equals("application/x-bittorrent", ignoreCase = true) || Magnet.isTorrentFileUrl(url) ||
+            URLUtil.guessFileName(url, disposition, mime).endsWith(".torrent", ignoreCase = true)
+        if (torrent) {
+            onAnalyze(url)
+            return@pageDownload
+        }
         val isMedia = mime?.startsWith("video/") == true || mime?.startsWith("audio/") == true ||
             MediaSniffer.classifyNetworkUrl(url) != null
         if (isMedia) {
