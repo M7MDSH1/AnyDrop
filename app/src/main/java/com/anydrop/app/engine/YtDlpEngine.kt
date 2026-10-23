@@ -89,8 +89,17 @@ class YtDlpEngine(
         /** A linked video whose qualities aren't known yet; the best one is picked when it downloads. */
         val isLink: Boolean get() = vcodec == LINK_CODEC
 
+        /** Files of a torrent (magnet link or .torrent file); [id] is "torrent:" + their indexes. */
+        val isTorrent: Boolean get() = vcodec == TORRENT_CODEC
+
+        /** Which of the torrent's files this entry downloads. */
+        val torrentFiles: Set<Int>
+            get() = if (isTorrent) id.removePrefix(TORRENT_ID).split(',').mapNotNull { it.trim().toIntOrNull() }.toSet() else emptySet()
+
         companion object {
             const val LINK_CODEC = "link"
+            const val TORRENT_CODEC = "torrent"
+            const val TORRENT_ID = "torrent:"
         }
     }
 

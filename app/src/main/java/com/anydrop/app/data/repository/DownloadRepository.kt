@@ -8,9 +8,18 @@ import android.provider.Settings
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.data.model.MediaSource
+import com.anydrop.app.R
+import com.anydrop.app.engine.TorrentEngine
+import com.anydrop.app.engine.TorrentEvent
+import com.anydrop.app.engine.TorrentException
+import com.anydrop.app.engine.TorrentFile
+import com.anydrop.app.engine.TorrentFileKind
+import com.anydrop.app.engine.TorrentMeta
 import com.anydrop.app.engine.YtDlpEngine
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.io.File
@@ -18,6 +27,7 @@ import java.io.File
 class DownloadRepository(
     private val context: Context,
     private val ytDlpEngine: YtDlpEngine,
+    private val torrentEngine: TorrentEngine,
     private val ioDispatcher: CoroutineDispatcher
 ) {
 
@@ -118,6 +128,70 @@ class DownloadRepository(
             .flowOn(ioDispatcher)
     }
 
+    /** A torrent link's files (magnet link or .torrent address), and the link downloads use. */
+    suspend fun torrentFiles(link: String): Pair<TorrentMeta, String> = torrentEngine.open(link)
+
+    /**
+     * Downloads the chosen files of a torrent. When it finishes, its videos, music and pictures
+     * go into the library folders ([folderFor]) and the public gallery like any download; a
+     * torrent's other files (subtitles, text…) are left out. The tracker shows the largest file.
+     */
+    fun downloadTorrent(link: String, files: Set<Int>, folderFor: (TorrentFileKind) -> File?): Flow<DownloadState> = flow {
+        torrentEngine.download(link, files).collect { event ->
+            when (event) {
+                is TorrentEvent.Progress -> emit(event.state)
+                is TorrentEvent.Done -> {
+                    emit(DownloadState.Progress(99, phase = context.getString(R.string.torrent_saving)))
+                    val saved = event.files.mapNotNull { saveTorrentFile(it, folderFor) }
+                    torrentEngine.cleanUp(event.workDir)
+                    val main = saved.maxByOrNull { it.fileSize }
+                    emit(
+                        if (main != null) DownloadState.Completed(main)
+                        else DownloadState.Error(context.getString(R.string.torrent_nothing_saved))
+                    )
+                }
+            }
+        }
+    }.catch { e ->
+        emit(DownloadState.Error(e.message?.takeIf { e is TorrentException } ?: context.getString(R.string.torrent_failed)))
+    }.flowOn(ioDispatcher)
+
+    /**
+     * Moves a finished torrent file into the library and the gallery. Torrents are often big, so
+     * once the gallery has its copy the private one is removed instead of keeping both.
+     */
+    private fun saveTorrentFile(file: File, folderFor: (TorrentFileKind) -> File?): MediaItem? {
+        val kind = TorrentFile(0, file.name, file.length()).kind
+        val dir = folderFor(kind) ?: return null
+        val target = freeFile(dir, file.name)
+        if (!file.renameTo(target)) {
+            file.copyTo(target)
+            file.delete()
+        }
+        val item = MediaItem(
+            id = target.nameWithoutExtension,
+            title = target.nameWithoutExtension,
+            localFilePath = target.absolutePath,
+            fileSize = target.length(),
+            isAudio = kind == TorrentFileKind.AUDIO,
+            isImage = kind == TorrentFileKind.IMAGE
+        )
+        val galleryUri = indexInMediaStore(item) ?: return item
+        target.delete()
+        return item.copy(localFilePath = galleryUri.toString(), localUri = galleryUri)
+    }
+
+    /** [name] in [dir], or "name (2).ext", "name (3).ext"… when taken. */
+    private fun freeFile(dir: File, name: String): File {
+        var candidate = File(dir, name)
+        var n = 2
+        while (candidate.exists()) {
+            candidate = File(dir, "${name.substringBeforeLast('.')} ($n).${name.substringAfterLast('.', "")}".trimEnd('.'))
+            n++
+        }
+        return candidate
+    }
+
     /** Stops one download (by its output path), or all of them when [tag] is null. */
     fun cancelDownload(tag: String? = null) {
         ytDlpEngine.cancel(tag)
@@ -156,32 +230,35 @@ class DownloadRepository(
      * Works on Android 10+ with NO storage permission. On Android 9- it falls back
      * to scanning the file path.
      */
-    private fun indexInMediaStore(item: MediaItem) {
+    private fun indexInMediaStore(item: MediaItem): android.net.Uri? {
         try {
             val file = File(item.localFilePath)
             if (!file.exists()) {
                 android.util.Log.w("MediaExport", "File missing, cannot export: ${item.localFilePath}")
-                return
+                return null
             }
 
             val ext = file.extension.lowercase()
+            // The system's own type for the extension (e.g. video/x-matroska for .mkv), else a guess.
+            val known = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
             val mime = when {
-                item.isImage -> "image/${if (ext == "jpg") "jpeg" else ext.ifBlank { "jpeg" }}"
-                item.isAudio -> if (ext == "m4a") "audio/mp4" else "audio/$ext"
-                else -> "video/${ext.ifBlank { "mp4" }}"
+                item.isImage -> if (ext == "jpg") "image/jpeg" else known ?: "image/${ext.ifBlank { "jpeg" }}"
+                item.isAudio -> if (ext == "m4a") "audio/mp4" else known ?: "audio/$ext"
+                else -> known?.takeIf { it.startsWith("video/") } ?: "video/${ext.ifBlank { "mp4" }}"
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                exportToMediaStore(file, mime, item)
+                return exportToMediaStore(file, mime, item)
             } else {
                 // Legacy: file is already on public storage; just scan it.
                 MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), arrayOf(mime), null)
             }
         } catch (_: Exception) {}
+        return null
     }
 
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
-    private fun exportToMediaStore(file: File, mime: String, item: MediaItem) {
+    private fun exportToMediaStore(file: File, mime: String, item: MediaItem): android.net.Uri? {
         val resolver = context.contentResolver
         val subDir = "AnyDrop"
 
@@ -216,7 +293,7 @@ class DownloadRepository(
         val uri = resolver.insert(collection, values)
         if (uri == null) {
             android.util.Log.w("MediaExport", "insert() returned null for ${file.name} ($mime) into $relativeBase/$subDir")
-            return
+            return null
         }
         try {
             resolver.openOutputStream(uri)?.use { out ->
@@ -227,9 +304,11 @@ class DownloadRepository(
             }
             resolver.update(uri, done, null, null)
             android.util.Log.i("MediaExport", "Exported ${file.name} -> $uri")
+            return uri
         } catch (e: Exception) {
             android.util.Log.w("MediaExport", "Export copy failed for ${file.name}", e)
             resolver.delete(uri, null, null)
+            return null
         }
     }
 

@@ -27,3 +27,9 @@
 -keep class androidx.media3.** { *; }
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# --- libtorrent4j (torrents) ---
+# The native library calls back into its SWIG-generated Java classes by name (alerts,
+# directors); renaming or removing any of them crashes torrents in release builds only.
+-keep class org.libtorrent4j.** { *; }
+-dontwarn org.libtorrent4j.**

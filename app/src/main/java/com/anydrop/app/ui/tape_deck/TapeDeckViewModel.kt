@@ -16,7 +16,11 @@ import com.anydrop.app.data.repository.DownloadTask
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.TaskStatus
+import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.MediaProbe
+import com.anydrop.app.engine.TorrentFile
+import com.anydrop.app.engine.asDownload
+import com.anydrop.app.engine.toFormat
 import com.anydrop.app.engine.MediaSniffer
 import com.anydrop.app.engine.YtDlpEngine.FetchResult
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
@@ -384,6 +388,22 @@ class TapeDeckViewModel @Inject constructor(
         downloadQueue.launchBatch(batch)
     }
 
+    /**
+     * Downloads the chosen files of the torrent on the deck as one tracker entry; its videos,
+     * music and pictures land in the library when it finishes.
+     */
+    fun downloadTorrent(files: List<TorrentFile>) {
+        val link = _url.value.trim()
+        if (link.isBlank() || files.isEmpty()) return
+        val title = _pageTitle.value.ifBlank { files.maxBy { it.size }.name.substringBeforeLast('.') }
+        val format = files.asDownload(title)
+        // One tracker entry per torrent: starting the same torrent again replaces it.
+        launch(
+            DownloadRequest(url = link, format = format, title = title),
+            libraryRepository.getOutputPath(link, title, "torrent")
+        )
+    }
+
     /** Two picks with the same title and quality would share a file: number the repeats. */
     private fun uniquePath(path: String, used: MutableSet<String>): String {
         var candidate = path
@@ -469,10 +489,13 @@ class TapeDeckViewModel @Inject constructor(
         _selectedFormat.value = null
         try {
             val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
-            val result: FetchResult = if (wholePage) {
-                downloadRepository.getPageMedia(urlValue, cookieFile)
-            } else {
-                downloadRepository.getFormats(urlValue, cookieFile)
+            val result: FetchResult = when {
+                // A torrent: its files instead of qualities (the page modes don't apply).
+                Magnet.isTorrentLink(urlValue) -> downloadRepository.torrentFiles(urlValue).let { (meta, _) ->
+                    FetchResult(meta.files.map { it.toFormat(meta.name) }, title = meta.name)
+                }
+                wholePage -> downloadRepository.getPageMedia(urlValue, cookieFile)
+                else -> downloadRepository.getFormats(urlValue, cookieFile)
             }
             if (generation != fetchGeneration) return
             _pageTitle.value = result.title
@@ -481,8 +504,8 @@ class TapeDeckViewModel @Inject constructor(
             rawFormats = if (wholePage) result.formats.withoutRepeatsOfMain() else result.formats
             _availableFormats.value = capByMaxQuality(rawFormats)
             // Pre-pick the best entry so RECORD works with one tap (images are picked by the user;
-            // a whole page is picked from its list).
-            if (_selectedFormat.value == null && !wholePage) {
+            // a whole page or a torrent is picked from its list).
+            if (_selectedFormat.value == null && !wholePage && rawFormats.none { it.isTorrent }) {
                 _selectedFormat.value = _availableFormats.value.firstOrNull { !it.isImage }
             }
             saveSession()
@@ -544,8 +567,9 @@ class TapeDeckViewModel @Inject constructor(
     private fun capByMaxQuality(formats: List<FormatInfo>): List<FormatInfo> {
         val max = settingsRepository.maxQualityHeight
         if (max >= SettingsRepository.MAX_QUALITY_BEST) return formats
-        // A carousel slide or an unresolved link has one version only: capping would drop it.
-        fun fits(f: FormatInfo) = f.isAudioOnly || f.isImage || f.slide >= 0 || f.isLink ||
+        // A carousel slide, an unresolved link or a torrent file has one version only: capping
+        // would drop it.
+        fun fits(f: FormatInfo) = f.isAudioOnly || f.isImage || f.slide >= 0 || f.isLink || f.isTorrent ||
             YtDlpFormatParser.extractHeight(f.resolution) <= max
         val keepAll = formats.groupBy { it.group }.filterValues { list -> list.none(::fits) }.keys
         return formats.filter { fits(it) || it.group in keepAll }
