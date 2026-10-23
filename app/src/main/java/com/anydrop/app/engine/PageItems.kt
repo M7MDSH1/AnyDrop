@@ -20,6 +20,25 @@ data class PageItem(val key: String, val formats: List<FormatInfo>) {
 /** Whole-page results (entries carry a [FormatInfo.group]). */
 val List<FormatInfo>.isWholePage: Boolean get() = any { it.group.isNotBlank() }
 
+/** The videos of a playlist (see [YtDlpEngine.getPlaylist]). */
+val List<FormatInfo>.isPlaylist: Boolean get() = any { it.group.startsWith(YtDlpEngine.PLAYLIST_GROUP) }
+
+/** The same video, saved as its sound only (.m4a). */
+fun FormatInfo.asAudio(): FormatInfo = FormatInfo(
+    id = "bestaudio",
+    extension = "m4a",
+    resolution = "Audio",
+    filesize = 0L,
+    vcodec = "none",
+    acodec = "audio",
+    isAudioOnly = true,
+    previewUrl = previewUrl,
+    durationSec = durationSec,
+    title = title,
+    group = group,
+    pageUrl = pageUrl
+)
+
 /** The videos and photos of a whole-page fetch, in the order found (the page's own video first). */
 fun List<FormatInfo>.pageItems(): List<PageItem> =
     filter { it.group.isNotBlank() && !it.isAudioOnly }

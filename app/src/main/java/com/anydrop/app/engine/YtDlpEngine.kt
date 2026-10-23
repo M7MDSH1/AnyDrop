@@ -45,6 +45,10 @@ class YtDlpEngine(
         private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
         private val VIDEO_EXTS = listOf("mp4", "mkv", "webm", "mov", "m4v")
         private val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
+        /** The most videos listed from one playlist. */
+        private const val MAX_PLAYLIST = 200
+        /** [FormatInfo.group] prefix of a playlist's videos ("playlist:" + the video's link). */
+        const val PLAYLIST_GROUP = "playlist:"
         /** [FormatInfo.group] of the page's own video in whole-page results. */
         const val MAIN_GROUP = "main"
 
@@ -197,9 +201,14 @@ class YtDlpEngine(
     private fun YoutubeDLRequest.applyCommonOptions(
         cookieFile: File?,
         youtubeClient: String? = null,
-        isTiktok: Boolean = false
+        isTiktok: Boolean = false,
+        url: String? = null,
+        mobileAgent: Boolean = true
     ) {
         addOption("--no-update")
+        // A link to a video inside a playlist (…watch?v=…&list=…) means that video: without
+        // this, yt-dlp would fetch or download the whole list.
+        if (url != null && Playlists.hasList(url)) addOption("--no-playlist")
         if (isTiktok) {
             // Current yt-dlp TikTok extractor ONLY tries its mobile API (which needs
             // no TLS impersonation) when a runtime config arg is present; otherwise it
@@ -211,7 +220,7 @@ class YtDlpEngine(
             // No manual UA/Referer/Origin headers here: the API sets its own app UA,
             // and extraneous headers aimed at the tiktokv.com API can trip its WAF.
             addOption("--extractor-args", "tiktok:app_info=/musical_ly/35.1.3/2023501030/0")
-        } else {
+        } else if (mobileAgent) {
             addOption("--user-agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36")
         }
         addOption("--extractor-retries", "5")
@@ -373,6 +382,53 @@ class YtDlpEngine(
         )
     }
 
+    /**
+     * The videos of a playlist (a YouTube playlist or mix, a channel's list…), listed without
+     * opening each one: title, length and thumbnail. Each is a linked entry ([FormatInfo.isLink]),
+     * so its qualities are looked up when it is picked or downloaded. Null when [url] isn't a
+     * playlist (or yt-dlp can't list it).
+     */
+    suspend fun getPlaylist(url: String, cookieFile: File? = null): FetchResult? = withContext(Dispatchers.IO) {
+        val request = YoutubeDLRequest(url)
+        // yt-dlp's own desktop agent: YouTube's mobile pages leave a mix's videos out.
+        request.applyCommonOptions(cookieFile, isTiktok = isTiktokUrl(url), mobileAgent = false)
+        request.addOption("--flat-playlist")
+        request.addOption("-J")
+        request.addOption("--no-warnings")
+        // Mixes never end; a few hundred videos is plenty to pick from.
+        request.addOption("--playlist-end", MAX_PLAYLIST.toString())
+        val out = try {
+            YoutubeDL.getInstance().execute(request).out
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Couldn't list the playlist", e)
+            return@withContext null
+        }
+        val playlist = Playlists.parse(out)?.takeIf { it.entries.isNotEmpty() } ?: return@withContext null
+        Log.i(TAG, "Playlist \"${playlist.title}\": ${playlist.entries.size} videos")
+        FetchResult(
+            formats = playlist.entries.map { e ->
+                FormatInfo(
+                    id = "",
+                    extension = "mp4",
+                    resolution = "Best",
+                    filesize = 0L,
+                    vcodec = FormatInfo.LINK_CODEC,
+                    acodec = FormatInfo.LINK_CODEC,
+                    previewUrl = e.thumbnail.orEmpty(),
+                    durationSec = e.durationSec,
+                    title = e.title,
+                    group = PLAYLIST_GROUP + e.url,
+                    pageUrl = e.url
+                )
+            },
+            title = playlist.title,
+            uploader = playlist.uploader,
+            webpageUrl = url
+        )
+    }
+
     /** Fills in length, real resolution and a cover for media found on [pageUrl] (see [MediaProbe]). */
     suspend fun probePageMedia(formats: List<FormatInfo>, pageUrl: String): List<FormatInfo> =
         MediaProbe.fill(context, formats, pageUrl)
@@ -418,7 +474,7 @@ class YtDlpEngine(
 
             for ((index, client) in clients.withIndex()) {
                 val request = YoutubeDLRequest(url)
-                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
                 try {
                     val info = YoutubeDL.getInstance().getInfo(request)
                     val title = info.title?.trim().orEmpty()
@@ -616,7 +672,7 @@ class YtDlpEngine(
         if (carousel.isNotEmpty()) return carousel
         return try {
             val request = YoutubeDLRequest(url)
-            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
             request.addOption("--ignore-no-formats-error")
             request.addOption("--skip-download")
             val info = YoutubeDL.getInstance().getInfo(request)
@@ -640,7 +696,7 @@ class YtDlpEngine(
     ): List<FormatInfo> {
         return try {
             val request = YoutubeDLRequest(url)
-            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
             request.addOption("-J")                    // dump single JSON (whole playlist)
             request.addOption("--ignore-no-formats-error")
             request.addOption("--no-warnings")
@@ -690,7 +746,7 @@ class YtDlpEngine(
                 if (tag in cancelled) break@outer
 
                 val request = YoutubeDLRequest(url)
-                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
                 request.addOption("-f", fmt)
                 request.addOption("-o", outputPath)
 
@@ -774,7 +830,7 @@ class YtDlpEngine(
             if (succeeded || tag in cancelled) break
 
             val request = YoutubeDLRequest(url)
-            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
             if (ffmpegUsable) {
                 request.addOption("-f", "bestaudio/best")
                 request.addOption("-x")                       // extract audio
@@ -894,7 +950,7 @@ class YtDlpEngine(
             if (succeeded || tag in cancelled) break
 
             val request = YoutubeDLRequest(url)
-            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+            request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
             request.addOption("-f", formatId.ifBlank { "best" })
             request.addOption("-o", "$outBase.%(ext)s")
 
@@ -1140,7 +1196,7 @@ class YtDlpEngine(
             if (tag in cancelled) return null
             try {
                 val request = YoutubeDLRequest(url)
-                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok)
+                request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
                 request.addOption("-f", formatId)
                 request.addOption("-o", outputPath)
 

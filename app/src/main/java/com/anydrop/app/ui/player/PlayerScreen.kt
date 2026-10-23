@@ -43,7 +43,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
@@ -55,9 +54,11 @@ import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -76,13 +77,18 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -151,6 +157,7 @@ fun PlayerScreen(
     // The heart; null hides it (a file from another app isn't in the library).
     val isFavorite by viewModel.isFavorite.collectAsState()
     val favorite: Boolean? = if (externalFile) null else isFavorite
+    val movieMode by viewModel.movieMode.collectAsState()
 
     // ---- Delete flow (video / image / audio) -------------------------------
     // Confirm → delete → advance to the neighbouring item, or exit when the
@@ -256,11 +263,13 @@ fun PlayerScreen(
         return
     }
 
+    // Movie mode: a swipe seeks within the video (VideoPlayerContent) instead of changing it.
     SwipeableContent(
         hasNext = nextMediaId != null,
         hasPrevious = previousMediaId != null,
         onNext = { nextMediaId?.let(onNavigateToMedia) },
-        onPrevious = { previousMediaId?.let(onNavigateToMedia) }
+        onPrevious = { previousMediaId?.let(onNavigateToMedia) },
+        swipeEnabled = !movieMode
     ) {
         VideoPlayerContent(
             uri = uri,
@@ -274,7 +283,9 @@ fun PlayerScreen(
             title = if (externalFile) currentMedia!!.title else null,
             shareItem = currentMedia!!,
             favorite = favorite,
-            onToggleFavorite = viewModel::toggleFavorite
+            onToggleFavorite = viewModel::toggleFavorite,
+            movieMode = movieMode,
+            onToggleMovieMode = viewModel::toggleMovieMode
         )
     }
 }
@@ -577,9 +588,17 @@ private fun VideoPlayerContent(
     title: String? = null,
     shareItem: com.anydrop.app.data.model.MediaItem? = null,
     favorite: Boolean? = null,
-    onToggleFavorite: () -> Unit = {}
+    onToggleFavorite: () -> Unit = {},
+    movieMode: Boolean = false,
+    onToggleMovieMode: () -> Unit = {}
 ) {
     val context: Context = activity
+    // Movie mode keeps the viewer on this video: no previous/next (buttons, PiP actions,
+    // auto-advance at the end).
+    val canPrevious = hasPrevious && !movieMode
+    val canNext = hasNext && !movieMode
+    val autoAdvance by rememberUpdatedState(canNext)
+    val currentOnNext by rememberUpdatedState(onNext)
 
     val player = remember {
         // HW decoders first (default); fall back to bundled SW/FFmpeg decoders
@@ -629,6 +648,10 @@ private fun VideoPlayerContent(
     var showSeekFeedback by remember { mutableStateOf<String?>(null) }
     // Which side the feedback shows on: -1 left (rewind), 1 right (forward), 0 centre.
     var seekFeedbackSide by remember { mutableIntStateOf(0) }
+    // How long the feedback stays: a seek is read at a glance, a sentence needs longer.
+    var feedbackHoldMs by remember { mutableLongStateOf(700L) }
+    // Movie mode's swipe-to-seek: where the swipe started (null when not swiping).
+    var swipeSeekFrom by remember { mutableStateOf<Long?>(null) }
     var volume by remember { mutableFloatStateOf(context.getSystemVolume()) }
     var brightness by remember { mutableFloatStateOf(context.getScreenBrightness()) }
     var showVolumeFeedback by remember { mutableStateOf(false) }
@@ -661,6 +684,22 @@ private fun VideoPlayerContent(
         hideHandler.postDelayed(hideRunnable, 3000)
     }
 
+    /** A tap on the video shows the controls, or hides them when they're up. */
+    fun toggleControls() {
+        if (showControls) {
+            hideHandler.removeCallbacks(hideRunnable)
+            showControls = false
+        } else {
+            resetHideTimer()
+        }
+    }
+
+    fun showFeedback(text: String, holdMs: Long = 700L) {
+        seekFeedbackSide = 0
+        feedbackHoldMs = holdMs
+        showSeekFeedback = text
+    }
+
     fun seekBy(direction: Int) {
         val now = SystemClock.uptimeMillis()
         seekStreakSeconds =
@@ -671,6 +710,7 @@ private fun VideoPlayerContent(
         val end = player.duration
         player.seekTo(if (end > 0L) target.coerceIn(0L, end) else target.coerceAtLeast(0L))
         seekFeedbackSide = direction
+        feedbackHoldMs = 700L
         showSeekFeedback = context.getString(
             if (direction < 0) R.string.seek_back_feedback else R.string.seek_forward_feedback,
             seekStreakSeconds
@@ -742,7 +782,7 @@ private fun VideoPlayerContent(
                     }
                     Player.STATE_ENDED -> {
                         viewModel.complete()
-                        if (hasNext) onNext()
+                        if (autoAdvance) currentOnNext()
                     }
                 }
             }
@@ -771,7 +811,7 @@ private fun VideoPlayerContent(
 
     LaunchedEffect(showSeekFeedback) {
         if (showSeekFeedback != null) {
-            delay(700)
+            delay(feedbackHoldMs)
             showSeekFeedback = null
         }
     }
@@ -792,10 +832,10 @@ private fun VideoPlayerContent(
     // Keep the PiP action buttons in sync with play state / navigation availability.
     fun refreshPipParams() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            updatePipParams(activity, player.pipAspectRatio(), isPlaying, hasPrevious, hasNext)
+            updatePipParams(activity, player.pipAspectRatio(), isPlaying, canPrevious, canNext)
         }
     }
-    LaunchedEffect(isPlaying, hasNext, hasPrevious, isInPipMode) {
+    LaunchedEffect(isPlaying, canNext, canPrevious, isInPipMode) {
         if (isInPipMode) refreshPipParams()
     }
 
@@ -848,12 +888,12 @@ private fun VideoPlayerContent(
 
     // Auto-enter PiP ONLY when the user genuinely leaves the app (Home/recents),
     // via MainActivity.onUserLeaveHint — never on Back or in-app navigation (skip).
-    DisposableEffect(hasNext, hasPrevious) {
+    DisposableEffect(canNext, canPrevious) {
         PipLeaveHandler.onUserLeave = {
             if (player.isPlaying && !activity.isInPictureInPictureModeCompat() &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ) {
-                enterPip(activity, player.pipAspectRatio(), isPlaying = true, hasPrevious = hasPrevious, hasNext = hasNext)
+                enterPip(activity, player.pipAspectRatio(), isPlaying = true, hasPrevious = canPrevious, hasNext = canNext)
             }
         }
         onDispose { PipLeaveHandler.onUserLeave = null }
@@ -905,9 +945,38 @@ private fun VideoPlayerContent(
 
         // Gesture halves kept LTR in every locale: double-tap left = back 10s,
         // right = forward 10s (coherent with the LTR seek bar), and the vertical
-        // drags stay brightness-left / volume-right.
+        // drags stay brightness-left / volume-right. In movie mode a sideways swipe
+        // seeks (right = forward), a full screen width being SWIPE_SEEK_SCREEN_MS.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(movieMode) {
+                        if (!movieMode) return@pointerInput
+                        var dragPx = 0f
+                        fun finish() {
+                            swipeSeekFrom = null
+                            endScrub(scrubTarget)
+                        }
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                dragPx = 0f
+                                beginScrub()
+                                swipeSeekFrom = scrubTarget
+                            },
+                            onHorizontalDrag = { change, amount ->
+                                change.consume()
+                                dragPx += amount
+                                val from = swipeSeekFrom ?: return@detectHorizontalDragGestures
+                                val target = from + (dragPx / size.width * SWIPE_SEEK_SCREEN_MS).toLong()
+                                val end = player.duration
+                                scrubTarget = if (end > 0L) target.coerceIn(0L, end) else target.coerceAtLeast(0L)
+                            },
+                            onDragEnd = { finish() },
+                            onDragCancel = { finish() }
+                        )
+                    }
+            ) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -915,7 +984,7 @@ private fun VideoPlayerContent(
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = { seekBy(-1) },
-                                onTap = { resetHideTimer() }
+                                onTap = { toggleControls() }
                             )
                         }
                         .pointerInput(Unit) {
@@ -935,7 +1004,7 @@ private fun VideoPlayerContent(
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = { seekBy(1) },
-                                onTap = { resetHideTimer() }
+                                onTap = { toggleControls() }
                             )
                         }
                         .pointerInput(Unit) {
@@ -1010,9 +1079,11 @@ private fun VideoPlayerContent(
                     }
                 )
                 .padding(horizontal = 28.dp)
-                // Side feedback sits above the previous/next buttons, not on them.
-                .offset(y = if (seekFeedbackSide != 0) (-104).dp else 0.dp)
+                // Feedback sits above the play/previous/next buttons, not on them.
+                .offset(y = (-104).dp)
         ) {
+            // A sentence (e.g. movie mode's hint) gets smaller type than a seek jump.
+            val sentence = feedbackHoldMs > 700L
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
@@ -1022,10 +1093,32 @@ private fun VideoPlayerContent(
                 Text(
                     showSeekFeedback ?: "",
                     color = Color.White,
-                    fontSize = 22.sp,
+                    fontSize = if (sentence) 15.sp else 22.sp,
+                    textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
                     // LTR so the arrows keep pointing the way the video moves; an RTL
-                    // paragraph would mirror » into «.
+                    // paragraph would mirror » into «. A sentence reads in its own direction.
+                    style = TextStyle(textDirection = if (sentence) TextDirection.Content else TextDirection.Ltr)
+                )
+            }
+        }
+
+        // Movie mode's swipe-to-seek: how far the swipe moves and where it lands.
+        swipeSeekFrom?.let { from ->
+            val delta = scrubTarget - from
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    (if (delta < 0) "−" else "+") + kotlin.math.abs(delta).toTimeString() +
+                        "  ·  " + scrubTarget.toTimeString(),
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
                     style = TextStyle(textDirection = TextDirection.Ltr)
                 )
             }
@@ -1081,11 +1174,13 @@ private fun VideoPlayerContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
+                        // A light dim in the middle keeps the bare play/skip icons readable
+                        // on bright frames.
                         Brush.verticalGradient(
                             listOf(
                                 Color.Black.copy(alpha = 0.5f),
-                                Color.Transparent,
-                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.2f),
+                                Color.Black.copy(alpha = 0.2f),
                                 Color.Black.copy(alpha = 0.8f)
                             )
                         )
@@ -1136,9 +1231,7 @@ private fun VideoPlayerContent(
                     }
                     IconButton(onClick = {
                         resizeModeIndex = (resizeModeIndex + 1) % resizeModes.size
-                        seekFeedbackSide = 0
-                        showSeekFeedback = resizeModes[resizeModeIndex].second
-                        hideHandler.postDelayed({ showSeekFeedback = null }, 700)
+                        showFeedback(resizeModes[resizeModeIndex].second)
                         resetHideTimer()
                     }) {
                         Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = OnVideo)
@@ -1148,7 +1241,7 @@ private fun VideoPlayerContent(
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         IconButton(onClick = {
-                            enterPip(activity, player.pipAspectRatio(), isPlaying, hasPrevious, hasNext); resetHideTimer()
+                            enterPip(activity, player.pipAspectRatio(), isPlaying, canPrevious, canNext); resetHideTimer()
                         }) {
                             Icon(Icons.Default.PictureInPicture, contentDescription = stringResource(R.string.player_pip), tint = OnVideo)
                         }
@@ -1160,29 +1253,26 @@ private fun VideoPlayerContent(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .graphicsLayer { alpha = chromeAlpha },
-                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(32.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = {
-                                onPrevious()
-                                resetHideTimer()
-                            },
-                            enabled = hasPrevious,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (hasPrevious) Color.Black.copy(alpha = 0.5f)
-                                    else Color.Black.copy(alpha = 0.2f)
+                        // Movie mode hides previous/next: the viewer stays on this video.
+                        if (!movieMode) {
+                            IconButton(
+                                onClick = {
+                                    onPrevious()
+                                    resetHideTimer()
+                                },
+                                enabled = hasPrevious,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                ShadowedIcon(
+                                    imageVector = Icons.Default.SkipPrevious,
+                                    contentDescription = stringResource(R.string.player_previous),
+                                    tint = if (hasPrevious) OnVideo else OnVideo.copy(alpha = 0.3f),
+                                    size = 40.dp
                                 )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipPrevious,
-                                contentDescription = stringResource(R.string.player_previous),
-                                tint = if (hasPrevious) OnVideo else OnVideo.copy(alpha = 0.3f),
-                                modifier = Modifier.size(28.dp)
-                            )
+                            }
                         }
 
                         IconButton(
@@ -1190,39 +1280,32 @@ private fun VideoPlayerContent(
                                 if (player.isPlaying) player.pause() else player.play()
                                 resetHideTimer()
                             },
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.5f))
+                            modifier = Modifier.size(80.dp)
                         ) {
-                            Icon(
+                            ShadowedIcon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.player_play_pause),
                                 tint = OnVideo,
-                                modifier = Modifier.size(42.dp)
+                                size = 60.dp
                             )
                         }
 
-                        IconButton(
-                            onClick = {
-                                onNext()
-                                resetHideTimer()
-                            },
-                            enabled = hasNext,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (hasNext) Color.Black.copy(alpha = 0.5f)
-                                    else Color.Black.copy(alpha = 0.2f)
+                        if (!movieMode) {
+                            IconButton(
+                                onClick = {
+                                    onNext()
+                                    resetHideTimer()
+                                },
+                                enabled = hasNext,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                ShadowedIcon(
+                                    imageVector = Icons.Default.SkipNext,
+                                    contentDescription = stringResource(R.string.player_next),
+                                    tint = if (hasNext) OnVideo else OnVideo.copy(alpha = 0.3f),
+                                    size = 40.dp
                                 )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = stringResource(R.string.player_next),
-                                tint = if (hasNext) OnVideo else OnVideo.copy(alpha = 0.3f),
-                                modifier = Modifier.size(28.dp)
-                            )
+                            }
                         }
                     }
                 }
@@ -1282,6 +1365,22 @@ private fun VideoPlayerContent(
                     ) {
                         IconButton(
                             onClick = {
+                                onToggleMovieMode()
+                                showFeedback(
+                                    context.getString(if (movieMode) R.string.movie_mode_off else R.string.movie_mode_on),
+                                    holdMs = 1800L
+                                )
+                                resetHideTimer()
+                            }
+                        ) {
+                            Icon(
+                                if (movieMode) Icons.Filled.Movie else Icons.Outlined.Movie,
+                                contentDescription = stringResource(R.string.player_movie_mode),
+                                tint = if (movieMode) VideoAccent else OnVideo.copy(alpha = 0.4f)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
                                 repeatOne = !repeatOne
                                 resetHideTimer()
                             }
@@ -1339,6 +1438,29 @@ private fun VideoPlayerContent(
 private val OnVideo = Color.White
 private val VideoAccent = DarkPalette.accent
 private val VideoMenu = DarkPalette.surface
+
+/** Movie mode: how far a swipe across the whole screen seeks. */
+private const val SWIPE_SEEK_SCREEN_MS = 90_000f
+
+/**
+ * A play/skip icon without a backdrop: a soft dark shadow under it keeps it readable on
+ * bright frames (blurred from Android 12; a plain offset shadow before that).
+ */
+@Composable
+private fun ShadowedIcon(imageVector: ImageVector, contentDescription: String?, tint: Color, size: Dp) {
+    Box {
+        Icon(
+            imageVector,
+            contentDescription = null,
+            tint = Color.Black.copy(alpha = 0.5f * tint.alpha),
+            modifier = Modifier
+                .size(size)
+                .offset(y = 1.dp)
+                .blur(3.dp, BlurredEdgeTreatment.Unbounded)
+        )
+        Icon(imageVector, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size))
+    }
+}
 
 /** The player's heart: red when the item is a favorite. */
 @Composable

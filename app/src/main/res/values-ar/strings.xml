@@ -207,6 +207,9 @@
     <string name="player_speed_1x">سرعة 1×</string>
     <string name="player_speed_normal">عادي (1×)</string>
     <string name="player_repeat_one">تكرار المقطع</string>
+    <string name="player_movie_mode">وضع الفيلم</string>
+    <string name="movie_mode_on">وضع الفيلم مفعّل: اسحب يمينًا أو يسارًا للتنقل داخل الفيديو</string>
+    <string name="movie_mode_off">تم إيقاف وضع الفيلم</string>
     <string name="resize_fit">ملاءمة</string>
     <string name="resize_fill">تمديد</string>
     <string name="resize_zoom">تكبير</string>
@@ -361,4 +364,25 @@
         <item quantity="many">%d ملفًا آخر لن يُنزَّل (مثل الترجمة).</item>
         <item quantity="other">%d ملف آخر لن يُنزَّل (مثل الترجمة).</item>
     </plurals>
+    <string name="menu_rename">إعادة تسمية</string>
+    <string name="rename_title">إعادة التسمية</string>
+    <string name="rename_hint">الاسم الجديد</string>
+    <string name="rename_done">تمت إعادة التسمية</string>
+    <string name="rename_invalid">اكتب اسمًا للملف.</string>
+    <string name="rename_taken">يوجد ملف بهذا الاسم بالفعل.</string>
+    <string name="rename_failed">تعذّرت إعادة تسمية هذا الملف.</string>
+    <string name="fetching_playlist">جارٍ قراءة قائمة التشغيل…</string>
+    <string name="playlist_count">قائمة التشغيل · %1$d</string>
+    <string name="playlist_hint">اختر الفيديوهات التي تريد تنزيلها، أو نزّلها كلها.</string>
+    <string name="playlist_as_video">فيديو</string>
+    <string name="playlist_as_audio">صوت فقط</string>
+    <string name="playlist_offer">هذا الفيديو جزء من قائمة تشغيل.</string>
+    <string name="playlist_offer_button">عرض القائمة كاملة</string>
+    <string name="progress_queued">في الانتظار…</string>
+    <string name="update_status_idle">لديك الإصدار %1$s.</string>
+    <string name="update_status_available">الإصدار %1$s جاهز للتثبيت (لديك %2$s).</string>
+    <string name="update_status_failed">تعذّر الاتصال بـ GitHub. تحقّق من الاتصال وحاول مجددًا.</string>
+    <string name="update_button_update">التحديث إلى %1$s</string>
+    <string name="update_button_check">التحقق من التحديثات</string>
+    <string name="update_button_checking">جارٍ التحقق…</string>
 </resources>

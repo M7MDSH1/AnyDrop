@@ -93,6 +93,7 @@ import com.anydrop.app.data.repository.SortMode
 import com.anydrop.app.ui.components.DeleteConfirmDialog
 import com.anydrop.app.ui.components.MediaInfoDialog
 import com.anydrop.app.ui.components.MediaItemDropdown
+import com.anydrop.app.ui.components.MediaRenameHost
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -127,6 +128,7 @@ fun LibraryScreen(
     val selectionMode = selectedIds.isNotEmpty()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var infoItem by remember { mutableStateOf<MediaItem?>(null) }
+    var renameTarget by remember { mutableStateOf<MediaItem?>(null) }
     // Collections: items waiting for a collection to be picked, the name dialog
     // (new collection, possibly for those items, or a rename), the one to delete.
     var addTargets by remember { mutableStateOf<List<MediaItem>?>(null) }
@@ -194,6 +196,7 @@ fun LibraryScreen(
             onDismiss = { showDeleteConfirm = false }
         )
     }
+    MediaRenameHost(target = renameTarget, onDismiss = { renameTarget = null }, rename = viewModel::rename)
     infoItem?.let { item ->
         MediaInfoDialog(item = item, onDismiss = { infoItem = null })
     }
@@ -471,6 +474,7 @@ fun LibraryScreen(
                         onToggleFavorite = { viewModel.toggleFavorite(listOf(item)) },
                         onAddToCollection = { addTargets = listOf(item) },
                         onDelete = { selectedIds = setOf(item.id); showDeleteConfirm = true },
+                        onRename = { renameTarget = item },
                         onInfo = { infoItem = item }
                     )
                 }
@@ -595,6 +599,7 @@ private fun LibraryCard(
     onToggleFavorite: () -> Unit = {},
     onAddToCollection: () -> Unit = {},
     onDelete: () -> Unit = {},
+    onRename: () -> Unit = {},
     onInfo: () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -700,7 +705,8 @@ private fun LibraryCard(
                         onDismiss = { menuOpen = false },
                         onDelete = onDelete,
                         onInfo = onInfo,
-                        onAddToCollection = onAddToCollection
+                        onAddToCollection = onAddToCollection,
+                        onRename = onRename
                     )
                 }
             }

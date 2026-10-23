@@ -54,4 +54,17 @@ class FileNameHelperTest {
         val base = "base"
         assertEquals(base, FileNameHelper.nextFreeBase(base, listOf("base_1x", "base_x", "other_1")))
     }
+
+    @Test
+    fun cleanName_makesATypedNameSafe() {
+        assertEquals("Family trip", FileNameHelper.cleanName("  Family   trip "))
+        assertEquals("ab c", FileNameHelper.cleanName("a/b: c?"))
+        // The extension the file already has isn't doubled.
+        assertEquals("Song", FileNameHelper.cleanName("Song.mp3", "mp3"))
+        assertEquals("Song.mp3", FileNameHelper.cleanName("Song.mp3", "m4a"))
+        assertEquals("رحلة العائلة", FileNameHelper.cleanName("رحلة العائلة"))
+        assertEquals(null, FileNameHelper.cleanName("   "))
+        assertEquals(null, FileNameHelper.cleanName("..."))
+        assertEquals(120, FileNameHelper.cleanName("x".repeat(300))!!.length)
+    }
 }

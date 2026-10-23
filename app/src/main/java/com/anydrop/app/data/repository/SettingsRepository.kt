@@ -47,6 +47,14 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean(KEY_WHOLE_PAGE, false)
         set(value) = prefs.edit().putBoolean(KEY_WHOLE_PAGE, value).apply()
 
+    /**
+     * Movie mode in the video player: swiping seeks within the video instead of moving to the
+     * next one, and the previous/next buttons are hidden. Kept until the user turns it off.
+     */
+    var movieMode: Boolean
+        get() = prefs.getBoolean(KEY_MOVIE_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_MOVIE_MODE, value).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -81,6 +89,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_AUTO_DETECT = "auto_detect_links"
         private const val KEY_WHOLE_PAGE = "fetch_whole_page"
         private const val KEY_DARK_MODE = "dark_mode"
+        private const val KEY_MOVIE_MODE = "player_movie_mode"
         private const val KEY_YTDLP_LAST_UPDATE = "ytdlp_last_update"
 
         const val MAX_QUALITY_BEST = 4320

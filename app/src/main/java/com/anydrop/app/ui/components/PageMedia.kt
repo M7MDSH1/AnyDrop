@@ -23,9 +23,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Web
@@ -139,6 +141,42 @@ fun MediaSummaryCard(cover: String, durationSec: Int, title: String, modifier: M
     }
 }
 
+/** Shown when the link is one video of a playlist: one tap lists the whole playlist. */
+@Composable
+fun PlaylistOffer(onShowPlaylist: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Amber.copy(alpha = 0.10f))
+            .border(1.dp, Amber.copy(alpha = 0.5f), shape)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            stringResource(R.string.playlist_offer),
+            color = White.copy(alpha = 0.85f),
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            stringResource(R.string.playlist_offer_button),
+            color = Amber,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(onClick = onShowPlaylist)
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        )
+    }
+}
+
 /** What a link fetches: just its video, or everything on its page. */
 @Composable
 fun FetchModeToggle(wholePage: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
@@ -208,14 +246,23 @@ fun PageMediaPicker(
     onResolve: (String) -> Unit,
     onDownload: (List<FormatInfo>) -> Unit,
     modifier: Modifier = Modifier,
-    maxListHeight: Dp = Dp.Unspecified
+    maxListHeight: Dp = Dp.Unspecified,
+    /**
+     * A playlist: every video starts selected and they can be saved as sound only, which
+     * [onDownloadAudio] receives instead of [onDownload].
+     */
+    playlist: Boolean = false,
+    onDownloadAudio: (List<FormatInfo>) -> Unit = {}
 ) {
     val keys = items.map { it.key }
-    // The page's own video starts selected; without one, the best video found playing on it.
+    // A playlist is downloaded as a whole by default. On a page, its own video starts
+    // selected; without one, the best video found playing on it.
     var selected by remember(keys) {
+        if (playlist) return@remember mutableStateOf(keys.toSet())
         val start = items.firstOrNull { it.isMain } ?: items.firstOrNull { !it.isLink && !it.isImage }
         mutableStateOf(setOfNotNull(start?.key))
     }
+    var audioOnly by remember(keys) { mutableStateOf(false) }
     // The quality chosen per item (by [choiceKey]); none = its best.
     val chosen = remember(keys) { mutableStateMapOf<String, String>() }
     fun formatFor(item: PageItem): FormatInfo = item.formats.firstOrNull { it.choiceKey() == chosen[item.key] } ?: item.first
@@ -230,14 +277,15 @@ fun PageMediaPicker(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    stringResource(R.string.page_items_count, items.size),
+                    if (playlist) stringResource(R.string.playlist_count, items.size)
+                    else stringResource(R.string.page_items_count, items.size),
                     color = Amber,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     letterSpacing = tracked(1f)
                 )
                 Text(
-                    stringResource(R.string.page_items_hint),
+                    stringResource(if (playlist) R.string.playlist_hint else R.string.page_items_hint),
                     color = White.copy(alpha = 0.5f),
                     fontSize = 11.sp
                 )
@@ -254,6 +302,23 @@ fun PageMediaPicker(
             )
         }
         Spacer(Modifier.height(10.dp))
+        if (playlist) {
+            // Music mixes are often wanted as songs: save every pick as sound only.
+            val shape = RoundedCornerShape(10.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .clip(shape)
+                    .background(Black)
+                    .border(1.dp, Hairline, shape)
+                    .padding(3.dp)
+            ) {
+                ModeSegment(Icons.Filled.OndemandVideo, stringResource(R.string.playlist_as_video), !audioOnly, { audioOnly = false }, Modifier.weight(1f))
+                ModeSegment(Icons.Filled.MusicNote, stringResource(R.string.playlist_as_audio), audioOnly, { audioOnly = true }, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+        }
 
         val list: @Composable () -> Unit = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -262,6 +327,7 @@ fun PageMediaPicker(
                     PageItemRow(
                         item = item,
                         format = formatFor(item),
+                        audioOnly = audioOnly,
                         pageTitle = pageTitle,
                         pageHost = pageHost,
                         selected = isSelected,
@@ -289,7 +355,8 @@ fun PageMediaPicker(
                 .clip(RoundedCornerShape(10.dp))
                 .background(if (selected.isEmpty()) MediumGray else Amber)
                 .clickable(enabled = selected.isNotEmpty()) {
-                    onDownload(items.filter { it.key in selected }.map(::formatFor))
+                    val picks = items.filter { it.key in selected }.map(::formatFor)
+                    if (audioOnly) onDownloadAudio(picks) else onDownload(picks)
                 }
                 .padding(vertical = 15.dp),
             horizontalArrangement = Arrangement.Center
@@ -310,6 +377,7 @@ fun PageMediaPicker(
 private fun PageItemRow(
     item: PageItem,
     format: FormatInfo,
+    audioOnly: Boolean,
     pageTitle: String,
     pageHost: String,
     selected: Boolean,
@@ -353,7 +421,21 @@ private fun PageItemRow(
             )
             Spacer(Modifier.height(5.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                QualityChip(item, format, resolving, onPickQuality, onResolve)
+                // Saved as sound, a video's picture quality doesn't matter.
+                if (audioOnly) {
+                    Text(
+                        "M4A",
+                        color = White.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .border(1.dp, Hairline, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                } else {
+                    QualityChip(item, format, resolving, onPickQuality, onResolve)
+                }
                 val details = buildList {
                     if (!item.isLink && !item.isImage) add(format.extension.uppercase())
                     sizeText(format.filesize)?.let(::add)

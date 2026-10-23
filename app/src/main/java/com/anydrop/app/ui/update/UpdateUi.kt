@@ -105,6 +105,15 @@ class UpdateViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Settings opened: learn whether an update is waiting (from the last answer when it's
+     * recent), without opening the dialog.
+     */
+    fun refreshStatus() {
+        if (status.value !is UpdateStatus.Idle) return
+        viewModelScope.launch { updates.check(force = false) }
+    }
+
     /** Settings: ask GitHub now. */
     fun checkNow() {
         viewModelScope.launch {

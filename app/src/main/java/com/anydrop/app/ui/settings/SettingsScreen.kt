@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,19 +14,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,9 +41,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +60,7 @@ import com.anydrop.app.ui.update.UpdateViewModel
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
+import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.White
 import com.anydrop.app.util.LocaleHelper
 import kotlinx.coroutines.launch
@@ -138,18 +149,11 @@ fun SettingsScreen(
             onClick = null
         )
         Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_updates),
-            subtitle = when (val status = updateStatus) {
-                UpdateStatus.Idle -> stringResource(R.string.update_check_tap)
-                UpdateStatus.Checking -> stringResource(R.string.update_checking)
-                UpdateStatus.UpToDate -> stringResource(R.string.update_up_to_date, BuildConfig.VERSION_NAME)
-                is UpdateStatus.Available -> stringResource(R.string.update_available_sub, status.update.version)
-                UpdateStatus.Failed -> stringResource(R.string.update_check_failed)
-            },
-            onClick = {
-                if (updateStatus is UpdateStatus.Available) updateViewModel.showUpdate() else updateViewModel.checkNow()
-            }
+        LaunchedEffect(Unit) { updateViewModel.refreshStatus() }
+        UpdateCard(
+            status = updateStatus,
+            onUpdate = updateViewModel::showUpdate,
+            onCheck = updateViewModel::checkNow
         )
         Spacer(modifier = Modifier.height(8.dp))
         }
@@ -303,6 +307,83 @@ private tailrec fun android.content.Context.findActivity(): ComponentActivity = 
     is ComponentActivity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> error("Settings is not hosted in an activity")
+}
+
+/**
+ * App updates: what's going on, and one button. An update that was put off ("Later" or
+ * "Skip") is still offered here; otherwise the button checks GitHub for a new version.
+ */
+@Composable
+private fun UpdateCard(status: UpdateStatus, onUpdate: () -> Unit, onCheck: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        colors = CardDefaults.cardColors(containerColor = Black)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.settings_updates),
+                color = Amber,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                letterSpacing = tracked(2f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = when (status) {
+                    UpdateStatus.Idle -> stringResource(R.string.update_status_idle, BuildConfig.VERSION_NAME)
+                    UpdateStatus.Checking -> stringResource(R.string.update_checking)
+                    UpdateStatus.UpToDate -> stringResource(R.string.update_up_to_date, BuildConfig.VERSION_NAME)
+                    is UpdateStatus.Available -> stringResource(R.string.update_status_available, status.update.version, BuildConfig.VERSION_NAME)
+                    UpdateStatus.Failed -> stringResource(R.string.update_status_failed)
+                },
+                color = White.copy(alpha = 0.6f),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            val shape = RoundedCornerShape(8.dp)
+            val available = status is UpdateStatus.Available
+            val checking = status == UpdateStatus.Checking
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(shape)
+                    .background(if (available) Amber else Color.Transparent)
+                    .border(1.dp, Amber.copy(alpha = if (checking) 0.4f else 1f), shape)
+                    .clickable(enabled = !checking) { if (available) onUpdate() else onCheck() },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (checking) {
+                    CircularProgressIndicator(color = Amber, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                } else {
+                    Icon(
+                        if (available) Icons.Filled.SystemUpdate else Icons.Filled.Refresh,
+                        contentDescription = null,
+                        tint = if (available) OnAccent else Amber,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = when {
+                        available -> stringResource(R.string.update_button_update, (status as UpdateStatus.Available).update.version)
+                        checking -> stringResource(R.string.update_button_checking)
+                        else -> stringResource(R.string.update_button_check)
+                    },
+                    color = if (available) OnAccent else Amber.copy(alpha = if (checking) 0.6f else 1f),
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    letterSpacing = tracked(1.5f)
+                )
+            }
+        }
+    }
 }
 
 @Composable

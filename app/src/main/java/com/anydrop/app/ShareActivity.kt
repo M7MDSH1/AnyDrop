@@ -64,7 +64,9 @@ import com.anydrop.app.engine.TorrentException
 import com.anydrop.app.engine.distinctPageVideos
 import com.anydrop.app.engine.torrentFileList
 import com.anydrop.app.ui.components.TorrentPicker
+import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.isWholePage
+import com.anydrop.app.ui.components.PlaylistOffer
 import com.anydrop.app.engine.pageItems
 import com.anydrop.app.engine.postItems
 import com.anydrop.app.ui.components.FetchModeToggle
@@ -190,6 +192,8 @@ private fun ShareSheet(
     val fetchWholePage by viewModel.fetchWholePage.collectAsState()
     val pageTitle by viewModel.pageTitle.collectAsState()
     val resolving by viewModel.resolving.collectAsState()
+    val playlistOffer by viewModel.playlistOffer.collectAsState()
+    val fetchingPlaylist by viewModel.fetchingPlaylist.collectAsState()
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -261,6 +265,10 @@ private fun ShareSheet(
                 )
             }
             Spacer(Modifier.height(16.dp))
+            if (playlistOffer && !isLoading) {
+                PlaylistOffer(onShowPlaylist = viewModel::loadPlaylist)
+                Spacer(Modifier.height(12.dp))
+            }
 
             when {
                 isLoading || formats.isEmpty() && downloadState !is DownloadState.Error -> {
@@ -276,6 +284,7 @@ private fun ShareSheet(
                                 stringResource(
                                     when {
                                         isTorrent -> R.string.fetching_torrent
+                                        fetchingPlaylist -> R.string.fetching_playlist
                                         fetchWholePage -> R.string.fetching_whole_page
                                         else -> R.string.share_fetching
                                     }
@@ -317,7 +326,9 @@ private fun ShareSheet(
                         resolving = resolving,
                         onResolve = viewModel::resolvePageItem,
                         onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } },
-                        maxListHeight = 380.dp
+                        maxListHeight = 380.dp,
+                        playlist = formats.isPlaylist,
+                        onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } }
                     )
                 }
 

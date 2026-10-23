@@ -207,6 +207,9 @@
     <string name="player_speed_1x">1× Speed</string>
     <string name="player_speed_normal">Normal (1×)</string>
     <string name="player_repeat_one">Repeat one</string>
+    <string name="player_movie_mode">Movie mode</string>
+    <string name="movie_mode_on">Movie mode on: swipe left or right to move through the video</string>
+    <string name="movie_mode_off">Movie mode off</string>
     <string name="resize_fit">Fit</string>
     <string name="resize_fill">Stretch</string>
     <string name="resize_zoom">Zoom</string>
@@ -357,4 +360,25 @@
         <item quantity="one">+%d other file (like subtitles) isn\'t downloaded.</item>
         <item quantity="other">+%d other files (like subtitles) aren\'t downloaded.</item>
     </plurals>
+    <string name="menu_rename">Rename</string>
+    <string name="rename_title">RENAME</string>
+    <string name="rename_hint">New name</string>
+    <string name="rename_done">Renamed</string>
+    <string name="rename_invalid">Type a name for the file.</string>
+    <string name="rename_taken">A file with that name already exists.</string>
+    <string name="rename_failed">Couldn\'t rename this file.</string>
+    <string name="fetching_playlist">Reading the playlist…</string>
+    <string name="playlist_count">PLAYLIST · %1$d VIDEOS</string>
+    <string name="playlist_hint">Pick the videos to download, or download them all.</string>
+    <string name="playlist_as_video">VIDEO</string>
+    <string name="playlist_as_audio">AUDIO ONLY</string>
+    <string name="playlist_offer">This video is part of a playlist.</string>
+    <string name="playlist_offer_button">GET THE WHOLE PLAYLIST</string>
+    <string name="progress_queued">Waiting for its turn…</string>
+    <string name="update_status_idle">You have version %1$s.</string>
+    <string name="update_status_available">Version %1$s is ready to install (you have %2$s).</string>
+    <string name="update_status_failed">Couldn\'t reach GitHub. Check your connection and try again.</string>
+    <string name="update_button_update">UPDATE TO %1$s</string>
+    <string name="update_button_check">CHECK FOR UPDATES</string>
+    <string name="update_button_checking">CHECKING…</string>
 </resources>
