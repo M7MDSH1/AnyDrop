@@ -11,6 +11,7 @@ import com.anydrop.app.data.repository.DeletionResult
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.MediaRefIndex
 import com.anydrop.app.data.repository.PlaybackProgressRepository
+import com.anydrop.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +28,8 @@ class PlayerViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val collectionsRepository: CollectionsRepository,
     private val progressRepository: PlaybackProgressRepository,
-    private val deckSessionRepository: DeckSessionRepository
+    private val deckSessionRepository: DeckSessionRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _currentMedia = MutableStateFlow<MediaItem?>(null)
@@ -50,6 +52,16 @@ class PlayerViewModel @Inject constructor(
 
     fun toggleFavorite() {
         _currentMedia.value?.let { collectionsRepository.toggleFavorite(listOf(it)) }
+    }
+
+    /** Movie mode (see [SettingsRepository.movieMode]); it stays on for the next video too. */
+    private val _movieMode = MutableStateFlow(settingsRepository.movieMode)
+    val movieMode: StateFlow<Boolean> = _movieMode.asStateFlow()
+
+    fun toggleMovieMode() {
+        val on = !_movieMode.value
+        settingsRepository.movieMode = on
+        _movieMode.value = on
     }
 
     // ---- Per-video session state. All of it is reset on every mediaId change

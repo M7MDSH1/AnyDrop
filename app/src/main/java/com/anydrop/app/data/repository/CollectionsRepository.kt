@@ -111,6 +111,16 @@ class CollectionsRepository @Inject constructor(
     }
 
     /** The part of [items] the [scope] shows, in the order given. */
+    /** [old] was renamed to [new]: favorites and collections keep holding it. */
+    fun rename(old: MediaItem, new: MediaItem) {
+        val ref = MediaRef.of(new)
+        fun List<MediaRef>.renamed() = map { if (it.matches(old)) ref else it }.distinct()
+        if (_favorites.value.any { it.matches(old) }) saveFavorites(_favorites.value.renamed())
+        if (_collections.value.any { c -> c.items.any { it.matches(old) } }) {
+            saveCollections(_collections.value.map { it.copy(items = it.items.renamed()) })
+        }
+    }
+
     fun filter(items: List<MediaItem>, scope: LibraryScope): List<MediaItem> = when (scope) {
         LibraryScope.All -> items
         LibraryScope.Favorites -> MediaRefIndex(_favorites.value).let { index -> items.filter { it in index } }

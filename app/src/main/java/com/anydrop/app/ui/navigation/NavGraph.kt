@@ -1,10 +1,16 @@
 package com.anydrop.app.ui.navigation
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.anydrop.app.sharedUrlFlow
 import com.anydrop.app.ui.audio.AudioScreen
@@ -36,6 +42,17 @@ fun AnyDropNavGraph(
     startDestination: String = Routes.TAPE_DECK,
     browserState: BrowserState? = null
 ) {
+    // The player's rotate button locks the screen's orientation; leaving the player
+    // (Back included) hands rotation back to the phone.
+    val activity = LocalContext.current as? Activity
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val route = backStackEntry?.destination?.route
+    LaunchedEffect(route) {
+        if (route != null && route != Routes.PLAYER) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,

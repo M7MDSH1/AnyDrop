@@ -62,6 +62,7 @@ import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.ui.components.DeleteConfirmDialog
 import com.anydrop.app.ui.components.MediaInfoDialog
 import com.anydrop.app.ui.components.MediaItemDropdown
+import com.anydrop.app.ui.components.MediaRenameHost
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -84,6 +85,7 @@ fun AudioScreen(
     val selectionMode = selectedIds.isNotEmpty()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var infoItem by remember { mutableStateOf<MediaItem?>(null) }
+    var renameTarget by remember { mutableStateOf<MediaItem?>(null) }
 
     fun toggleSelect(item: MediaItem) {
         selectedIds = if (selectedIds.contains(item.id)) selectedIds - item.id else selectedIds + item.id
@@ -123,6 +125,7 @@ fun AudioScreen(
         )
     }
     infoItem?.let { item -> MediaInfoDialog(item = item, onDismiss = { infoItem = null }) }
+    MediaRenameHost(target = renameTarget, onDismiss = { renameTarget = null }, rename = viewModel::rename)
 
     // Request audio-read permission so we can list all device audio, then refresh.
     val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -220,6 +223,7 @@ fun AudioScreen(
                         onClick = { if (selectionMode) toggleSelect(item) else onPlayMedia(item) },
                         onLongClick = { toggleSelect(item) },
                         onDeleteMenu = { selectedIds = setOf(item.id); showDeleteConfirm = true },
+                        onRename = { renameTarget = item },
                         onInfo = { infoItem = item }
                     )
                 }
@@ -237,6 +241,7 @@ private fun AudioRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDeleteMenu: () -> Unit,
+    onRename: () -> Unit,
     onInfo: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -300,7 +305,8 @@ private fun AudioRow(
                         expanded = menuOpen,
                         onDismiss = { menuOpen = false },
                         onDelete = onDeleteMenu,
-                        onInfo = onInfo
+                        onInfo = onInfo,
+                        onRename = onRename
                     )
                 }
             }

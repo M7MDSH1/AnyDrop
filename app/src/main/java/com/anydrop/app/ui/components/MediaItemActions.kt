@@ -1,6 +1,29 @@
 package com.anydrop.app.ui.components
 
+import android.app.Activity
 import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDirection
+import com.anydrop.app.data.repository.FileNameHelper
+import com.anydrop.app.data.repository.RenameResult
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.clickable
@@ -12,6 +35,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -36,7 +60,7 @@ import com.anydrop.app.ui.theme.MediumGray
 import com.anydrop.app.ui.theme.White
 import java.io.File
 
-/** The per-item 3-dot dropdown menu: Share / (Add to collection) / Delete / Info. */
+/** The per-item 3-dot dropdown menu: Share / (Add to collection) / (Rename) / Delete / Info. */
 @Composable
 fun MediaItemDropdown(
     item: MediaItem,
@@ -44,7 +68,8 @@ fun MediaItemDropdown(
     onDismiss: () -> Unit,
     onDelete: () -> Unit,
     onInfo: () -> Unit,
-    onAddToCollection: (() -> Unit)? = null
+    onAddToCollection: (() -> Unit)? = null,
+    onRename: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
@@ -63,6 +88,13 @@ fun MediaItemDropdown(
                 onClick = { onDismiss(); add() }
             )
         }
+        onRename?.let { rename ->
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.menu_rename), fontFamily = FontFamily.Monospace) },
+                leadingIcon = { Icon(Icons.Default.Edit, null, tint = Amber) },
+                onClick = { onDismiss(); rename() }
+            )
+        }
         DropdownMenuItem(
             text = { Text(stringResource(R.string.menu_delete), fontFamily = FontFamily.Monospace) },
             leadingIcon = { Icon(Icons.Default.Delete, null, tint = LedRed) },
@@ -74,6 +106,107 @@ fun MediaItemDropdown(
             onClick = { onDismiss(); onInfo() }
         )
     }
+}
+
+/**
+ * Rename for a library item: the dialog, then (for a file another app made) Android's "allow
+ * AnyDrop to modify this?" step, after which the rename runs again. Keep it in the screen at
+ * all times; [target] non-null opens the dialog.
+ */
+@Composable
+fun MediaRenameHost(
+    target: MediaItem?,
+    onDismiss: () -> Unit,
+    rename: (MediaItem, String, (RenameResult) -> Unit) -> Unit
+) {
+    val context = LocalContext.current
+    var pending by remember { mutableStateOf<Pair<MediaItem, String>?>(null) }
+    val report: (RenameResult) -> Unit = { result ->
+        val message = when (result) {
+            is RenameResult.Done -> R.string.rename_done
+            is RenameResult.Failed -> when (result.reason) {
+                RenameResult.Reason.INVALID_NAME -> R.string.rename_invalid
+                RenameResult.Reason.NAME_TAKEN -> R.string.rename_taken
+                RenameResult.Reason.ERROR -> R.string.rename_failed
+            }
+            is RenameResult.NeedsConsent -> R.string.rename_failed
+        }
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val (item, name) = pending ?: return@rememberLauncherForActivityResult
+        pending = null
+        if (res.resultCode == Activity.RESULT_OK) rename(item, name, report)
+    }
+    target?.let { item ->
+        RenameMediaDialog(
+            item = item,
+            onDismiss = onDismiss,
+            onConfirm = { name ->
+                onDismiss()
+                rename(item, name) { result ->
+                    if (result is RenameResult.NeedsConsent) {
+                        pending = item to name
+                        consent.launch(IntentSenderRequest.Builder(result.sender).build())
+                    } else {
+                        report(result)
+                    }
+                }
+            }
+        )
+    }
+}
+
+/** Asks for the new name; it opens with the current one (without its extension) selected. */
+@Composable
+private fun RenameMediaDialog(item: MediaItem, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val current = remember(item) {
+        val name = item.title.ifBlank { File(item.localFilePath).name }
+        val ext = name.substringAfterLast('.', "")
+        // Titles of files usually carry their extension; songs show their title tag.
+        if (ext.isNotEmpty() && ext.length <= 4 && ext.all { it.isLetterOrDigit() }) name.substringBeforeLast('.') else name
+    }
+    var field by remember(item) { mutableStateOf(TextFieldValue(current, TextRange(0, current.length))) }
+    val valid = FileNameHelper.cleanName(field.text) != null
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MediumGray,
+        title = { Text(stringResource(R.string.rename_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        text = {
+            OutlinedTextField(
+                value = field,
+                onValueChange = { field = it.copy(text = it.text.replace("\n", "")) },
+                singleLine = true,
+                isError = !valid,
+                label = { Text(stringResource(R.string.rename_hint)) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (valid) onConfirm(field.text) }),
+                textStyle = TextStyle(textDirection = TextDirection.Content),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Amber,
+                    unfocusedBorderColor = White.copy(alpha = 0.3f),
+                    cursorColor = Amber,
+                    focusedTextColor = White,
+                    unfocusedTextColor = White,
+                    focusedLabelColor = Amber,
+                    unfocusedLabelColor = White.copy(alpha = 0.6f)
+                ),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus)
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(field.text) }, enabled = valid) {
+                Text(stringResource(R.string.btn_save), color = if (valid) Amber else White.copy(alpha = 0.3f), fontFamily = FontFamily.Monospace)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+            }
+        }
+    )
 }
 
 /** Confirm-before-delete dialog. Handles single or multiple items. */

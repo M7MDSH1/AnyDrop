@@ -72,7 +72,9 @@ import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.distinctPageVideos
 import com.anydrop.app.engine.torrentFileList
 import com.anydrop.app.ui.components.TorrentPicker
+import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.isWholePage
+import com.anydrop.app.ui.components.PlaylistOffer
 import com.anydrop.app.engine.pageItems
 import com.anydrop.app.engine.postItems
 import com.anydrop.app.ui.components.FetchModeToggle
@@ -113,6 +115,8 @@ fun TapeDeckScreen(
     val fetchWholePage by viewModel.fetchWholePage.collectAsState()
     val pageTitle by viewModel.pageTitle.collectAsState()
     val resolving by viewModel.resolving.collectAsState()
+    val playlistOffer by viewModel.playlistOffer.collectAsState()
+    val fetchingPlaylist by viewModel.fetchingPlaylist.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -299,6 +303,7 @@ fun TapeDeckScreen(
                     stringResource(
                         when {
                             isTorrent -> R.string.fetching_torrent
+                            fetchingPlaylist -> R.string.fetching_playlist
                             fetchWholePage -> R.string.fetching_whole_page
                             else -> R.string.fetching_qualities
                         }
@@ -327,6 +332,11 @@ fun TapeDeckScreen(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
+        if (playlistOffer && !isLoadingFormats) {
+            PlaylistOffer(onShowPlaylist = viewModel::loadPlaylist)
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
         // Whole page: everything on it, to pick from. Otherwise a post with several
         // photos/videos (a carousel) offers its slides, and a single video its qualities.
         val pageItems = remember(availableFormats) { if (availableFormats.isWholePage) availableFormats.pageItems() else emptyList() }
@@ -347,7 +357,9 @@ fun TapeDeckScreen(
                 pageUrl = url,
                 resolving = resolving,
                 onResolve = viewModel::resolvePageItem,
-                onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } }
+                onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } },
+                playlist = availableFormats.isPlaylist,
+                onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } }
             )
             Spacer(modifier = Modifier.height(12.dp))
         } else if (postItems.isNotEmpty()) {

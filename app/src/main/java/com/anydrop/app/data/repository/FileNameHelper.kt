@@ -26,4 +26,20 @@ object FileNameHelper {
         while ("${base}_$n" in used) n++
         return "${base}_$n"
     }
+
+    /**
+     * A name the user typed, made safe as a file name (without extension): characters files
+     * can't hold are dropped, spaces tidied, the typed extension (if it is [extension]) removed.
+     * Null when nothing usable is left.
+     */
+    fun cleanName(input: String, extension: String = ""): String? {
+        var name = input.replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (extension.isNotEmpty() && name.endsWith(".$extension", ignoreCase = true)) {
+            name = name.dropLast(extension.length + 1).trimEnd()
+        }
+        name = name.trimEnd('.').trim()
+        return name.take(120).takeIf { it.isNotEmpty() }
+    }
 }

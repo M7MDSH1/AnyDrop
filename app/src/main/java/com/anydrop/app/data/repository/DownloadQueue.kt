@@ -97,7 +97,9 @@ class DownloadQueue @Inject constructor(
      */
     fun launchBatch(items: List<Pair<DownloadRequest, String>>) {
         if (items.isEmpty()) return
-        items.forEach { (request, path) -> addTask(request, path) }
+        items.forEachIndexed { i, (request, path) ->
+            addTask(request, path, if (i == 0) R.string.progress_starting else R.string.progress_queued)
+        }
         DownloadService.startDownload(context, items.first().second, items.first().first.title, batchTags = items.map { it.second })
         val job = appDownloadScope.launch {
             items.forEach { (request, path) ->
@@ -160,7 +162,7 @@ class DownloadQueue @Inject constructor(
         }
     }
 
-    private fun addTask(request: DownloadRequest, tag: String) {
+    private fun addTask(request: DownloadRequest, tag: String, phase: Int = R.string.progress_starting) {
         val format = request.format
         val kind = when {
             format.isImage -> TaskKind.IMAGE
@@ -173,7 +175,7 @@ class DownloadQueue @Inject constructor(
             quality = format.resolution,
             kind = kind,
             request = request,
-            phase = context.getString(R.string.progress_starting)
+            phase = context.getString(phase)
         )
         _tasks.update { list -> listOf(task) + list.filterNot { it.tag == tag } }
     }

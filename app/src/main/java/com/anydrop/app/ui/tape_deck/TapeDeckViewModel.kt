@@ -17,6 +17,9 @@ import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.TaskStatus
 import com.anydrop.app.engine.Magnet
+import com.anydrop.app.engine.Playlists
+import com.anydrop.app.engine.asAudio
+import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.MediaProbe
 import com.anydrop.app.engine.TorrentFile
 import com.anydrop.app.engine.asDownload
@@ -93,6 +96,14 @@ class TapeDeckViewModel @Inject constructor(
     val pageTitle: StateFlow<String> = _pageTitle.asStateFlow()
     private var fetchedUploader = ""
     private var fetchedWebpageUrl = ""
+
+    /** The link is a video inside a playlist: the deck offers the whole list. */
+    private val _playlistOffer = MutableStateFlow(false)
+    val playlistOffer: StateFlow<Boolean> = _playlistOffer.asStateFlow()
+
+    /** A playlist is being listed (for the loading text). */
+    private val _fetchingPlaylist = MutableStateFlow(false)
+    val fetchingPlaylist: StateFlow<Boolean> = _fetchingPlaylist.asStateFlow()
 
     /** Linked videos whose qualities are being looked up (by [FormatInfo.group]). */
     private val _resolving = MutableStateFlow<Set<String>>(emptySet())
@@ -177,6 +188,7 @@ class TapeDeckViewModel @Inject constructor(
             _availableFormats.value = capByMaxQuality(formats)
             val selectedId = deckSessionRepository.selectedFormatId()
             _selectedFormat.value = _availableFormats.value.firstOrNull { it.id == selectedId }
+            _playlistOffer.value = !formats.isPlaylist && Playlists.hasList(sessionUrl) && !Magnet.isTorrentLink(sessionUrl)
         }
     }
 
@@ -190,6 +202,7 @@ class TapeDeckViewModel @Inject constructor(
         fetchedUploader = ""
         fetchedWebpageUrl = ""
         _resolving.value = emptySet()
+        _playlistOffer.value = false
         _duplicatePrompt.value = null
         pendingSuffixPath = null
         probeJob?.cancel()
@@ -358,11 +371,13 @@ class TapeDeckViewModel @Inject constructor(
      * chosen for it. Linked videos download from their own page (best quality when none was
      * chosen); each video is saved under its own title when the page gave one.
      */
-    fun downloadPageItems(chosen: List<FormatInfo>) {
+    fun downloadPageItems(chosen: List<FormatInfo>, audioOnly: Boolean = false) {
         val urlValue = _url.value.trim()
         if (urlValue.isBlank() || chosen.isEmpty()) return
         val used = mutableSetOf<String>()
-        val batch = chosen.mapIndexed { idx, f ->
+        val batch = chosen.mapIndexed { idx, picked ->
+            // A playlist can be saved as sound only (music mixes): each video becomes an .m4a.
+            val f = if (audioOnly && !picked.isImage) picked.asAudio() else picked
             val source = f.pageUrl.ifBlank { urlValue }
             val title = f.title.ifBlank { _pageTitle.value }
             val request = DownloadRequest(
@@ -375,6 +390,8 @@ class TapeDeckViewModel @Inject constructor(
             )
             val path = if (f.isImage) {
                 libraryRepository.getImageOutputPath(source, title, "img${idx + 1}")
+            } else if (f.isAudioOnly) {
+                libraryRepository.getAudioOutputPath(source, title, "audio")
             } else {
                 val label = if (f.isLink) "best" else f.resolution.ifBlank { "video" }
                 val copies = libraryRepository.findVideoCopies(source, title, label)
@@ -480,11 +497,24 @@ class TapeDeckViewModel @Inject constructor(
         }
     }
 
-    private suspend fun fetchFormats() {
+    /** Lists every video of the playlist the deck's link is in (the link was one of its videos). */
+    fun loadPlaylist() {
+        if (_url.value.isBlank()) return
+        searchJob?.cancel()
+        probeJob?.cancel()
+        _playlistOffer.value = false
+        _availableFormats.value = emptyList()
+        searchJob = viewModelScope.launch { fetchFormats(forcePlaylist = true) }
+    }
+
+    private suspend fun fetchFormats(forcePlaylist: Boolean = false) {
         val urlValue = _url.value.trim()
         if (urlValue.isBlank()) return
         val wholePage = _fetchWholePage.value
         val generation = ++fetchGeneration
+        val playlistWanted = !Magnet.isTorrentLink(urlValue) &&
+            (forcePlaylist || Playlists.isListOnly(urlValue) || (wholePage && Playlists.hasList(urlValue)))
+        _fetchingPlaylist.value = playlistWanted
         _isLoadingFormats.value = true
         _selectedFormat.value = null
         try {
@@ -494,6 +524,12 @@ class TapeDeckViewModel @Inject constructor(
                 Magnet.isTorrentLink(urlValue) -> downloadRepository.torrentFiles(urlValue).let { (meta, _) ->
                     FetchResult(meta.files.map { it.toFormat(meta.name) }, title = meta.name)
                 }
+                // A playlist: its videos to pick from. A video inside one opens as that video
+                // (the deck then offers the whole list), unless the whole page was asked for.
+                playlistWanted ->
+                    downloadRepository.getPlaylist(urlValue, cookieFile)
+                        ?: if (wholePage) downloadRepository.getPageMedia(urlValue, cookieFile)
+                        else downloadRepository.getFormats(urlValue, cookieFile)
                 wholePage -> downloadRepository.getPageMedia(urlValue, cookieFile)
                 else -> downloadRepository.getFormats(urlValue, cookieFile)
             }
@@ -505,10 +541,13 @@ class TapeDeckViewModel @Inject constructor(
             _availableFormats.value = capByMaxQuality(rawFormats)
             // Pre-pick the best entry so RECORD works with one tap (images are picked by the user;
             // a whole page or a torrent is picked from its list).
-            if (_selectedFormat.value == null && !wholePage && rawFormats.none { it.isTorrent }) {
+            if (_selectedFormat.value == null && !wholePage && rawFormats.none { it.isTorrent } && !rawFormats.isWholePage) {
                 _selectedFormat.value = _availableFormats.value.firstOrNull { !it.isImage }
             }
             saveSession()
+            // Not offered again when listing was just tried (YouTube doesn't list every mix).
+            _playlistOffer.value = !playlistWanted && !rawFormats.isPlaylist && Playlists.hasList(urlValue) &&
+                !Magnet.isTorrentLink(urlValue)
             if (rawFormats.isEmpty()) {
                 _downloadState.value = DownloadState.Error(
                     getApplication<Application>().getString(R.string.error_no_media_found)

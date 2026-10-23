@@ -36,6 +36,10 @@ class DownloadRepository(
         cookieFile: File? = null
     ): YtDlpEngine.FetchResult = ytDlpEngine.getFormats(url, cookieFile)
 
+    /** The videos of a playlist link, or null when it isn't one. */
+    suspend fun getPlaylist(url: String, cookieFile: File? = null): YtDlpEngine.FetchResult? =
+        ytDlpEngine.getPlaylist(url, cookieFile)
+
     /** Every video on the page, and the videos it links to ("whole page" mode). */
     suspend fun getPageMedia(
         url: String,

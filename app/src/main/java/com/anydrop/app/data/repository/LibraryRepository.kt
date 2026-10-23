@@ -23,6 +23,17 @@ enum class SortMode { DATE, DURATION }
 enum class MediaFilter { ALL, VIDEOS, IMAGES }
 
 /** Result of a batch delete: which URIs need user consent and how to ask. */
+/** How a rename went. */
+sealed interface RenameResult {
+    /** Renamed; [item] is the media under its new name. */
+    data class Done(val item: MediaItem) : RenameResult
+    /** Another app's file: the user must allow the change first (then rename again). */
+    data class NeedsConsent(val sender: IntentSender) : RenameResult
+    data class Failed(val reason: Reason) : RenameResult
+
+    enum class Reason { INVALID_NAME, NAME_TAKEN, ERROR }
+}
+
 data class DeletionResult(
     /** MediaStore rows the app doesn't own (Android 11+ → createDeleteRequest). */
     val consentUris: List<Uri> = emptyList(),
@@ -52,6 +63,10 @@ class LibraryRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("anydrop_library", Context.MODE_PRIVATE)
     private val indexCache = LibraryIndexCache(context)
     private var lastCacheSignature = 0L
+
+    // Songs renamed here (MediaStore id → new file name). Songs are listed by their title,
+    // which MediaStore doesn't let apps change, so a renamed song is listed by its file name.
+    private val renamedSongs = context.getSharedPreferences("anydrop_renamed_songs", Context.MODE_PRIVATE)
 
     private val audioExtensions = listOf("m4a", "mp3", "opus", "aac", "ogg", "flac", "wav")
     private val imageExtensions = listOf("jpg", "jpeg", "png", "webp", "heic", "gif")
@@ -406,8 +421,11 @@ class LibraryRepository(private val context: Context) {
             cursor?.use {
                 while (it.moveToNext()) {
                     val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
-                    val title = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE))
-                        ?: it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME))
+                    val displayName = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME))
+                    val title = displayName?.takeIf { name -> renamedSongs.getString(id.toString(), null) == name }
+                        ?.substringBeforeLast('.')
+                        ?: it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE))
+                        ?: displayName
                         ?: "Unknown"
                     val duration = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION))
                     val size = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE))
@@ -527,6 +545,112 @@ class LibraryRepository(private val context: Context) {
             }
         } catch (_: Exception) {}
     }
+
+    /**
+     * Renames a video, song or picture to [newName]; its extension stays. A file in AnyDrop's
+     * folders is renamed with its metadata and its gallery copy. A gallery item is renamed
+     * through MediaStore, which needs the user's OK for files another app made (the result
+     * then carries the system's request; rename again once it's allowed).
+     */
+    fun renameItem(item: MediaItem, newName: String): RenameResult {
+        val path = item.localUri?.toString()?.takeIf { it.startsWith("content://") } ?: item.localFilePath
+        val result = if (path.startsWith("content://")) renameInGallery(item, Uri.parse(path), newName)
+        else renameFile(item, File(path), newName)
+        if (result is RenameResult.Done) invalidateIndexCache()
+        return result
+    }
+
+    private fun renameFile(item: MediaItem, file: File, newName: String): RenameResult {
+        if (!file.exists()) return RenameResult.Failed(RenameResult.Reason.ERROR)
+        val ext = file.extension
+        val name = FileNameHelper.cleanName(newName, ext) ?: return RenameResult.Failed(RenameResult.Reason.INVALID_NAME)
+        val dest = File(file.parentFile, if (ext.isEmpty()) name else "$name.$ext")
+        if (dest == file) return RenameResult.Done(item)
+        if (dest.exists()) return RenameResult.Failed(RenameResult.Reason.NAME_TAKEN)
+        if (!file.renameTo(dest)) return RenameResult.Failed(RenameResult.Reason.ERROR)
+        File("${file.absolutePath}.meta.json").takeIf { it.exists() }?.renameTo(File("${dest.absolutePath}.meta.json"))
+        renameGalleryTwin(file.name, dest.name)
+        return RenameResult.Done(
+            item.copy(id = dest.nameWithoutExtension, title = dest.nameWithoutExtension, localFilePath = dest.absolutePath, localUri = Uri.fromFile(dest))
+        )
+    }
+
+    private fun renameInGallery(item: MediaItem, uri: Uri, newName: String): RenameResult {
+        val resolver = context.contentResolver
+        val oldName = displayName(uri) ?: item.title
+        val ext = oldName.substringAfterLast('.', "")
+        val name = FileNameHelper.cleanName(newName, ext) ?: return RenameResult.Failed(RenameResult.Reason.INVALID_NAME)
+        val target = if (ext.isEmpty()) name else "$name.$ext"
+        val values = android.content.ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, target)
+            // Songs are listed by their title tag, videos by file name: keep both in step.
+            put(MediaStore.MediaColumns.TITLE, name)
+        }
+        try {
+            if (resolver.update(uri, values, null, null) <= 0) return RenameResult.Failed(RenameResult.Reason.ERROR)
+        } catch (e: SecurityException) {
+            val sender = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                    MediaStore.createWriteRequest(resolver, listOf(uri)).intentSender
+                Build.VERSION.SDK_INT == Build.VERSION_CODES.Q ->
+                    (e as? android.app.RecoverableSecurityException)?.userAction?.actionIntent?.intentSender
+                else -> null
+            } ?: return RenameResult.Failed(RenameResult.Reason.ERROR)
+            return RenameResult.NeedsConsent(sender)
+        } catch (e: Exception) {
+            // MediaStore refuses a name that's already in the folder.
+            return RenameResult.Failed(RenameResult.Reason.NAME_TAKEN)
+        }
+        if (item.isAudio) rememberRenamedSong(uri, target)
+        // AnyDrop's own copy (with the source link and creator) keeps matching the gallery file.
+        listOf(getVideoDir(), getAudioDir(), getImageDir()).forEach { dir ->
+            val twin = File(dir, oldName)
+            if (twin.isFile && !File(dir, target).exists() && twin.renameTo(File(dir, target))) {
+                File("${twin.absolutePath}.meta.json").takeIf { it.exists() }?.renameTo(File(dir, "$target.meta.json"))
+            }
+        }
+        return RenameResult.Done(item.copy(title = if (item.isAudio) name else target))
+    }
+
+    /** Renames AnyDrop's copy of [oldName] in the gallery (Movies/Music/Pictures → AnyDrop), if there is one. */
+    private fun renameGalleryTwin(oldName: String, newName: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val resolver = context.contentResolver
+        listOf(
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        ).forEach { collection ->
+            runCatching {
+                resolver.query(
+                    collection,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                    arrayOf(oldName, "%AnyDrop%"),
+                    null
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val uri = ContentUris.withAppendedId(collection, c.getLong(0))
+                        val renamed = resolver.update(uri, android.content.ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, newName)
+                            put(MediaStore.MediaColumns.TITLE, newName.substringBeforeLast('.'))
+                        }, null, null) > 0
+                        if (renamed && collection.toString().contains("/audio/")) rememberRenamedSong(uri, newName)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun rememberRenamedSong(uri: Uri, fileName: String) {
+        runCatching { renamedSongs.edit().putString(ContentUris.parseId(uri).toString(), fileName).apply() }
+    }
+
+    private fun displayName(uri: Uri): String? = runCatching {
+        context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull()
 
     /** Read a video/audio file's duration in ms (0 on failure). */
     private fun readVideoDuration(file: File): Long {
