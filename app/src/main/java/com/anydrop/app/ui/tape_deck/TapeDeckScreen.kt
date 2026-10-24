@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -43,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -68,6 +71,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.anydrop.app.R
+import com.anydrop.app.showDownloadsRequest
 import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.distinctPageVideos
 import com.anydrop.app.engine.torrentFileList
@@ -97,6 +101,10 @@ import com.anydrop.app.ui.theme.VuRed
 import com.anydrop.app.ui.theme.VuYellow
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToInt
 import com.anydrop.app.ui.theme.tracked
 
 @Composable
@@ -172,11 +180,22 @@ fun TapeDeckScreen(
     val canDownload = selectedFormat != null && url.isNotBlank()
     val level = tasks.filter { it.isActive }.maxOfOrNull { it.percent }?.div(100f) ?: 0f
 
+    // A tapped download notification scrolls down to the downloads list.
+    val scrollState = rememberScrollState()
+    var downloadsTop by remember { mutableStateOf<Int?>(null) }
+    val showDownloads by showDownloadsRequest.collectAsState()
+    LaunchedEffect(showDownloads) {
+        if (!showDownloads) return@LaunchedEffect
+        val top = withTimeoutOrNull(2_000) { snapshotFlow { downloadsTop }.filterNotNull().first() }
+        if (top != null) scrollState.animateScrollTo(top)
+        showDownloadsRequest.value = false
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkGray)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -438,14 +457,16 @@ fun TapeDeckScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        DownloadQueuePanel(
-            tasks = tasks,
-            onStop = viewModel::cancelTask,
-            onRetry = viewModel::retryTask,
-            onOpen = viewModel::openTask,
-            onDismiss = viewModel::dismissTask,
-            onClearFinished = viewModel::clearFinishedTasks
-        )
+        Box(Modifier.onGloballyPositioned { downloadsTop = it.positionInParent().y.roundToInt() }) {
+            DownloadQueuePanel(
+                tasks = tasks,
+                onStop = viewModel::cancelTask,
+                onRetry = viewModel::retryTask,
+                onOpen = viewModel::openTask,
+                onDismiss = viewModel::dismissTask,
+                onClearFinished = viewModel::clearFinishedTasks
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
     }

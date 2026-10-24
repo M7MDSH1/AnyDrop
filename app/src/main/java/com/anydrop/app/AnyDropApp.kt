@@ -13,6 +13,7 @@ import com.anydrop.app.data.repository.DownloadTracker
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.readAppLanguageSync
+import com.anydrop.app.service.DownloadService
 import com.anydrop.app.service.UpdateCheckWorker
 import com.anydrop.app.ui.theme.TapeDeckPaletteState
 import com.anydrop.app.util.Constants
@@ -36,6 +37,9 @@ var pendingSharedUrl: String? = null
  * pastes the URL — the ViewModel's init{} only runs once and can't catch later shares.
  */
 val sharedUrlFlow = MutableStateFlow<String?>(null)
+
+/** Set when a download notification is tapped; the deck scrolls to its downloads list and clears it. */
+val showDownloadsRequest = MutableStateFlow(false)
 
 /**
  * App-lifetime coroutine scope for downloads. Downloads must NOT run in a
@@ -146,6 +150,7 @@ class AnyDropApp : Application() {
                 .setContentText(getString(R.string.notification_download_interrupted))
                 .setSmallIcon(android.R.drawable.stat_notify_error)
                 .setAutoCancel(true)
+                .setContentIntent(DownloadService.openDownloadsIntent(this))
                 .build()
             NotificationManagerCompat.from(this)
                 .notify(title, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID, notification)

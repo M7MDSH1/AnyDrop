@@ -6,6 +6,8 @@ object Constants {
     const val FOREGROUND_SERVICE_NOTIFICATION_ID = 1
     const val DOWNLOAD_PROGRESS_NOTIFICATION_ID = 1001
     const val DOWNLOAD_CHANNEL_ID = "anydrop_downloads"
+    // Opens the deck's downloads list (from any download notification).
+    const val EXTRA_SHOW_DOWNLOADS = "com.anydrop.app.SHOW_DOWNLOADS"
 
     // In-app updates from the project's GitHub releases.
     const val GITHUB_REPO = "M7MDSH1/AnyDrop"

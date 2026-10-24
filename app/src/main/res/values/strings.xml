@@ -232,6 +232,7 @@
     <string name="notification_complete">Complete</string>
     <string name="notification_failed">Failed</string>
     <string name="notification_cancelled">Cancelled</string>
+    <string name="notification_downloads_finished">Downloads finished</string>
 
     <!-- Errors (ViewModel / engine) -->
     <string name="error_no_media_found">No downloadable media found for this link.</string>

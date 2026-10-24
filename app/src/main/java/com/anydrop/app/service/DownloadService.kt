@@ -94,33 +94,33 @@ class DownloadService : Service() {
                     .setOngoing(true)
                     .setProgress(100, pct, false)
                     .setSilent(true)
+                    .setGroup(GROUP_DOWNLOADS)
+                    .setContentIntent(openDownloadsIntent(this))
                     .build()
                 NotificationManagerCompat.from(this)
                     .notify(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID, notification)
             }
-            Constants.ACTION_DOWNLOAD_COMPLETE -> {
-                if (!finishTag(intent)) return START_NOT_STICKY
-                val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
-                postFinalNotification(tag, getString(R.string.notification_complete), android.R.drawable.stat_sys_download_done, withMainIntent = true)
-            }
-            Constants.ACTION_DOWNLOAD_FAILED -> {
-                if (!finishTag(intent)) return START_NOT_STICKY
-                val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
-                postFinalNotification(tag, getString(R.string.notification_failed), android.R.drawable.stat_notify_error)
-            }
-            Constants.ACTION_DOWNLOAD_CANCEL -> {
-                if (!finishTag(intent)) return START_NOT_STICKY
-                val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
-                postFinalNotification(tag, getString(R.string.notification_cancelled), android.R.drawable.stat_notify_error)
-            }
+            Constants.ACTION_DOWNLOAD_COMPLETE ->
+                finishWith(intent, getString(R.string.notification_complete), android.R.drawable.stat_sys_download_done)
+            Constants.ACTION_DOWNLOAD_FAILED ->
+                finishWith(intent, getString(R.string.notification_failed), android.R.drawable.stat_notify_error)
+            Constants.ACTION_DOWNLOAD_CANCEL ->
+                finishWith(intent, getString(R.string.notification_cancelled), android.R.drawable.stat_notify_error)
         }
         return START_NOT_STICKY
     }
 
+    /** A download ended: its result notification replaces its progress, then the bookkeeping. */
+    private fun finishWith(intent: Intent, verb: String, icon: Int) {
+        val tag = intent.getStringExtra("tag") ?: return
+        if (tag !in activeTags) return
+        postFinalNotification(tag, verb, icon)
+        finishTag(tag)
+    }
+
     /** Shared terminal-path bookkeeping: drop the tag and clear tracker state. */
-    private fun finishTag(intent: Intent?): Boolean {
-        val tag = intent?.getStringExtra("tag") ?: return false
-        if (!activeTags.remove(tag)) return false
+    private fun finishTag(tag: String) {
+        activeTags.remove(tag)
         lastPercentages.remove(tag)
         titles.remove(tag)
         appDownloadScope.launch { downloadTracker.markDone(tag) }
@@ -128,26 +128,28 @@ class DownloadService : Service() {
         if (activeTags.isEmpty()) {
             foregroundPinned = false
             stopForeground(STOP_FOREGROUND_REMOVE)
+            // The results stay grouped under a summary that still opens the downloads list
+            // (a group Android makes up itself would just open the app).
+            NotificationManagerCompat.from(this).notify(
+                Constants.FOREGROUND_SERVICE_NOTIFICATION_ID,
+                summaryBuilder(getString(R.string.notification_downloads_finished))
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setAutoCancel(true)
+                    .build()
+            )
             stopSelf()
         }
-        return true
     }
 
-    private fun postFinalNotification(tag: String, verb: String, icon: Int, withMainIntent: Boolean = false) {
+    private fun postFinalNotification(tag: String, verb: String, icon: Int) {
         val builder = NotificationCompat.Builder(this, Constants.DOWNLOAD_CHANNEL_ID)
             .setContentTitle(titles[tag] ?: getString(R.string.app_name))
             .setContentText(verb)
             .setSmallIcon(icon)
             .setProgress(0, 0, false)
             .setAutoCancel(true)
-        if (withMainIntent) {
-            val pendingIntent = PendingIntent.getActivity(
-                this, 0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-            builder.setContentIntent(pendingIntent)
-        }
+            .setGroup(GROUP_DOWNLOADS)
+            .setContentIntent(openDownloadsIntent(this))
         NotificationManagerCompat.from(this)
             .notify(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID, builder.build())
     }
@@ -164,18 +166,41 @@ class DownloadService : Service() {
     }
 
     private fun buildSummary(text: String) =
-        NotificationCompat.Builder(this, Constants.DOWNLOAD_CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(text)
+        summaryBuilder(text)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(0, 0, true) // indeterminate: per-file % lives in tagged notifications
             .setOngoing(true)
-            .setSilent(true)
             .build()
+
+    /** The pin heads the group of per-file notifications, so tapping the group opens the downloads too. */
+    private fun summaryBuilder(text: String) =
+        NotificationCompat.Builder(this, Constants.DOWNLOAD_CHANNEL_ID)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(text)
+            .setSilent(true)
+            .setGroup(GROUP_DOWNLOADS)
+            .setGroupSummary(true)
+            .setContentIntent(openDownloadsIntent(this))
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+
+        private const val GROUP_DOWNLOADS = "com.anydrop.app.DOWNLOADS"
+
+        // Own request code: the update notification's intent to MainActivity uses 0, and two
+        // intents that differ only in extras would share (and overwrite) one PendingIntent.
+        private const val REQUEST_OPEN_DOWNLOADS = 1
+
+        /** A tap on any download notification opens AnyDrop on the deck's downloads list. */
+        fun openDownloadsIntent(context: Context): PendingIntent = PendingIntent.getActivity(
+            context,
+            REQUEST_OPEN_DOWNLOADS,
+            Intent(context, MainActivity::class.java)
+                .putExtra(Constants.EXTRA_SHOW_DOWNLOADS, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
         /** Start a download (or pre-register a sequential batch via [batchTags]). */
         fun startDownload(context: Context, tag: String, title: String, batchTags: List<String>? = null) {
