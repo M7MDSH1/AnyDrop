@@ -1112,6 +1112,13 @@ class YtDlpEngine(
         // Without ffmpeg the audio is pulled out of the video by Android's muxer afterwards.
         val nativeAudio = audioOnly && !ffmpegUsable
         val base = if (nativeAudio) ".temp_webaudio_${System.currentTimeMillis()}" else out.nameWithoutExtension
+        // Links that end in a code instead of a file type (Snapchat: ".27.IRZXSOY") would be
+        // refused by yt-dlp's file-name check; the file is named with the video's real type instead.
+        val oddExt = YtDlpFormatParser.hasOddExt(format.directUrl)
+        val ext = when {
+            !oddExt || (audioOnly && !nativeAudio) -> "%(ext)s"
+            else -> format.extension.takeIf { it in VIDEO_EXTS } ?: "mp4"
+        }
 
         val request = YoutubeDLRequest(format.directUrl).apply {
             addOption("--no-update")
@@ -1120,7 +1127,8 @@ class YtDlpEngine(
             addOption("--retries", "5")
             addOption("--fragment-retries", "5")
             addOption("--concurrent-fragments", "4")
-            addOption("-o", File(dir, "$base.%(ext)s").absolutePath)
+            addOption("-o", File(dir, "$base.$ext").absolutePath)
+            if (oddExt) addOption("--compat-options", "allow-unsafe-ext")
             if (audioOnly && !nativeAudio) {
                 addOption("-x")
                 addOption("--audio-format", "m4a")

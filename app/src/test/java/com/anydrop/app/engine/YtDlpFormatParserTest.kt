@@ -36,6 +36,20 @@ class YtDlpFormatParserTest {
     }
 
     @Test
+    fun videoLinks_endingInCodes_getARealFileType() {
+        // Snapchat's CDN ends links in codes, not file types.
+        val snap = "https://cf-st.sc-cdn.net/d/7aF3kQ.27.IRZXSOY?mo=Gk0aFBoAGgAyAX06AQRCBgjZ&uc=46"
+        assertEquals("mp4", YtDlpFormatParser.videoExtFromUrl(snap))
+        assertTrue(YtDlpFormatParser.hasOddExt(snap))
+        assertEquals("webm", YtDlpFormatParser.videoExtFromUrl("https://x.com/a.b/clip.WEBM?t=1"))
+        assertFalse(YtDlpFormatParser.hasOddExt("https://x.com/clip.mp4?t=1"))
+        assertFalse(YtDlpFormatParser.hasOddExt("https://x.com/live/index.m3u8"))
+        // No file type at all: yt-dlp names those itself, as before.
+        assertFalse(YtDlpFormatParser.hasOddExt("https://cdn.x.com/v/12345"))
+        assertEquals("mp4", YtDlpFormatParser.videoExtFromUrl("https://cdn.x.com/v/12345"))
+    }
+
+    @Test
     fun imageExtFromUrl_defaultsToJpg() {
         assertEquals("jpg", YtDlpFormatParser.imageExtFromUrl("https://scontent.cdninstagram.com/v/t51.123"))
         assertEquals("jpg", YtDlpFormatParser.imageExtFromUrl(""))

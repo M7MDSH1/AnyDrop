@@ -621,7 +621,7 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
         if (n > 1) label = "$label ($n)"
         YtDlpEngine.FormatInfo(
             id = "web:$i",
-            extension = if (c.isHls || c.isDash) "mp4" else c.url.substringBefore('?').substringAfterLast('.', "mp4").take(4).lowercase(),
+            extension = if (c.isHls || c.isDash) "mp4" else YtDlpFormatParser.videoExtFromUrl(c.url),
             resolution = label,
             filesize = 0L,
             vcodec = "page",

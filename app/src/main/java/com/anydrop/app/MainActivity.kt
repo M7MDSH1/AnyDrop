@@ -97,7 +97,11 @@ object PipLeaveHandler {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private var navController: NavController? = null
+    private var navController by mutableStateOf<NavController?>(null)
+
+    // A share or a download notification wants the deck. Kept until navigation exists: after the
+    // process was killed, the intent can arrive before the screen is composed.
+    private var deckRequested by mutableStateOf(false)
 
     @Inject
     lateinit var deckSessionRepository: DeckSessionRepository
@@ -118,8 +122,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         extractUrlFromIntent(intent)?.let { pendingSharedUrl = it }
         showUpdateRequested = intent?.getBooleanExtra(Constants.EXTRA_SHOW_UPDATE, false) == true
-        // Reopen on the tab the user last left, unless a share is pending (force DECK).
-        val startTab = if (pendingSharedUrl != null) Routes.TAPE_DECK
+        // A tapped download notification opens the deck's downloads list. The extra is dropped
+        // once read, so a rotation doesn't open the list again.
+        if (intent?.getBooleanExtra(Constants.EXTRA_SHOW_DOWNLOADS, false) == true) {
+            intent.removeExtra(Constants.EXTRA_SHOW_DOWNLOADS)
+            showDownloadsRequest.value = true
+            deckRequested = true
+        }
+        // Reopen on the tab the user last left, unless a share or the downloads list is pending (DECK).
+        val startTab = if (pendingSharedUrl != null || deckRequested) Routes.TAPE_DECK
         else deckSessionRepository.lastTab(Routes.TAPE_DECK)
 
         setContent {
@@ -131,6 +142,16 @@ class MainActivity : ComponentActivity() {
                 if (showUpdateRequested) {
                     showUpdateRequested = false
                     updateViewModel.showUpdate()
+                }
+            }
+            LaunchedEffect(deckRequested, navController) {
+                val nav = navController ?: return@LaunchedEffect
+                if (!deckRequested) return@LaunchedEffect
+                deckRequested = false
+                nav.navigate(Routes.TAPE_DECK) {
+                    popUpTo(0) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             }
             AnyDropTheme(darkTheme = darkMode) {
@@ -155,15 +176,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(Constants.EXTRA_SHOW_UPDATE, false)) showUpdateRequested = true
+        if (intent.getBooleanExtra(Constants.EXTRA_SHOW_DOWNLOADS, false)) {
+            showDownloadsRequest.value = true
+            deckRequested = true
+        }
         extractUrlFromIntent(intent)?.let { url ->
             pendingSharedUrl = url
             // Notify the running deck ViewModel so it pastes the URL immediately.
             sharedUrlFlow.value = url
-            navController?.navigate(Routes.TAPE_DECK) {
-                popUpTo(0) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
-            }
+            deckRequested = true
         }
     }
 

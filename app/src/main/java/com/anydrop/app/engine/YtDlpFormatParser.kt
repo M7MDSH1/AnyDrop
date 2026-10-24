@@ -19,6 +19,24 @@ object YtDlpFormatParser {
         return listOf("jpg", "jpeg", "png", "webp", "heic", "gif").firstOrNull { clean.endsWith(".$it") } ?: "jpg"
     }
 
+    private val VIDEO_FILE_EXTS = setOf("mp4", "m4v", "webm", "mkv", "mov", "3gp", "ts", "flv", "avi")
+    private val MEDIA_FILE_EXTS = VIDEO_FILE_EXTS +
+        setOf("m4a", "mp3", "aac", "ogg", "oga", "ogv", "opus", "wav", "flac", "weba", "m3u8", "m3u", "mpd", "f4m", "ism")
+
+    /** The file type at the end of a link's path, lowercase ("" when the path has none). */
+    fun urlExt(url: String): String =
+        url.substringBefore('?').substringBefore('#').substringAfterLast('/').substringAfterLast('.', "").lowercase()
+
+    /** A video link's file type, or [fallback] when the link ends in something else (Snapchat: ".27.IRZXSOY"). */
+    fun videoExtFromUrl(url: String, fallback: String = "mp4"): String =
+        urlExt(url).takeIf { it in VIDEO_FILE_EXTS } ?: fallback
+
+    /**
+     * The link ends in something that isn't a media file type. yt-dlp refuses to name a file
+     * after such an extension, so the download names the file itself.
+     */
+    fun hasOddExt(url: String): Boolean = urlExt(url).let { it.isNotEmpty() && it !in MEDIA_FILE_EXTS }
+
     fun isImageUrl(url: String): Boolean {
         val c = url.substringBefore("?").lowercase()
         return listOf(".jpg", ".jpeg", ".png", ".webp", ".heic").any { c.endsWith(it) } ||

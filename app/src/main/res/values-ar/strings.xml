@@ -232,6 +232,7 @@
     <string name="notification_complete">مكتمل</string>
     <string name="notification_failed">فشل</string>
     <string name="notification_cancelled">أُلغي</string>
+    <string name="notification_downloads_finished">انتهت التنزيلات</string>
 
     <!-- Errors (ViewModel / engine) -->
     <string name="error_no_media_found">لم يُعثر على وسائط قابلة للتنزيل لهذا الرابط.</string>
