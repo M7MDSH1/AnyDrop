@@ -297,8 +297,15 @@ class YtDlpEngine(
         }
 
         if (result.formats.isNotEmpty()) return result
-        failure?.let { throw friendlyFailure(it) }
+        failure?.let { throw friendlyFailure(it, signedIn = isSignedIn(cookieFile, host)) }
         return FetchResult(emptyList())
+    }
+
+    /** The user signed in to [host]'s site in AnyDrop (its cookies are in the cookies.txt yt-dlp gets). */
+    private fun isSignedIn(cookieFile: File?, host: String): Boolean {
+        val site = host.removePrefix("www.").removePrefix("m.").ifBlank { return false }
+        return runCatching { cookieFile?.readLines().orEmpty().any { line -> !line.startsWith("#") && line.contains(site) } }
+            .getOrDefault(false)
     }
 
     private fun usesDesktopPage(host: String) =
@@ -313,17 +320,18 @@ class YtDlpEngine(
     suspend fun getPageMedia(url: String, cookieFile: File? = null): FetchResult = coroutineScope {
         val host = hostOf(url)
         val pageOnly = host.isOn("instagram.com", "instagr.am", "threads.net", "threads.com")
-        val main = async {
-            if (pageOnly) null
-            else try {
-                ytdlpFormats(url, cookieFile)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Whole page: yt-dlp has nothing for the page itself", e)
-                null
-            }
+        // Why yt-dlp had nothing, told to the user when the page has nothing either.
+        var mainFailure: Exception? = null
+        suspend fun ytdlpOrNull(): FetchResult? = try {
+            ytdlpFormats(url, cookieFile)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Whole page: yt-dlp has nothing for the page itself", e)
+            mainFailure = e
+            null
         }
+        val main = async { if (pageOnly) null else ytdlpOrNull() }
         val page = async {
             try {
                 webExtractor.extract(url, usesDesktopPage(host), timeoutMs = 30_000, wholePage = true)
@@ -334,9 +342,13 @@ class YtDlpEngine(
                 null
             }
         }
-        // Just the page's picture from yt-dlp is no video; the page's own reading has the real ones.
-        val mainResult = main.await()?.let { if (it.coverOnly) it.copy(formats = emptyList()) else it }
         val scan = page.await()
+        // Instagram is read from its page. When the page shows nothing (a private or
+        // age-restricted post), yt-dlp is asked after all: for the video, or for the reason.
+        val pageEmpty = scan == null || (scan.videos.isEmpty() && scan.images.isEmpty())
+        val ytdlp = if (pageOnly && pageEmpty) ytdlpOrNull() else main.await()
+        // Just the page's picture from yt-dlp is no video; the page's own reading has the real ones.
+        val mainResult = ytdlp?.let { if (it.coverOnly) it.copy(formats = emptyList()) else it }
 
         // yt-dlp's title when it found the page's video; otherwise the page's own (a catch-all
         // extractor names its guesses "Title (1)").
@@ -371,8 +383,11 @@ class YtDlpEngine(
                 )
             }
         val all = mainVideo + mainImages + onPage + linked
-        if (all.isEmpty() && mainResult == null && scan == null) {
-            throw UnsupportedSiteException(context.getString(R.string.error_no_media_found))
+        if (all.isEmpty()) {
+            mainFailure?.let { throw friendlyFailure(it, signedIn = isSignedIn(cookieFile, host)) }
+            if (mainResult == null && scan == null) {
+                throw UnsupportedSiteException(context.getString(R.string.error_no_media_found))
+            }
         }
         FetchResult(
             formats = all,
@@ -434,12 +449,16 @@ class YtDlpEngine(
         MediaProbe.fill(context, formats, pageUrl)
 
     /** Turns raw yt-dlp errors into something a person can act on. */
-    private fun friendlyFailure(e: Exception): Exception {
+    private fun friendlyFailure(e: Exception, signedIn: Boolean = false): Exception {
         val m = e.message.orEmpty()
         return when {
             listOf("ip address is blocked", "not available in your country", "geo restrict", "blocked in your country", "not available in your region")
                 .any { m.contains(it, ignoreCase = true) } ->
                 UnsupportedSiteException(context.getString(R.string.error_region_blocked))
+            e is UnsupportedSiteException && e.message == restrictedMessage ->
+                UnsupportedSiteException(
+                    context.getString(if (signedIn) R.string.error_restricted_signed_in else R.string.error_restricted_post)
+                )
             e is UnsupportedSiteException && e.isLoginMessage ->
                 UnsupportedSiteException(context.getString(R.string.error_private_post))
             e is UnsupportedSiteException -> e
@@ -452,6 +471,7 @@ class YtDlpEngine(
 
     private val Exception.isLoginMessage: Boolean get() = message == loginRequiredMessage
     private val loginRequiredMessage = "login-required"
+    private val restrictedMessage = "audience-restricted"
 
     private suspend fun webFormats(url: String, desktop: Boolean, timeoutMs: Long = 25_000): FetchResult? {
         val scan = try {
@@ -577,6 +597,10 @@ class YtDlpEngine(
                     if (e.isImpersonationUnavailable()) {
                         throw UnsupportedSiteException(context.getString(R.string.error_site_unsupported))
                     }
+                    if (e.isAudienceRestricted()) {
+                        // Age or audience restriction: only some signed-in accounts may see it.
+                        throw UnsupportedSiteException(restrictedMessage)
+                    }
                     if (e.needsLogin()) {
                         // Caller tries the page-reading engine before this reaches the user.
                         throw UnsupportedSiteException(loginRequiredMessage)
@@ -597,6 +621,18 @@ class YtDlpEngine(
         return m.contains("No video formats found", ignoreCase = true) ||
             m.contains("Unsupported URL", ignoreCase = true) ||
             m.contains("There's no video", ignoreCase = true)
+    }
+
+    /**
+     * The site limits who may see this (Instagram: "This content isn't available to everyone:
+     * It can't be seen by certain audiences"; YouTube: "Sign in to confirm your age").
+     */
+    private fun Exception.isAudienceRestricted(): Boolean {
+        val m = message ?: ""
+        return listOf(
+            "isn't available to everyone", "certain audiences", "confirm your age",
+            "age-restricted", "age restricted", "inappropriate for some users"
+        ).any { m.contains(it, ignoreCase = true) }
     }
 
     /**
