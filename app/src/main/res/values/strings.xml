@@ -252,6 +252,8 @@
     <!-- No-login downloads, download tracker, browser -->
     <string name="error_region_blocked">The site blocks this video for your country or network. Try again later or on another connection.</string>
     <string name="error_private_post">This post is private or needs a login. Public posts download without an account — for private ones, sign in under Settings → Session Signal.</string>
+    <string name="error_restricted_post">This video is limited to some viewers (age or audience restriction), so the site only shows it to signed-in accounts that may see it. Sign in under Settings → Session Signal, then try again.</string>
+    <string name="error_restricted_signed_in">This video is limited to some viewers (age or audience restriction), and the site doesn\'t show it to the account you signed in with.</string>
     <string name="error_site_unsupported">This site blocks non-browser downloaders and isn\'t supported.</string>
     <string name="error_link_expired">The site refused the download — the link may have expired. Tap RETRY.</string>
     <string name="error_no_space">Your phone is out of storage space.</string>
