@@ -127,6 +127,7 @@ class YtDlpEngine(
         try {
             com.yausername.ffmpeg.FFmpeg.getInstance().init(context)
             Log.i(TAG, "FFmpeg initialized")
+            patchFfmpegFor16kPages()
         } catch (e: Exception) {
             Log.w(TAG, "FFmpeg init failed", e)
         }
@@ -150,10 +151,36 @@ class YtDlpEngine(
     }
 
     /**
-     * Whether the bundled ffmpeg actually runs here. It's built for 4 KB memory pages, so it
-     * can't load on phones with 16 KB pages (newer devices); yt-dlp then silently skips
-     * merging/converting. When false we avoid needing it: merges use [MediaMuxerUtil] (already
-     * the case) and audio is kept as the original AAC stream instead of being converted.
+     * ffmpeg's package (unpacked from libffmpeg.zip.so) carries five WebP libraries built for
+     * 4 KB memory pages, which stops ffmpeg from starting on phones with 16 KB pages
+     * (youtubedl-android#365). The app ships them rebuilt for 16 KB pages (jniLibs,
+     * libffmpeg16k_*.so, 64-bit only: 32-bit phones have 4 KB pages) and puts them in place
+     * after every unpack. The library only unpacks again when its package changes.
+     */
+    private fun patchFfmpegFor16kPages() {
+        val shipped = File(context.applicationInfo.nativeLibraryDir)
+        val target = File(context.noBackupFilesDir, "youtubedl-android/packages/ffmpeg/usr/lib")
+        if (!target.isDirectory) return
+        for (name in listOf("sharpyuv", "webp", "webpdecoder", "webpdemux", "webpmux")) {
+            val rebuilt = File(shipped, "libffmpeg16k_$name.so")
+            if (!rebuilt.isFile) return
+            val lib = File(target, "lib$name.so")
+            if (lib.length() == rebuilt.length()) continue
+            val tmp = File(target, ".lib$name.so.tmp")
+            rebuilt.copyTo(tmp, overwrite = true)
+            if (!tmp.renameTo(lib)) {
+                lib.delete()
+                tmp.renameTo(lib)
+            }
+            Log.i(TAG, "ffmpeg: lib$name.so replaced with the 16 KB-page build")
+        }
+    }
+
+    /**
+     * Whether the bundled ffmpeg actually runs here. Before [patchFfmpegFor16kPages] it couldn't
+     * load on phones with 16 KB pages, and yt-dlp then silently skipped merging/converting. When
+     * false we avoid needing it: merges use [MediaMuxerUtil] (already the case) and audio is kept
+     * as the original AAC stream instead of being converted.
      */
     val ffmpegUsable: Boolean by lazy {
         try {
