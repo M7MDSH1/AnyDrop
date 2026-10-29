@@ -12,6 +12,7 @@ sealed interface DownloadState {
         val sizeText: String = ""
     ) : DownloadState
     data class Completed(val mediaItem: MediaItem) : DownloadState
-    data class Error(val message: String) : DownloadState
+    /** [detail]: the tool's own error output (yt-dlp, libtorrent), for "Copy error details"; blank when none. */
+    data class Error(val message: String, val detail: String = "") : DownloadState
     data object Cancelled : DownloadState
 }

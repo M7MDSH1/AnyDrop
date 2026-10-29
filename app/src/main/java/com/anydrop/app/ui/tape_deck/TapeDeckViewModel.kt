@@ -166,7 +166,7 @@ class TapeDeckViewModel @Inject constructor(
     private fun DownloadTask.toDownloadState(): DownloadState = when (status) {
         TaskStatus.RUNNING -> DownloadState.Progress(percent, speed, eta, phase, sizeText)
         TaskStatus.DONE -> DownloadState.Completed(MediaItem(id = tag, title = title, localFilePath = filePath))
-        TaskStatus.FAILED -> DownloadState.Error(error)
+        TaskStatus.FAILED -> DownloadState.Error(error, errorDetail)
         TaskStatus.CANCELLED -> DownloadState.Cancelled
     }
 
@@ -564,7 +564,8 @@ class TapeDeckViewModel @Inject constructor(
             // silently showing an empty list.
             _downloadState.value = DownloadState.Error(
                 e.message
-                    ?: getApplication<Application>().getString(R.string.error_fetch_formats)
+                    ?: getApplication<Application>().getString(R.string.error_fetch_formats),
+                detail = (e.cause ?: e).toString()
             )
         } finally {
             if (generation == fetchGeneration) _isLoadingFormats.value = false

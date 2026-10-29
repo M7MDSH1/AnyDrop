@@ -47,6 +47,19 @@ class YtDlpEngine(
         private val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
         /** The most videos listed from one playlist. */
         private const val MAX_PLAYLIST = 200
+        /** How much of yt-dlp's error output is kept for "Copy error details". */
+        private const val MAX_ERROR_DETAIL = 4000
+
+        private fun partialKey(outputPath: String) = Integer.toHexString(outputPath.hashCode())
+
+        /**
+         * How the unfinished files of the download into [outputPath] begin: yt-dlp's
+         * "<name>.part" files, and the separate video and audio of a merged download.
+         */
+        fun partialFilePrefixes(outputPath: String): List<String> {
+            val key = partialKey(outputPath)
+            return listOfNotNull(File(outputPath).nameWithoutExtension.ifBlank { null }, ".temp_video_$key", ".temp_audio_$key")
+        }
         /** [FormatInfo.group] prefix of a playlist's videos ("playlist:" + the video's link). */
         const val PLAYLIST_GROUP = "playlist:"
         /** [FormatInfo.group] of the page's own video in whole-page results. */
@@ -276,7 +289,8 @@ class YtDlpEngine(
             m.contains("attempting impersonation")
     }
 
-    class UnsupportedSiteException(message: String) : Exception(message)
+    /** A failure explained for the user; [cause] carries the tool's own error (see "Copy error details"). */
+    class UnsupportedSiteException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     // ── Format discovery ─────────────────────────────────────────────────────
 
@@ -478,21 +492,24 @@ class YtDlpEngine(
     /** Turns raw yt-dlp errors into something a person can act on. */
     private fun friendlyFailure(e: Exception, signedIn: Boolean = false): Exception {
         val m = e.message.orEmpty()
+        // yt-dlp's own error, kept as the cause for "Copy error details".
+        val raw = (if (e is UnsupportedSiteException) e.cause else e) ?: e
         return when {
             listOf("ip address is blocked", "not available in your country", "geo restrict", "blocked in your country", "not available in your region")
                 .any { m.contains(it, ignoreCase = true) } ->
-                UnsupportedSiteException(context.getString(R.string.error_region_blocked))
+                UnsupportedSiteException(context.getString(R.string.error_region_blocked), raw)
             e is UnsupportedSiteException && e.message == restrictedMessage ->
                 UnsupportedSiteException(
-                    context.getString(if (signedIn) R.string.error_restricted_signed_in else R.string.error_restricted_post)
+                    context.getString(if (signedIn) R.string.error_restricted_signed_in else R.string.error_restricted_post),
+                    raw
                 )
             e is UnsupportedSiteException && e.isLoginMessage ->
-                UnsupportedSiteException(context.getString(R.string.error_private_post))
+                UnsupportedSiteException(context.getString(R.string.error_private_post), raw)
             e is UnsupportedSiteException -> e
             listOf("unable to download webpage", "timed out", "network is unreachable", "failed to resolve", "connection reset")
                 .any { m.contains(it, ignoreCase = true) } ->
-                UnsupportedSiteException(context.getString(R.string.error_network))
-            else -> UnsupportedSiteException(context.getString(R.string.error_no_media_found))
+                UnsupportedSiteException(context.getString(R.string.error_network), raw)
+            else -> UnsupportedSiteException(context.getString(R.string.error_no_media_found), raw)
         }
     }
 
@@ -622,15 +639,15 @@ class YtDlpEngine(
                 } catch (e: Exception) {
                     Log.w(TAG, "getFormats failed with client '$client' (${index + 1}/${clients.size})", e)
                     if (e.isImpersonationUnavailable()) {
-                        throw UnsupportedSiteException(context.getString(R.string.error_site_unsupported))
+                        throw UnsupportedSiteException(context.getString(R.string.error_site_unsupported), e)
                     }
                     if (e.isAudienceRestricted()) {
                         // Age or audience restriction: only some signed-in accounts may see it.
-                        throw UnsupportedSiteException(restrictedMessage)
+                        throw UnsupportedSiteException(restrictedMessage, e)
                     }
                     if (e.needsLogin()) {
                         // Caller tries the page-reading engine before this reaches the user.
-                        throw UnsupportedSiteException(loginRequiredMessage)
+                        throw UnsupportedSiteException(loginRequiredMessage, e)
                     }
                     if (e.isNoVideoFormats()) {
                         val imgs = imageFallbackViaThumbnails(url, cookieFile, client, isTiktok)
@@ -846,7 +863,7 @@ class YtDlpEngine(
                 } catch (e: CanceledException) {
                     break@outer
                 } catch (e: Exception) {
-                    lastError = friendlyDownloadError(e)
+                    lastError = friendlyDownloadError(e, tag)
                     Log.w(TAG, "Download failed with client '$client', format '$fmt' (${index + 1}/${clients.size})", e)
                     // Only worth retrying if this looks like a 403/blocked-client
                     // issue, not a genuine bad URL or no-space error. For TikTok there
@@ -933,7 +950,7 @@ class YtDlpEngine(
             } catch (e: CanceledException) {
                 break
             } catch (e: Exception) {
-                lastError = friendlyDownloadError(e)
+                lastError = friendlyDownloadError(e, tag)
                 Log.w(TAG, "Audio download failed with client '$client' (${index + 1}/${clients.size})", e)
                 if (e.isImpersonationUnavailable()) {
                     lastError = context.getString(R.string.error_site_unsupported)
@@ -1047,7 +1064,7 @@ class YtDlpEngine(
             } catch (e: CanceledException) {
                 break
             } catch (e: Exception) {
-                lastError = friendlyDownloadError(e)
+                lastError = friendlyDownloadError(e, tag)
                 Log.w(TAG, "Image download failed with client '$client' (${index + 1}/${clients.size})", e)
                 if (e.isImpersonationUnavailable()) {
                     lastError = context.getString(R.string.error_site_unsupported)
@@ -1072,9 +1089,11 @@ class YtDlpEngine(
         trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
 
         val downloadDir = File(outputPath).parentFile ?: File(outputPath)
-        val timestamp = System.currentTimeMillis()
-        val tempVideoPath = File(downloadDir, ".temp_video_$timestamp.mp4").absolutePath
-        val tempAudioPath = File(downloadDir, ".temp_audio_$timestamp.m4a").absolutePath
+        // Named after the output, so a RETRY after the app was closed carries on with the same
+        // files: yt-dlp resumes a .part file and skips a stream that already finished.
+        val key = partialKey(outputPath)
+        val tempVideoPath = File(downloadDir, ".temp_video_$key.mp4").absolutePath
+        val tempAudioPath = File(downloadDir, ".temp_audio_$key.m4a").absolutePath
 
         try {
             // Video is ~85% of the bytes, audio the rest; each phase gets its share of the bar.
@@ -1150,7 +1169,7 @@ class YtDlpEngine(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Download with merge failed", e)
-            finish(tag, false, friendlyDownloadError(e))
+            finish(tag, false, friendlyDownloadError(e, tag))
         }
     }
 
@@ -1246,7 +1265,7 @@ class YtDlpEngine(
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "Direct download failed", e)
-            finish(tag, false, friendlyDownloadError(e))
+            finish(tag, false, friendlyDownloadError(e, tag))
         }
     }
 
@@ -1306,17 +1325,22 @@ class YtDlpEngine(
 
     /** Terminal event for a download flow: completed (already sent), cancelled or failed. */
     private suspend fun ProducerScope<DownloadState>.finish(tag: String, succeeded: Boolean, error: String) {
+        val detail = rawErrors.remove(tag).orEmpty()
         if (!succeeded) {
             if (tag in cancelled) trySend(DownloadState.Cancelled)
-            else trySend(DownloadState.Error(error.ifBlank { context.getString(R.string.error_download_failed) }))
+            else trySend(DownloadState.Error(error.ifBlank { context.getString(R.string.error_download_failed) }, detail))
         }
         cancelled.remove(tag)
         close()
         awaitClose { }
     }
 
-    private fun friendlyDownloadError(e: Exception): String {
+    /** yt-dlp's own words for the last failure of each download (by tag), for "Copy error details". */
+    private val rawErrors = ConcurrentHashMap<String, String>()
+
+    private fun friendlyDownloadError(e: Exception, tag: String): String {
         val m = e.message.orEmpty()
+        rawErrors[tag] = m.ifBlank { e.toString() }.take(MAX_ERROR_DETAIL)
         return when {
             m.contains("HTTP Error 403", true) -> context.getString(R.string.error_link_expired)
             m.contains("No space left", true) -> context.getString(R.string.error_no_space)

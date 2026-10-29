@@ -11,6 +11,7 @@ import com.anydrop.app.appDownloadScope
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.MediaSniffer
 import com.anydrop.app.engine.TorrentFileKind
+import com.anydrop.app.engine.YtDlpEngine
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.YtDlpFormatParser
 import com.anydrop.app.service.DownloadService
@@ -23,6 +24,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -58,6 +61,8 @@ data class DownloadTask(
     val eta: String = "",
     val sizeText: String = "",
     val error: String = "",
+    /** The tool's own error output behind [error], for "Copy error details". */
+    val errorDetail: String = "",
     val filePath: String = "",
     val startedAt: Long = System.currentTimeMillis()
 ) {
@@ -67,7 +72,8 @@ data class DownloadTask(
 /**
  * The download tracker: every download started from the deck, the share sheet or the
  * browser shows up here with live progress, and can be stopped, retried or opened.
- * Lives for the app process (downloads run in [appDownloadScope], not in a ViewModel).
+ * Downloads run in [appDownloadScope], not in a ViewModel. The list itself is kept on disk
+ * ([DownloadListStore]), so it's still there after Android closes the app.
  */
 @Singleton
 class DownloadQueue @Inject constructor(
@@ -75,12 +81,39 @@ class DownloadQueue @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val libraryRepository: LibraryRepository,
     private val cookieRepository: CookieRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val store: DownloadListStore
 ) {
-    private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
+    private val _tasks = MutableStateFlow(restore(store.load()))
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
 
     private val jobs = ConcurrentHashMap<String, Job>()
+
+    init {
+        // Saved whenever a download is added, removed or changes state; progress ticks aren't.
+        appDownloadScope.launch {
+            _tasks
+                .map { list -> list.map { it.copy(phase = "", speed = "", eta = "", percent = if (it.isActive) 0 else it.percent) } }
+                .distinctUntilChanged()
+                .collect(store::save)
+        }
+    }
+
+    /**
+     * The saved list as the app reopens. A download that was running is no longer: it finished
+     * if its file is complete, otherwise it was interrupted and RETRY carries on from its
+     * partial file.
+     */
+    private fun restore(saved: List<DownloadTask>): List<DownloadTask> = saved.map { task ->
+        if (!task.isActive) return@map task
+        val out = File(task.tag)
+        val complete = out.isFile && out.length() > 0L && !File(task.tag + ".part").exists()
+        if (complete) {
+            task.copy(status = TaskStatus.DONE, percent = 100, filePath = out.absolutePath, sizeText = sizeLabel(out.length()))
+        } else {
+            task.copy(status = TaskStatus.FAILED, error = context.getString(R.string.download_interrupted_retry))
+        }
+    }
 
     /** Starts one download. Returns its tag (= [outputPath]). */
     fun launch(request: DownloadRequest, outputPath: String): String {
@@ -124,15 +157,36 @@ class DownloadQueue @Inject constructor(
     fun retry(tag: String) {
         val task = _tasks.value.firstOrNull { it.tag == tag } ?: return
         if (task.isActive) return
-        launch(task.request, tag)
+        // Session cookies aren't saved with the list: a restored page video gets them again.
+        val request = task.request.let { r ->
+            if (r.cookieHeader == null && r.format.isFromPage) r.copy(cookieHeader = MediaSniffer.cookieHeaderFor(r.format.directUrl)) else r
+        }
+        launch(request, tag)
     }
 
     fun dismiss(tag: String) {
+        val removed = _tasks.value.filter { it.tag == tag && !it.isActive }
         _tasks.update { list -> list.filterNot { it.tag == tag && !it.isActive } }
+        removed.forEach(::deletePartials)
     }
 
     fun clearFinished() {
+        val removed = _tasks.value.filter { !it.isActive }
         _tasks.update { list -> list.filter { it.isActive } }
+        removed.forEach(::deletePartials)
+    }
+
+    /** A download leaving the list won't be resumed: its partial files go too. */
+    private fun deletePartials(task: DownloadTask) {
+        if (task.status == TaskStatus.DONE) return
+        val out = File(task.tag)
+        val prefixes = YtDlpEngine.partialFilePrefixes(task.tag)
+        appDownloadScope.launch {
+            out.parentFile?.listFiles()?.forEach { f ->
+                val unfinished = f.name.startsWith(".temp_") || f.name.endsWith(".part") || f.name.endsWith(".ytdl")
+                if (f.isFile && unfinished && prefixes.any { f.name.startsWith(it) }) f.delete()
+            }
+        }
     }
 
     /** Opens a finished download in whatever app handles it. */
@@ -284,7 +338,9 @@ class DownloadQueue @Inject constructor(
                     libraryRepository.refreshLibrary()
                 }
                 is DownloadState.Error -> {
-                    update(tag) { it.copy(status = TaskStatus.FAILED, error = state.message, speed = "", eta = "") }
+                    update(tag) {
+                        it.copy(status = TaskStatus.FAILED, error = state.message, errorDetail = state.detail, speed = "", eta = "")
+                    }
                     DownloadService.notifyFailed(context, tag, request.title.ifBlank { context.getString(R.string.error_download_failed) })
                 }
                 is DownloadState.Cancelled -> update(tag) { it.copy(status = TaskStatus.CANCELLED, speed = "", eta = "") }

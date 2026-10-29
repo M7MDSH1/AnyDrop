@@ -64,6 +64,7 @@ import com.anydrop.app.engine.TorrentException
 import com.anydrop.app.engine.distinctPageVideos
 import com.anydrop.app.engine.torrentFileList
 import com.anydrop.app.ui.components.TorrentPicker
+import com.anydrop.app.ui.components.CopyErrorDetailsButton
 import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.isWholePage
 import com.anydrop.app.ui.components.PlaylistOffer
@@ -298,13 +299,18 @@ private fun ShareSheet(
                 }
 
                 downloadState is DownloadState.Error -> {
+                    val error = downloadState as DownloadState.Error
                     Text(
-                        (downloadState as DownloadState.Error).message,
+                        error.message,
                         color = StatusRed,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         lineHeight = 17.sp
                     )
+                    if (error.detail.isNotBlank()) {
+                        Spacer(Modifier.height(10.dp))
+                        CopyErrorDetailsButton(error.message, error.detail, link = sharedUrl, color = StatusRed)
+                    }
                 }
 
                 // A torrent: pick its files.

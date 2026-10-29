@@ -46,6 +46,7 @@ import com.anydrop.app.R
 import com.anydrop.app.data.repository.DownloadTask
 import com.anydrop.app.data.repository.TaskKind
 import com.anydrop.app.data.repository.TaskStatus
+import com.anydrop.app.ui.components.CopyErrorDetailsButton
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.Hairline
@@ -244,6 +245,14 @@ private fun TaskCard(
                 lineHeight = 15.sp,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(8.dp))
+            CopyErrorDetailsButton(
+                message = task.error,
+                detail = task.errorDetail,
+                link = task.request.webpageUrl.ifBlank { task.request.url },
+                color = StatusRed,
+                quality = task.quality
             )
         }
     }
