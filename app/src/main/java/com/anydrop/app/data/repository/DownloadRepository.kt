@@ -157,7 +157,12 @@ class DownloadRepository(
             }
         }
     }.catch { e ->
-        emit(DownloadState.Error(e.message?.takeIf { e is TorrentException } ?: context.getString(R.string.torrent_failed)))
+        emit(
+            DownloadState.Error(
+                e.message?.takeIf { e is TorrentException } ?: context.getString(R.string.torrent_failed),
+                detail = e.toString()
+            )
+        )
     }.flowOn(ioDispatcher)
 
     /**

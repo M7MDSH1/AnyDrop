@@ -58,6 +58,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.ui.components.DuplicatePromptDialog
+import com.anydrop.app.ui.components.ErrorDetails
 import com.anydrop.app.ui.tape_deck.components.LinkField
 import com.anydrop.app.ui.tape_deck.components.RecordButton
 import com.anydrop.app.ui.tape_deck.components.DeckError
@@ -154,7 +155,9 @@ fun TapeDeckScreen(
             delay(1500)
             val clip = runCatching {
                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.primaryClip?.getItemAt(0)?.text?.toString()?.trim().orEmpty()
+                // An error report AnyDrop just copied holds the link, but isn't one to load.
+                if (ErrorDetails.isReport(cm.primaryClipDescription)) ""
+                else cm.primaryClip?.getItemAt(0)?.text?.toString()?.trim().orEmpty()
             }.getOrDefault("")
             if (clip.isBlank() || clip == lastSeenClip || clip == viewModel.url.value) continue
             if (clip.isLinkLike()) {
@@ -444,7 +447,7 @@ fun TapeDeckScreen(
         }
 
         (downloadState as? DownloadState.Error)?.let { error ->
-            DeckError(error.message)
+            DeckError(error.message, detail = error.detail, link = url)
             Spacer(modifier = Modifier.height(12.dp))
         }
 

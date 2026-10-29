@@ -228,6 +228,9 @@
     <string name="notification_download_active">جارٍ التنزيل…</string>
     <string name="notification_downloading_files">جارٍ التنزيل (%1$d ملفات)</string>
     <string name="notification_download_interrupted">فشل — انقطع التنزيل</string>
+    <string name="download_interrupted_retry">توقّف التنزيل عند إغلاق AnyDrop. اضغط «إعادة المحاولة» لإكماله من حيث توقّف.</string>
+    <string name="error_copy_details">نسخ تفاصيل الخطأ</string>
+    <string name="error_details_copied">تم نسخ تفاصيل الخطأ</string>
     <string name="download_progress">جارٍ التنزيل… %1$d٪٪</string>
     <string name="notification_complete">مكتمل</string>
     <string name="notification_failed">فشل</string>

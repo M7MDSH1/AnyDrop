@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anydrop.app.R
+import com.anydrop.app.ui.components.CopyErrorDetailsButton
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.Hairline
@@ -128,9 +129,12 @@ fun RecordButton(
     }
 }
 
-/** Why the last fetch/download didn't work, in words — never a bare stack trace. */
+/**
+ * Why the last fetch/download didn't work, in words — never a bare stack trace. With a [detail]
+ * (the tool's own error), a button copies everything a bug report needs.
+ */
 @Composable
-fun DeckError(message: String, modifier: Modifier = Modifier) {
+fun DeckError(message: String, modifier: Modifier = Modifier, detail: String = "", link: String = "") {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -143,13 +147,19 @@ fun DeckError(message: String, modifier: Modifier = Modifier) {
     ) {
         Icon(Icons.Filled.ErrorOutline, null, tint = StatusRed, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
-        Text(
-            text = message,
-            color = White.copy(alpha = 0.9f),
-            fontSize = 12.sp,
-            lineHeight = 17.sp,
-            fontFamily = FontFamily.Monospace
-        )
+        Column {
+            Text(
+                text = message,
+                color = White.copy(alpha = 0.9f),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                fontFamily = FontFamily.Monospace
+            )
+            if (detail.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                CopyErrorDetailsButton(message, detail, link, color = StatusRed)
+            }
+        }
     }
 }
 

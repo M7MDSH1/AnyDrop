@@ -8,10 +8,12 @@ import coil.Coil
 import coil.ImageLoader
 import coil.decode.VideoFrameDecoder
 import com.anydrop.app.R
+import com.anydrop.app.data.repository.DownloadListStore
 import com.anydrop.app.data.repository.DownloadRepository
 import com.anydrop.app.data.repository.DownloadTracker
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
+import com.anydrop.app.engine.YtDlpEngine
 import com.anydrop.app.data.repository.readAppLanguageSync
 import com.anydrop.app.service.DownloadService
 import com.anydrop.app.service.UpdateCheckWorker
@@ -65,6 +67,9 @@ class AnyDropApp : Application() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
+    @Inject
+    lateinit var downloadListStore: DownloadListStore
+
     override fun attachBaseContext(base: android.content.Context) {
         super.attachBaseContext(
             LocaleHelper.wrapAppLocale(base, readAppLanguageSync(base))
@@ -115,9 +120,13 @@ class AnyDropApp : Application() {
      *      interrupted" (never as stuck "Downloading…") and their orphaned partial
      *      / temp files are swept off disk.
      *  (3) A folder-wide sweep removes any leftover *.part / .temp_* junk.
+     * Partial files of downloads still in the deck's downloads list ([DownloadListStore])
+     * are kept: RETRY resumes them. They go when the download leaves the list.
      */
     private fun reconcileInterruptedDownloads() {
         appDownloadScope.launch {
+            val resumable = downloadListStore.unfinishedOutputs().flatMap { YtDlpEngine.partialFilePrefixes(it.path) }
+            fun keep(f: File) = resumable.any { f.name.startsWith(it) }
             val stale = downloadTracker.staleDownloads()
             var restored = false
             stale.forEach { (path, title) ->
@@ -129,13 +138,13 @@ class AnyDropApp : Application() {
                     downloadTracker.markDone(path)
                     restored = restored || ok
                 } else {
-                    cleanOrphans(output)
+                    cleanOrphans(output, ::keep)
                     postInterruptedNotification(title)
                 }
             }
-            sweepOrphanFiles(libraryRepository.getVideoDir())
-            sweepOrphanFiles(libraryRepository.getImageDir())
-            sweepOrphanFiles(libraryRepository.getAudioDir())
+            sweepOrphanFiles(libraryRepository.getVideoDir(), ::keep)
+            sweepOrphanFiles(libraryRepository.getImageDir(), ::keep)
+            sweepOrphanFiles(libraryRepository.getAudioDir(), ::keep)
             if (restored) {
                 libraryRepository.invalidateIndexCache()
             }
@@ -160,19 +169,19 @@ class AnyDropApp : Application() {
     }
 
     /** Remove the partial download and any mux temp siblings for a dead download. */
-    private fun cleanOrphans(output: File) {
+    private fun cleanOrphans(output: File, keep: (File) -> Boolean) {
         val dir = output.parentFile ?: return
         val base = output.name
         dir.listFiles()?.forEach { f ->
-            if (f.isFile && (f.name == "$base.part" || f.name.startsWith(".temp_"))) {
+            if (f.isFile && !keep(f) && (f.name == "$base.part" || f.name.startsWith(".temp_"))) {
                 f.delete()
             }
         }
     }
 
-    private fun sweepOrphanFiles(dir: File) {
+    private fun sweepOrphanFiles(dir: File, keep: (File) -> Boolean) {
         dir.listFiles()?.forEach { f ->
-            if (f.isFile && (f.name.endsWith(".part") || f.name.startsWith(".temp_"))) {
+            if (f.isFile && !keep(f) && (f.name.endsWith(".part") || f.name.startsWith(".temp_"))) {
                 f.delete()
             }
         }

@@ -228,6 +228,9 @@
     <string name="notification_download_active">Downloading…</string>
     <string name="notification_downloading_files">Downloading (%1$d files)</string>
     <string name="notification_download_interrupted">Failed — download interrupted</string>
+    <string name="download_interrupted_retry">Interrupted when AnyDrop was closed. Tap RETRY to carry on where it stopped.</string>
+    <string name="error_copy_details">COPY ERROR DETAILS</string>
+    <string name="error_details_copied">Error details copied</string>
     <string name="download_progress">Downloading… %1$d%%</string>
     <string name="notification_complete">Complete</string>
     <string name="notification_failed">Failed</string>
