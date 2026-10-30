@@ -54,6 +54,15 @@ class PlayerViewModel @Inject constructor(
         _currentMedia.value?.let { collectionsRepository.toggleFavorite(listOf(it)) }
     }
 
+    /** A video being listened to as sound only (from this position), or null. */
+    private val _asAudioFrom = MutableStateFlow<Long?>(null)
+    val asAudioFrom: StateFlow<Long?> = _asAudioFrom.asStateFlow()
+
+    /** The video on screen keeps playing as sound only, with the screen off if wanted. */
+    fun listenAsAudio(positionMs: Long) {
+        _asAudioFrom.value = positionMs
+    }
+
     /** Subtitles saved next to the video (language → file). */
     fun subtitlesFor(item: MediaItem): Map<String, java.io.File> = libraryRepository.subtitlesFor(item)
 
@@ -139,6 +148,7 @@ class PlayerViewModel @Inject constructor(
 
     /** Begin a watch session for [media], resetting every per-video piece of state. */
     private fun startSession(media: MediaItem, fromLibrary: Boolean = true) {
+        if (media.id != _currentMedia.value?.id) _asAudioFrom.value = null
         _currentMedia.value = media
         lastSavedPosition = 0L
         completionHandled = false
