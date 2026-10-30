@@ -17,6 +17,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Rational
 import android.util.TypedValue
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.filled.ClosedCaptionDisabled
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
@@ -162,6 +164,9 @@ fun PlayerScreen(
     val isFavorite by viewModel.isFavorite.collectAsState()
     val favorite: Boolean? = if (externalFile) null else isFavorite
     val movieMode by viewModel.movieMode.collectAsState()
+    val allMedia by viewModel.allMedia.collectAsState()
+    // A video being listened to as sound only, from this position.
+    val asAudioFrom by viewModel.asAudioFrom.collectAsState()
 
     // ---- Delete flow (video / image / audio) -------------------------------
     // Confirm → delete → advance to the neighbouring item, or exit when the
@@ -247,21 +252,27 @@ fun PlayerScreen(
 
     // Audio plays through a background MediaSessionService so it keeps going after
     // the app is exited, with a media notification.
-    if (currentMedia!!.isAudio) {
+    val listenFrom = asAudioFrom
+    if (currentMedia!!.isAudio || listenFrom != null) {
+        val videoAsAudio = !currentMedia!!.isAudio
+        // Songs: the Audio tab's list is the queue. A video played as sound: just itself.
+        val queue = remember(allMedia, currentMedia, videoAsAudio) {
+            if (videoAsAudio) listOf(currentMedia!!) else allMedia.filter { it.isAudio }.ifEmpty { listOf(currentMedia!!) }
+        }
         SwipeableContent(
             hasNext = nextMediaId != null,
             hasPrevious = previousMediaId != null,
             onNext = { nextMediaId?.let(onNavigateToMedia) },
-            onPrevious = { previousMediaId?.let(onNavigateToMedia) }
+            onPrevious = { previousMediaId?.let(onNavigateToMedia) },
+            swipeEnabled = !videoAsAudio
         ) {
             AudioPlayerContent(
-                uri = uri,
-                title = currentMedia!!.title,
-                hasNext = nextMediaId != null,
-                hasPrevious = previousMediaId != null,
-                onNext = { nextMediaId?.let(onNavigateToMedia) },
-                onPrevious = { previousMediaId?.let(onNavigateToMedia) },
-                onDeleteRequest = { showDeleteConfirm = true }
+                queue = queue,
+                current = currentMedia!!,
+                onCurrentChange = onNavigateToMedia,
+                onDeleteRequest = { showDeleteConfirm = true },
+                videoAsAudio = videoAsAudio,
+                startPositionMs = listenFrom ?: 0L
             )
         }
         return
@@ -290,179 +301,9 @@ fun PlayerScreen(
             onToggleFavorite = viewModel::toggleFavorite,
             movieMode = movieMode,
             onToggleMovieMode = viewModel::toggleMovieMode,
+            onListen = viewModel::listenAsAudio,
             subtitles = remember(currentMedia) { viewModel.subtitlesFor(currentMedia!!) }
         )
-    }
-}
-
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-@Composable
-private fun AudioPlayerContent(
-    uri: Uri,
-    title: String,
-    hasNext: Boolean,
-    hasPrevious: Boolean,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-    onDeleteRequest: () -> Unit = {}
-) {
-    val context = LocalContext.current
-    var controller by remember { mutableStateOf<MediaController?>(null) }
-    var isPlaying by remember { mutableStateOf(true) }
-    var position by remember { mutableLongStateOf(0L) }
-    var buffered by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-
-    // Connect to the background PlaybackService and start this track.
-    DisposableEffect(uri) {
-        val token = SessionToken(
-            context,
-            android.content.ComponentName(context, com.anydrop.app.service.PlaybackService::class.java)
-        )
-        val future = MediaController.Builder(context, token).buildAsync()
-        future.addListener({
-            val c = future.get()
-            controller = c
-            c.setMediaItem(Media3Item.fromUri(uri))
-            c.prepare()
-            c.playWhenReady = true
-        }, com.google.common.util.concurrent.MoreExecutors.directExecutor())
-
-        onDispose {
-            // Do NOT release the player here — the service keeps it alive for
-            // background playback. Just release this controller handle.
-            controller?.release()
-            controller = null
-        }
-    }
-
-    var scrubbing by remember { mutableStateOf(false) }
-    var scrubTarget by remember { mutableLongStateOf(0L) }
-
-    // Frame clock for the timeline (MediaController extrapolates the position
-    // locally, so this is cheap); the bar reads it in its draw phase.
-    LaunchedEffect(controller) {
-        val c = controller ?: return@LaunchedEffect
-        while (true) {
-            withFrameMillis { }
-            isPlaying = c.isPlaying
-            position = c.currentPosition
-            buffered = c.bufferedPosition
-            duration = c.duration.coerceAtLeast(0L)
-        }
-    }
-
-    Box(
-        modifier = Modifier.fillMaxSize().background(Black),
-        contentAlignment = Alignment.Center
-    ) {
-        IconButton(
-            onClick = onDeleteRequest,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-        ) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = stringResource(R.string.menu_delete),
-                tint = LedRed
-            )
-        }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(180.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Amber.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = Amber,
-                    modifier = Modifier.size(72.dp)
-                )
-            }
-            Spacer(Modifier.height(24.dp))
-            Text(
-                title,
-                color = White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                maxLines = 2
-            )
-            Spacer(Modifier.height(24.dp))
-
-            // Scrubber — kept LTR (together with its timestamps) in every locale.
-            // Audio seeks once, on release; the bubble previews the target.
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                ScrubBar(
-                    position = { position },
-                    buffered = { buffered },
-                    duration = duration,
-                    accent = Amber,
-                    trackColor = White.copy(alpha = 0.15f),
-                    bufferColor = White.copy(alpha = 0.3f),
-                    onScrubStart = { scrubbing = true },
-                    onScrub = { scrubTarget = it },
-                    onScrubEnd = { target ->
-                        controller?.seekTo(target)
-                        position = target
-                        scrubbing = false
-                    }
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TimeLabel(
-                        text = { (if (scrubbing) scrubTarget else position).toTimeString() },
-                        color = White.copy(alpha = 0.6f)
-                    )
-                    TimeLabel(text = { duration.toTimeString() }, color = White.copy(alpha = 0.6f))
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onPrevious, enabled = hasPrevious) {
-                        Icon(
-                            Icons.Default.SkipPrevious,
-                            contentDescription = stringResource(R.string.player_previous),
-                            tint = if (hasPrevious) White else White.copy(alpha = 0.3f),
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-                    IconButton(onClick = {
-                        controller?.let { if (it.isPlaying) it.pause() else it.play() }
-                    }) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = stringResource(R.string.player_play_pause),
-                            tint = Amber,
-                            modifier = Modifier.size(56.dp)
-                        )
-                    }
-                    IconButton(onClick = onNext, enabled = hasNext) {
-                        Icon(
-                            Icons.Default.SkipNext,
-                            contentDescription = stringResource(R.string.player_next),
-                            tint = if (hasNext) White else White.copy(alpha = 0.3f),
-                            modifier = Modifier.size(40.dp)
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -596,6 +437,8 @@ private fun VideoPlayerContent(
     onToggleFavorite: () -> Unit = {},
     movieMode: Boolean = false,
     onToggleMovieMode: () -> Unit = {},
+    /** Keep playing the sound only (screen off), from this position. */
+    onListen: ((Long) -> Unit)? = null,
     /** Subtitles saved with the video, language → file. */
     subtitles: Map<String, File> = emptyMap()
 ) {
@@ -1258,6 +1101,14 @@ private fun VideoPlayerContent(
                     }
                     IconButton(onClick = { toggleOrientation(activity); resetHideTimer() }) {
                         Icon(Icons.Default.ScreenRotation, contentDescription = stringResource(R.string.player_rotate), tint = OnVideo)
+                    }
+                    onListen?.let { listen ->
+                        IconButton(onClick = {
+                            Toast.makeText(context, R.string.video_as_audio_toast, Toast.LENGTH_SHORT).show()
+                            listen(player.currentPosition)
+                        }) {
+                            Icon(Icons.Filled.Headphones, contentDescription = stringResource(R.string.player_listen), tint = OnVideo)
+                        }
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         IconButton(onClick = {
