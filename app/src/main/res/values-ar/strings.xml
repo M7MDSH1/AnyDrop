@@ -52,6 +52,9 @@
     <string name="link_detected">تم اكتشاف رابط</string>
     <string name="load_link">تحميل</string>
     <string name="select_quality">اختر الجودة</string>
+    <string name="audio_voice_title">لغة الصوت</string>
+    <string name="audio_voice_original">الأصلي</string>
+    <string name="audio_voice_translated">مترجم</string>
     <string name="paste_url_hint">الصق الرابط هنا…</string>
     <string name="paste_btn">لصق</string>
     <string name="recording_indicator">● تسجيل</string>

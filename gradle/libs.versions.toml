@@ -17,6 +17,8 @@ coroutines = "1.8.1"
 coreKtx = "1.13.1"
 collectionKtx = "1.4.1"
 youtubedl = "0.18.1"
+# The JSON library youtubedl-android uses (it ships it); compile-only, same version.
+jackson = "2.11.1"
 libtorrent4j = "2.1.0-39"
 junit = "4.13.2"
 
@@ -59,6 +61,7 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 
 youtubedl-android = { group = "io.github.junkfood02.youtubedl-android", name = "library", version.ref = "youtubedl" }
 youtubedl-ffmpeg = { group = "io.github.junkfood02.youtubedl-android", name = "ffmpeg", version.ref = "youtubedl" }
+jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
 libtorrent4j = { group = "org.libtorrent4j", name = "libtorrent4j", version.ref = "libtorrent4j" }
 libtorrent4j-arm64 = { group = "org.libtorrent4j", name = "libtorrent4j-android-arm64", version.ref = "libtorrent4j" }
 libtorrent4j-arm = { group = "org.libtorrent4j", name = "libtorrent4j-android-arm", version.ref = "libtorrent4j" }

@@ -57,6 +57,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
+import com.anydrop.app.ui.components.AudioVoicePicker
 import com.anydrop.app.ui.components.DuplicatePromptDialog
 import com.anydrop.app.ui.components.ErrorDetails
 import com.anydrop.app.ui.tape_deck.components.LinkField
@@ -116,6 +117,8 @@ fun TapeDeckScreen(
     val downloadState by viewModel.downloadState.collectAsState()
     val isCookieImported by viewModel.isCookieImported.collectAsState()
     val availableFormats by viewModel.availableFormats.collectAsState()
+    val audioVoices by viewModel.audioVoices.collectAsState()
+    val audioLanguage by viewModel.audioLanguage.collectAsState()
     val selectedFormat by viewModel.selectedFormat.collectAsState()
     val isLoadingFormats by viewModel.isLoadingFormats.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
@@ -401,6 +404,9 @@ fun TapeDeckScreen(
                 MediaSummaryCard(cover = video.previewUrl, durationSec = video.durationSec, title = pageTitle)
                 Spacer(modifier = Modifier.height(12.dp))
             }
+            // A video with several voices (its own, translations): which one to save.
+            AudioVoicePicker(voices = audioVoices, selected = audioLanguage, onSelect = viewModel::selectAudioLanguage)
+            if (audioVoices.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
             FormatSelector(
                 formats = availableFormats,
                 selectedFormat = selectedFormat,

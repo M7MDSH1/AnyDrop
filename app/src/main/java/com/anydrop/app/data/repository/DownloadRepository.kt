@@ -71,9 +71,10 @@ class DownloadRepository(
         outputPath: String,
         formatId: String,
         height: Int,
-        cookieFile: File? = null
+        cookieFile: File? = null,
+        audioLanguage: String = ""
     ): Flow<DownloadState> {
-        return ytDlpEngine.downloadWithMerge(url, outputPath, formatId, height, cookieFile)
+        return ytDlpEngine.downloadWithMerge(url, outputPath, formatId, height, cookieFile, audioLanguage)
             .map { state ->
                 if (state is DownloadState.Completed) {
                     indexInMediaStore(state.mediaItem)
@@ -86,9 +87,12 @@ class DownloadRepository(
     fun downloadAudio(
         url: String,
         outputPath: String,
-        cookieFile: File? = null
+        cookieFile: File? = null,
+        language: String = "",
+        formatId: String = "",
+        abr: Int = 0
     ): Flow<DownloadState> {
-        return ytDlpEngine.downloadAudio(url, outputPath, cookieFile)
+        return ytDlpEngine.downloadAudio(url, outputPath, cookieFile, language, formatId, abr)
             .map { state ->
                 if (state is DownloadState.Completed) {
                     indexInMediaStore(state.mediaItem)

@@ -52,6 +52,9 @@
     <string name="link_detected">LINK DETECTED</string>
     <string name="load_link">LOAD</string>
     <string name="select_quality">SELECT QUALITY</string>
+    <string name="audio_voice_title">AUDIO LANGUAGE</string>
+    <string name="audio_voice_original">original</string>
+    <string name="audio_voice_translated">translated</string>
     <string name="paste_url_hint">Paste URL here…</string>
     <string name="paste_btn">PASTE</string>
     <string name="recording_indicator">● REC</string>
