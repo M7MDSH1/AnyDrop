@@ -18,6 +18,7 @@ import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.TaskStatus
 import com.anydrop.app.engine.AudioVoice
 import com.anydrop.app.engine.Captions
+import com.anydrop.app.engine.LinkList
 import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.Playlists
 import com.anydrop.app.engine.asAudio
@@ -35,6 +36,10 @@ import com.anydrop.app.engine.withoutRepeatsOfMain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -230,10 +235,41 @@ class TapeDeckViewModel @Inject constructor(
         _duplicatePrompt.value = null
         pendingSuffixPath = null
         probeJob?.cancel()
+        linkSummaryJob?.cancel()
         searchJob?.cancel()
     }
 
-    fun onUrlChange(newUrl: String) {
+    private var linkSummaryJob: Job? = null
+
+    /** The pasted links' titles, covers and lengths, three at a time, filled in as they arrive. */
+    private fun fillLinkSummaries(urlValue: String) {
+        linkSummaryJob?.cancel()
+        val links = rawFormats.filter { it.group.startsWith(LinkList.GROUP) }.map { it.pageUrl }
+        val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
+        linkSummaryJob = viewModelScope.launch {
+            val slots = Semaphore(3)
+            links.map { link ->
+                async {
+                    val summary = slots.withPermit { downloadRepository.linkSummary(link, cookieFile) } ?: return@async
+                    if (_url.value.trim() != urlValue) return@async
+                    rawFormats = rawFormats.map { f ->
+                        if (f.group != LinkList.GROUP + link || !f.isLink) f
+                        else f.copy(
+                            title = summary.title.ifBlank { f.title },
+                            previewUrl = summary.thumbnail.ifBlank { f.previewUrl },
+                            durationSec = summary.durationSec.takeIf { it > 0 } ?: f.durationSec
+                        )
+                    }
+                    _availableFormats.value = shown(rawFormats)
+                }
+            }.awaitAll()
+            if (_url.value.trim() == urlValue) saveSession()
+        }
+    }
+
+    fun onUrlChange(text: String) {
+        // Several links (a note, a message): kept on one line; the deck lists them.
+        val newUrl = LinkList.extract(text).takeIf { it.size >= 2 }?.let(LinkList::oneLine) ?: text
         _url.value = newUrl
         clearFetched()
         deckSessionRepository.saveSession(newUrl, emptyList(), "")
@@ -520,7 +556,8 @@ class TapeDeckViewModel @Inject constructor(
         _downloadState.value = DownloadState.Idle
     }
 
-    fun handleSharedUrl(url: String) {
+    fun handleSharedUrl(text: String) {
+        val url = LinkList.extract(text).takeIf { it.size >= 2 }?.let(LinkList::oneLine) ?: text
         _url.value = url
         clearFetched()
         deckSessionRepository.saveSession(url, emptyList(), "")
@@ -545,7 +582,8 @@ class TapeDeckViewModel @Inject constructor(
         if (urlValue.isBlank()) return
         val wholePage = _fetchWholePage.value
         val generation = ++fetchGeneration
-        val playlistWanted = !Magnet.isTorrentLink(urlValue) &&
+        val linkList = LinkList.isList(urlValue)
+        val playlistWanted = !linkList && !Magnet.isTorrentLink(urlValue) &&
             (forcePlaylist || Playlists.isListOnly(urlValue) || (wholePage && Playlists.hasList(urlValue)))
         _fetchingPlaylist.value = playlistWanted
         _isLoadingFormats.value = true
@@ -553,6 +591,8 @@ class TapeDeckViewModel @Inject constructor(
         try {
             val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
             val result: FetchResult = when {
+                // Several links: each listed as its own video (read in the background below).
+                linkList -> FetchResult(LinkList.entries(LinkList.extract(urlValue)))
                 // A torrent: its files instead of qualities (the page modes don't apply).
                 Magnet.isTorrentLink(urlValue) -> downloadRepository.torrentFiles(urlValue).let { (meta, _) ->
                     FetchResult(meta.files.map { it.toFormat(meta.name) }, title = meta.name)
@@ -574,7 +614,8 @@ class TapeDeckViewModel @Inject constructor(
                 .takeIf { wanted -> result.captions.any { it.language == wanted } }.orEmpty()
             fetchedUploader = result.uploader
             fetchedWebpageUrl = result.webpageUrl
-            rawFormats = if (wholePage) result.formats.withoutRepeatsOfMain() else result.formats
+            rawFormats = if (wholePage && !linkList) result.formats.withoutRepeatsOfMain() else result.formats
+            if (linkList) fillLinkSummaries(urlValue)
             _availableFormats.value = shown(rawFormats)
             // Pre-pick the best entry so RECORD works with one tap (images are picked by the user;
             // a whole page or a torrent is picked from its list).

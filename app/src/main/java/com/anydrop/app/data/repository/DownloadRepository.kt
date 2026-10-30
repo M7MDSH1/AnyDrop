@@ -85,6 +85,9 @@ class DownloadRepository(
             .flowOn(ioDispatcher)
     }
 
+    suspend fun linkSummary(url: String, cookieFile: File? = null): YtDlpEngine.LinkSummary? =
+        ytDlpEngine.getLinkSummary(url, cookieFile)
+
     /** The video's subtitles next to it (see [YtDlpEngine.downloadSubtitles]). */
     suspend fun downloadSubtitles(url: String, language: String, videoPath: String, cookieFile: File? = null): File? =
         withContext(ioDispatcher) { ytDlpEngine.downloadSubtitles(url, language, videoPath, cookieFile) }

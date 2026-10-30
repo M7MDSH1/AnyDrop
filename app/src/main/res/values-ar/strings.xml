@@ -400,6 +400,8 @@
     <string name="fetching_playlist">جارٍ قراءة قائمة التشغيل…</string>
     <string name="playlist_count">قائمة التشغيل · %1$d</string>
     <string name="playlist_hint">اختر الفيديوهات التي تريد تنزيلها، أو نزّلها كلها.</string>
+    <string name="links_count">%1$d روابط</string>
+    <string name="links_hint">يُنزَّل كل رابط كفيديو مستقل — أو كصوت فقط.</string>
     <string name="playlist_as_video">فيديو</string>
     <string name="playlist_as_audio">صوت فقط</string>
     <string name="playlist_offer">هذا الفيديو جزء من قائمة تشغيل.</string>

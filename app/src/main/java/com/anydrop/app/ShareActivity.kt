@@ -67,6 +67,8 @@ import com.anydrop.app.ui.components.TorrentPicker
 import com.anydrop.app.ui.components.AudioVoicePicker
 import com.anydrop.app.ui.components.SubtitlePicker
 import com.anydrop.app.ui.components.CopyErrorDetailsButton
+import com.anydrop.app.engine.LinkList
+import com.anydrop.app.engine.isLinkList
 import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.isWholePage
 import com.anydrop.app.ui.components.PlaylistOffer
@@ -139,7 +141,10 @@ class ShareActivity : ComponentActivity() {
         if (intent == null) return null
         if (intent.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
-            return Magnet.find(text) ?: Regex("""https?://[^\s]+""").find(text)?.value
+            // Several links shared at once (a note, a message) are listed together.
+            val links = LinkList.extract(text)
+            if (links.size >= 2) return LinkList.oneLine(links)
+            return Magnet.find(text) ?: links.firstOrNull()
         }
         if (intent.action != Intent.ACTION_VIEW) return null
         val data = intent.data ?: return null
@@ -254,7 +259,7 @@ private fun ShareSheet(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 11.sp
             )
-            if (!isTorrent) {
+            if (!isTorrent && !LinkList.isList(sharedUrl)) {
                 Spacer(Modifier.height(12.dp))
                 FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
             }
@@ -339,8 +344,9 @@ private fun ShareSheet(
                         onResolve = viewModel::resolvePageItem,
                         onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } },
                         maxListHeight = 380.dp,
-                        playlist = formats.isPlaylist,
-                        onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } }
+                        playlist = formats.isPlaylist || formats.isLinkList,
+                        onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } },
+                        linkList = formats.isLinkList
                     )
                 }
 

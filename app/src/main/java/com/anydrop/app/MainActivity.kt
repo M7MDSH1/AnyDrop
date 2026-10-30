@@ -69,6 +69,7 @@ import com.anydrop.app.R
 import com.anydrop.app.ui.navigation.AnyDropNavGraph
 import com.anydrop.app.ui.navigation.Routes
 import com.anydrop.app.data.repository.DeckSessionRepository
+import com.anydrop.app.engine.LinkList
 import com.anydrop.app.data.repository.readAppLanguageSync
 import com.anydrop.app.util.LocaleHelper
 import com.anydrop.app.ui.settings.AppearanceViewModel
@@ -197,8 +198,10 @@ class MainActivity : ComponentActivity() {
         return null
     }
 
+    /** The link shared, or all of them on one line when there are several (the deck lists them). */
     private fun String.extractUrl(): String {
-        return Regex("https?://[^\\s]+").find(this)?.value ?: this
+        val links = LinkList.extract(this)
+        return if (links.size >= 2) LinkList.oneLine(links) else links.firstOrNull() ?: this
     }
 }
 

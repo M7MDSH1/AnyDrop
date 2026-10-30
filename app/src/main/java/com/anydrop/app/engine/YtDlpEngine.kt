@@ -587,6 +587,41 @@ class YtDlpEngine(
         )
     }
 
+    /** What a list shows for one link before it's downloaded. */
+    data class LinkSummary(val title: String, val thumbnail: String, val durationSec: Int)
+
+    /**
+     * One link's title, cover and length, without looking up its qualities (`-J --flat-playlist`
+     * is quick). Null when yt-dlp can't read it; the list then keeps the link's address.
+     */
+    suspend fun getLinkSummary(url: String, cookieFile: File? = null): LinkSummary? = withContext(Dispatchers.IO) {
+        val request = YoutubeDLRequest(url).apply {
+            applyCommonOptions(cookieFile, isTiktok = isTiktokUrl(url), url = url)
+            addOption("--flat-playlist")
+            addOption("--no-playlist")
+            addOption("-J")
+            addOption("--no-warnings")
+        }
+        val json = try {
+            YoutubeDL.getInstance().execute(request).out
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "No summary for $url: ${e.message?.take(160)}")
+            return@withContext null
+        }
+        val o = runCatching { org.json.JSONObject(json.trim()) }.getOrNull() ?: return@withContext null
+        val thumbs = o.optJSONArray("thumbnails")
+        val thumb = o.optString("thumbnail").takeIf { it.startsWith("http") }
+            ?: thumbs?.let { arr -> (arr.length() - 1 downTo 0).firstNotNullOfOrNull { arr.optJSONObject(it)?.optString("url")?.takeIf { u -> u.startsWith("http") } } }
+            .orEmpty()
+        LinkSummary(
+            title = o.optString("title").takeIf { it.isNotBlank() && it != "null" }.orEmpty(),
+            thumbnail = thumb,
+            durationSec = o.optDouble("duration", 0.0).takeIf { !it.isNaN() }?.toInt()?.coerceAtLeast(0) ?: 0
+        )
+    }
+
     /** Fills in length, real resolution and a cover for media found on [pageUrl] (see [MediaProbe]). */
     suspend fun probePageMedia(formats: List<FormatInfo>, pageUrl: String): List<FormatInfo> =
         MediaProbe.fill(context, formats, pageUrl)
