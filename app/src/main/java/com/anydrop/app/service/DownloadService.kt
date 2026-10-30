@@ -30,8 +30,21 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class DownloadService : Service() {
 
-    /** Tags of downloads currently running (or pre-registered as a batch). */
+    /** Tags of downloads queued or running. */
     private val activeTags = mutableSetOf<String>()
+
+    /** Queued downloads held back by "Wi-Fi only" (the summary says so when that's all there is). */
+    private val waitingForWifi = mutableSetOf<String>()
+
+    /** A result notification was posted, so the finished group gets its summary. */
+    private var postedResult = false
+
+    /**
+     * Downloads with a notification of their own showing. The pin heads them as the group's
+     * summary; without any (downloads still only queued) it's a plain notification, since
+     * Android doesn't show a group summary that has nothing under it.
+     */
+    private val children = mutableSetOf<String>()
 
     /** Display title per active tag, pre-populated during batch registration. */
     private val titles = mutableMapOf<String, String>()
@@ -55,29 +68,31 @@ class DownloadService : Service() {
             Constants.ACTION_DOWNLOAD_START -> {
                 val batchTags = intent.getStringArrayListExtra("batch_tags")
                 if (batchTags != null) {
-                    // Batch pre-registration: reserve all tags up front so teardown
-                    // only fires once the whole batch is done (no pin, no tracker
-                    // mark — each item registers itself when it actually starts).
+                    // Queued downloads: reserved up front so the notification stays while they
+                    // wait their turn (no tracker mark — each one registers when it starts).
                     val batchTitle = intent.getStringExtra("batch_title").orEmpty()
                     batchTags.forEach { tag ->
                         activeTags.add(tag)
                         titles[tag] = batchTitle
                     }
+                    pin()
                     return START_NOT_STICKY
                 }
 
                 val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
                 val title = intent.getStringExtra("title").orEmpty()
                 activeTags.add(tag)
+                waitingForWifi.remove(tag)
                 titles[tag] = title
                 lastPercentages[tag] = 0
-                if (foregroundPinned) {
-                    refreshSummary()
-                } else {
-                    startForeground(Constants.FOREGROUND_SERVICE_NOTIFICATION_ID, buildSummary(summaryText()))
-                    foregroundPinned = true
-                }
+                pin()
                 appDownloadScope.launch { downloadTracker.markActive(tag, title) }
+            }
+            Constants.ACTION_DOWNLOAD_WAITING -> {
+                val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
+                if (tag !in activeTags) return START_NOT_STICKY
+                if (intent.getBooleanExtra("wifi", false)) waitingForWifi.add(tag) else waitingForWifi.remove(tag)
+                refreshSummary()
             }
             Constants.ACTION_DOWNLOAD_PROGRESS -> {
                 val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
@@ -99,15 +114,32 @@ class DownloadService : Service() {
                     .build()
                 NotificationManagerCompat.from(this)
                     .notify(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID, notification)
+                if (children.add(tag)) refreshSummary()
             }
             Constants.ACTION_DOWNLOAD_COMPLETE ->
                 finishWith(intent, getString(R.string.notification_complete), android.R.drawable.stat_sys_download_done)
             Constants.ACTION_DOWNLOAD_FAILED ->
                 finishWith(intent, getString(R.string.notification_failed), android.R.drawable.stat_notify_error)
-            Constants.ACTION_DOWNLOAD_CANCEL ->
-                finishWith(intent, getString(R.string.notification_cancelled), android.R.drawable.stat_notify_error)
+            Constants.ACTION_DOWNLOAD_CANCEL -> {
+                // Paused in the app: its progress notification just goes away.
+                val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
+                if (tag !in activeTags) return START_NOT_STICKY
+                NotificationManagerCompat.from(this).cancel(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID)
+                children.remove(tag)
+                finishTag(tag)
+            }
         }
         return START_NOT_STICKY
+    }
+
+    /** The foreground pin, put up once and kept up to date. */
+    private fun pin() {
+        if (foregroundPinned) {
+            refreshSummary()
+        } else {
+            startForeground(Constants.FOREGROUND_SERVICE_NOTIFICATION_ID, buildSummary(summaryText()))
+            foregroundPinned = true
+        }
     }
 
     /** A download ended: its result notification replaces its progress, then the bookkeeping. */
@@ -121,6 +153,7 @@ class DownloadService : Service() {
     /** Shared terminal-path bookkeeping: drop the tag and clear tracker state. */
     private fun finishTag(tag: String) {
         activeTags.remove(tag)
+        waitingForWifi.remove(tag)
         lastPercentages.remove(tag)
         titles.remove(tag)
         appDownloadScope.launch { downloadTracker.markDone(tag) }
@@ -130,13 +163,17 @@ class DownloadService : Service() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             // The results stay grouped under a summary that still opens the downloads list
             // (a group Android makes up itself would just open the app).
-            NotificationManagerCompat.from(this).notify(
-                Constants.FOREGROUND_SERVICE_NOTIFICATION_ID,
-                summaryBuilder(getString(R.string.notification_downloads_finished))
-                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setAutoCancel(true)
-                    .build()
-            )
+            if (postedResult) {
+                NotificationManagerCompat.from(this).notify(
+                    Constants.FOREGROUND_SERVICE_NOTIFICATION_ID,
+                    summaryBuilder(getString(R.string.notification_downloads_finished))
+                        .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                        .setAutoCancel(true)
+                        .build()
+                )
+            }
+            postedResult = false
+            children.clear()
             stopSelf()
         }
     }
@@ -152,10 +189,14 @@ class DownloadService : Service() {
             .setContentIntent(openDownloadsIntent(this))
         NotificationManagerCompat.from(this)
             .notify(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID, builder.build())
+        postedResult = true
+        children.add(tag)
     }
 
-    private fun summaryText(): String = when (activeTags.size) {
-        1 -> titles[activeTags.first()] ?: getString(R.string.notification_download_active)
+    private fun summaryText(): String = when {
+        allWaitingForWifi() ->
+            getString(R.string.notification_waiting_wifi, activeTags.size)
+        activeTags.size == 1 -> titles[activeTags.first()] ?: getString(R.string.notification_download_active)
         else -> getString(R.string.notification_downloading_files, activeTags.size)
     }
 
@@ -166,21 +207,24 @@ class DownloadService : Service() {
     }
 
     private fun buildSummary(text: String) =
-        summaryBuilder(text)
+        summaryBuilder(text, asSummary = children.isNotEmpty())
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setProgress(0, 0, true) // indeterminate: per-file % lives in tagged notifications
+            // Indeterminate while downloading (per-file % lives in tagged notifications); none
+            // while everything waits for Wi-Fi, so the text saying so shows.
+            .setProgress(0, 0, !allWaitingForWifi())
             .setOngoing(true)
             .build()
 
+    private fun allWaitingForWifi() = waitingForWifi.isNotEmpty() && waitingForWifi.containsAll(activeTags)
+
     /** The pin heads the group of per-file notifications, so tapping the group opens the downloads too. */
-    private fun summaryBuilder(text: String) =
+    private fun summaryBuilder(text: String, asSummary: Boolean = true) =
         NotificationCompat.Builder(this, Constants.DOWNLOAD_CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(text)
             .setSilent(true)
-            .setGroup(GROUP_DOWNLOADS)
-            .setGroupSummary(true)
             .setContentIntent(openDownloadsIntent(this))
+            .apply { if (asSummary) setGroup(GROUP_DOWNLOADS).setGroupSummary(true) }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -202,18 +246,44 @@ class DownloadService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        /** Start a download (or pre-register a sequential batch via [batchTags]). */
-        fun startDownload(context: Context, tag: String, title: String, batchTags: List<String>? = null) {
-            val intent = Intent(context, DownloadService::class.java).apply {
+        /** A download starts now (it was [register]ed when queued). */
+        fun startDownload(context: Context, tag: String, title: String) {
+            start(context, Intent(context, DownloadService::class.java).apply {
                 action = Constants.ACTION_DOWNLOAD_START
                 putExtra("tag", tag)
                 putExtra("title", title)
-                if (batchTags != null) {
-                    putStringArrayListExtra("batch_tags", ArrayList(batchTags))
-                    putExtra("batch_title", title)
-                }
+            })
+        }
+
+        /** Downloads were queued: the notification goes up and stays while they wait their turn. */
+        fun register(context: Context, tags: List<String>, title: String) {
+            start(context, Intent(context, DownloadService::class.java).apply {
+                action = Constants.ACTION_DOWNLOAD_START
+                putStringArrayListExtra("batch_tags", ArrayList(tags))
+                putExtra("batch_title", title)
+            })
+        }
+
+        /** A queued download is (or no longer is) waiting for Wi-Fi. */
+        fun setWaitingForWifi(context: Context, tag: String, waiting: Boolean) {
+            start(context, Intent(context, DownloadService::class.java).apply {
+                action = Constants.ACTION_DOWNLOAD_WAITING
+                putExtra("tag", tag)
+                putExtra("wifi", waiting)
+            })
+        }
+
+        /**
+         * A queued download can get its turn while the app is in the background, where Android
+         * refuses to start a foreground service. The service is already up then (it was started
+         * when the download was queued), so a plain start reaches it.
+         */
+        private fun start(context: Context, intent: Intent) {
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                runCatching { context.startService(intent) }
             }
-            context.startForegroundService(intent)
         }
 
         fun updateProgress(context: Context, tag: String, percentage: Int) {

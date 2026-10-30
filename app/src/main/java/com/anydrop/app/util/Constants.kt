@@ -23,6 +23,7 @@ object Constants {
     const val ACTION_DOWNLOAD_COMPLETE = "com.anydrop.app.DOWNLOAD_COMPLETE"
     const val ACTION_DOWNLOAD_FAILED = "com.anydrop.app.DOWNLOAD_FAILED"
     const val ACTION_DOWNLOAD_PROGRESS = "com.anydrop.app.DOWNLOAD_PROGRESS"
+    const val ACTION_DOWNLOAD_WAITING = "com.anydrop.app.DOWNLOAD_WAITING"
 
     val SUPPORTED_DOMAINS = listOf(
         "instagram.com", "tiktok.com", "youtube.com",
