@@ -1,5 +1,6 @@
 package com.anydrop.app.data.repository
 
+import com.anydrop.app.engine.AudioTracks
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import org.json.JSONObject
 
@@ -28,6 +29,9 @@ internal object FormatJson {
         put("title", f.title)
         put("group", f.group)
         put("pageUrl", f.pageUrl)
+        // Audio language, so a restored deck still offers the same voices.
+        put("language", f.language)
+        put("audioRole", f.audioRole.name)
     }
 
     fun fromJson(o: JSONObject): FormatInfo = FormatInfo(
@@ -48,6 +52,8 @@ internal object FormatJson {
         durationSec = o.optInt("durationSec"),
         title = o.optString("title"),
         group = o.optString("group"),
-        pageUrl = o.optString("pageUrl")
+        pageUrl = o.optString("pageUrl"),
+        language = o.optString("language"),
+        audioRole = runCatching { AudioTracks.Role.valueOf(o.optString("audioRole")) }.getOrDefault(AudioTracks.Role.OTHER)
     )
 }

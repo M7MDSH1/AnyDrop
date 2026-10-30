@@ -44,7 +44,9 @@ data class DownloadRequest(
     val creator: String = "",
     val webpageUrl: String = "",
     /** Browser session cookies for media found on a page (never written to disk). */
-    val cookieHeader: String? = null
+    val cookieHeader: String? = null,
+    /** The voice to save when the video has several audio languages (blank = the usual audio). */
+    val audioLanguage: String = ""
 )
 
 /** One row of the download tracker. [tag] is the output path — also the notification tag. */
@@ -248,12 +250,15 @@ class DownloadQueue @Inject constructor(
             format.isFromPage -> downloadRepository.downloadDirect(
                 request.webpageUrl.ifBlank { request.url }, format, outputPath, request.cookieHeader
             )
-            format.isAudioOnly -> downloadRepository.downloadAudio(request.url, outputPath, cookieFile)
-            format.acodec.isNotEmpty() && format.acodec != "none" ->
+            format.isAudioOnly -> downloadRepository.downloadAudio(
+                request.url, outputPath, cookieFile, request.audioLanguage, formatId = format.id, abr = format.abr
+            )
+            // A chosen voice goes with any video, even one that has its own audio (only its picture is kept).
+            format.acodec.isNotEmpty() && format.acodec != "none" && request.audioLanguage.isBlank() ->
                 downloadRepository.download(request.url, outputPath, format.id, cookieFile)
             else -> {
                 val height = YtDlpFormatParser.extractHeight(format.resolution).takeIf { it > 0 } ?: 1080
-                downloadRepository.downloadWithMerge(request.url, outputPath, format.id, height, cookieFile)
+                downloadRepository.downloadWithMerge(request.url, outputPath, format.id, height, cookieFile, request.audioLanguage)
             }
         }
     }

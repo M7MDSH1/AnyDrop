@@ -109,6 +109,8 @@ dependencies {
 
     implementation(libs.youtubedl.android)
     implementation(libs.youtubedl.ffmpeg)
+    // To read yt-dlp's JSON with the library's own mapper (the library brings it at runtime).
+    compileOnly(libs.jackson.databind)
 
     // Torrents (magnet links, .torrent files). The ABI splits above keep each APK to its own
     // native library; x86_64 is only for emulator builds.

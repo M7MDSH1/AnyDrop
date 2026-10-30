@@ -11,6 +11,7 @@ import com.anydrop.app.data.repository.SettingsRepository
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDL.CanceledException
+import com.yausername.youtubedl_android.mapper.VideoInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -99,7 +100,11 @@ class YtDlpEngine(
         /** Whole-page results: the entries of one video share this key. Blank elsewhere. */
         val group: String = "",
         /** A video linked from the page (e.g. a suggestion under the player); it downloads from this page. */
-        val pageUrl: String = ""
+        val pageUrl: String = "",
+        /** Audio entries: the track's language (BCP-47, e.g. "es-US") when the video has several. */
+        val language: String = "",
+        /** Audio entries: the video's own voice, or a translation (see [AudioTracks.Role]). */
+        val audioRole: AudioTracks.Role = AudioTracks.Role.OTHER
     ) {
         val isFromPage: Boolean get() = directUrl.isNotBlank()
 
@@ -197,21 +202,57 @@ class YtDlpEngine(
      */
     val ffmpegUsable: Boolean by lazy {
         try {
-            val bin = File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so")
-            val packages = File(context.noBackupFilesDir, "youtubedl-android/packages")
-            val process = ProcessBuilder(bin.absolutePath, "-hide_banner", "-version")
-                .redirectErrorStream(true)
-                .apply {
-                    environment()["LD_LIBRARY_PATH"] = listOf("python", "ffmpeg", "aria2c")
-                        .joinToString(":") { File(packages, "$it/usr/lib").absolutePath }
-                }
-                .start()
+            val process = ffmpegProcess("-hide_banner", "-version")
             val output = process.inputStream.bufferedReader().readText()
             val ok = process.waitFor(5, TimeUnit.SECONDS) && process.exitValue() == 0 && output.contains("ffmpeg version")
             if (!ok) Log.w(TAG, "ffmpeg can't run here: ${output.take(200)}")
             ok
         } catch (e: Exception) {
             Log.w(TAG, "ffmpeg probe failed", e)
+            false
+        }
+    }
+
+    /** Starts the bundled ffmpeg with [args] (output and errors on one stream). */
+    private fun ffmpegProcess(vararg args: String): Process {
+        val bin = File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so")
+        val packages = File(context.noBackupFilesDir, "youtubedl-android/packages")
+        return ProcessBuilder(bin.absolutePath, *args)
+            .redirectErrorStream(true)
+            .apply {
+                environment()["LD_LIBRARY_PATH"] = listOf("python", "ffmpeg", "aria2c")
+                    .joinToString(":") { File(packages, "$it/usr/lib").absolutePath }
+            }
+            .start()
+    }
+
+    /**
+     * Puts [video]'s picture and [audio]'s sound in one MP4 with ffmpeg, for streams Android's
+     * own muxer can't take (some VP9/AV1 or HLS-made files). Nothing is re-encoded.
+     */
+    private fun ffmpegMerge(video: File, audio: File, outputPath: String): Boolean {
+        if (!ffmpegUsable) return false
+        val out = File(outputPath)
+        val tmp = File(out.parentFile, ".temp_ffmerge_${partialKey(outputPath)}.mp4")
+        return try {
+            val process = ffmpegProcess(
+                "-y", "-hide_banner", "-loglevel", "error",
+                "-i", video.absolutePath, "-i", audio.absolutePath,
+                "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-movflags", "+faststart",
+                tmp.absolutePath
+            )
+            val log = process.inputStream.bufferedReader().readText()
+            val ok = process.waitFor(10, TimeUnit.MINUTES) && process.exitValue() == 0 && tmp.length() > 0
+            if (!ok) {
+                Log.w(TAG, "ffmpeg merge failed: ${log.take(300)}")
+                tmp.delete()
+                return false
+            }
+            out.delete()
+            tmp.renameTo(out)
+        } catch (e: Exception) {
+            Log.w(TAG, "ffmpeg merge failed", e)
+            tmp.delete()
             false
         }
     }
@@ -311,7 +352,29 @@ class YtDlpEngine(
         val pageFirst = instagramLike
 
         if (pageFirst) {
-            webFormats(url, desktop = true)?.let { return it }
+            // Signed in, Instagram may add translated voices to the video's DASH data, which only
+            // yt-dlp reads. It's asked alongside the page, and its list wins when it has voices.
+            val signedIn = isSignedIn(cookieFile, host)
+            val found = coroutineScope {
+                val voiced = if (signedIn) async {
+                    try {
+                        ytdlpFormats(url, cookieFile)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
+                val page = webFormats(url, desktop = true)
+                val ytdlp = voiced?.await()
+                when {
+                    ytdlp != null && AudioVoice.of(ytdlp.formats).isNotEmpty() -> ytdlp
+                    page != null -> page
+                    ytdlp != null && ytdlp.formats.isNotEmpty() && !ytdlp.coverOnly -> ytdlp
+                    else -> null
+                }
+            }
+            found?.let { return it }
         }
 
         var failure: Exception? = null
@@ -540,7 +603,18 @@ class YtDlpEngine(
                 val request = YoutubeDLRequest(url)
                 request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
                 try {
-                    val info = YoutubeDL.getInstance().getInfo(request)
+                    // yt-dlp's JSON read here (not via getInfo) so the audio languages, which the
+                    // library's format object leaves out, come from the same run.
+                    request.addOption("--dump-json")
+                    val json = YoutubeDL.getInstance().execute(request).out
+                    val info = YoutubeDL.objectMapper.readValue(json, VideoInfo::class.java)
+                    val tracks = AudioTracks.parse(json)
+                    // Languages only matter when there's a choice.
+                    val severalLanguages = tracks.values.map { it.language }.distinct().size > 1
+                    if (severalLanguages) {
+                        Log.i(TAG, "Audio languages: " + tracks.entries.groupBy({ it.value.language }, { it.key }).entries
+                            .joinToString { (lang, ids) -> "$lang=${ids.joinToString("/")}" })
+                    }
                     val title = info.title?.trim().orEmpty()
                     val uploader = runCatching { info.uploader?.trim().orEmpty() }.getOrDefault("")
                     val webpageUrl = runCatching { info.webpageUrl?.trim().orEmpty() }.getOrDefault("")
@@ -577,6 +651,7 @@ class YtDlpEngine(
                         .filter { !hasVideo(it.vcodec) && hasAudio(it.acodec) }
                         .map { format ->
                             val abr = format.abr.toInt()
+                            val track = tracks[format.formatId].takeIf { severalLanguages }
                             FormatInfo(
                                 id = format.formatId ?: "",
                                 extension = format.ext ?: "m4a",
@@ -585,11 +660,13 @@ class YtDlpEngine(
                                 vcodec = "none",
                                 acodec = format.acodec ?: "",
                                 isAudioOnly = true,
-                                abr = abr
+                                abr = abr,
+                                language = track?.language.orEmpty(),
+                                audioRole = track?.role ?: AudioTracks.Role.OTHER
                             )
                         }
-                        .filter { it.abr > 0 }
-                        .distinctBy { it.abr }
+                        .filter { it.abr > 0 || it.language.isNotBlank() }
+                        .distinctBy { it.language to it.abr }
                         .sortedByDescending { it.abr }
 
                     // Image formats (no video AND no audio codec, image extension).
@@ -882,10 +959,17 @@ class YtDlpEngine(
      * one (16 KB-page phones) the original AAC stream is saved as-is, which needs no conversion.
      * The outputPath should end in ".m4a"; yt-dlp writes the file next to it.
      */
+    /**
+     * Saves the sound only. [formatId] / [abr]: the audio quality picked in the list (blank = the
+     * best); [language]: the voice to save when the video has several.
+     */
     fun downloadAudio(
         url: String,
         outputPath: String,
-        cookieFile: File? = null
+        cookieFile: File? = null,
+        language: String = "",
+        formatId: String = "",
+        abr: Int = 0
     ): Flow<DownloadState> = callbackFlow {
         val tag = outputPath
         cancelled.remove(tag)
@@ -911,13 +995,19 @@ class YtDlpEngine(
 
             val request = YoutubeDLRequest(url)
             request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
+            // The quality picked in the list comes first ([formatId]); the rest are fallbacks.
+            val picked = formatId.takeIf { it.isNotBlank() && it != "bestaudio" }
             if (ffmpegUsable) {
-                request.addOption("-f", "bestaudio/best")
+                val selector = listOfNotNull(picked, language.takeIf { it.isNotBlank() }?.let { "bestaudio[language=$it]" }, "bestaudio", "best")
+                request.addOption("-f", selector.joinToString("/"))
                 request.addOption("-x")                       // extract audio
                 request.addOption("--audio-format", "m4a")    // container ffmpeg can produce
-                request.addOption("--audio-quality", "0")     // best
+                // AAC near the source's bitrate (an M4A source is kept as it is). ffmpeg's top VBR
+                // setting made files several times bigger than the stream they came from.
+                request.addOption("--audio-quality", if (abr > 0) "${(abr * 3 / 2).coerceIn(96, 256)}K" else "192K")
             } else {
-                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
+                val fallback = if (language.isNotBlank()) AudioTracks.selector(language) else "bestaudio[ext=m4a]/bestaudio"
+                request.addOption("-f", listOfNotNull(picked, fallback).joinToString("/"))
             }
             request.addOption("-o", "$outBase.%(ext)s")
 
@@ -1082,7 +1172,9 @@ class YtDlpEngine(
         outputPath: String,
         formatId: String,
         height: Int,
-        cookieFile: File? = null
+        cookieFile: File? = null,
+        /** The voice to put with the video when it has several languages (blank = the best audio). */
+        audioLanguage: String = ""
     ): Flow<DownloadState> = callbackFlow {
         val tag = outputPath
         cancelled.remove(tag)
@@ -1129,7 +1221,8 @@ class YtDlpEngine(
             val audioPhase = context.getString(R.string.progress_downloading_audio)
             val audioProgress = ProgressMapper(phase = audioPhase, from = 85, to = 97)
             trySend(DownloadState.Progress(85, phase = audioPhase))
-            val audioFile = downloadRaw(tag, url, "bestaudio[ext=m4a]/bestaudio", tempAudioPath, cookieFile) { p, eta, line ->
+            val audioSelector = if (audioLanguage.isNotBlank()) AudioTracks.selector(audioLanguage) else "bestaudio[ext=m4a]/bestaudio"
+            val audioFile = downloadRaw(tag, url, audioSelector, tempAudioPath, cookieFile) { p, eta, line ->
                 audioProgress.map(p, eta, line)?.let { trySend(it) }
             }
             if (tag in cancelled) {
@@ -1141,7 +1234,9 @@ class YtDlpEngine(
 
             if (audioFile != null && audioFile.exists()) {
                 trySend(DownloadState.Progress(98, phase = context.getString(R.string.progress_merging_audio)))
-                val muxed = MediaMuxerUtil.mux(videoFile.absolutePath, audioFile.absolutePath, outputPath)
+                // Android's own muxer first; ffmpeg for the streams it can't take.
+                val muxed = MediaMuxerUtil.mux(videoFile.absolutePath, audioFile.absolutePath, outputPath) ||
+                    ffmpegMerge(videoFile, audioFile, outputPath)
                 videoFile.delete()
                 audioFile.delete()
                 if (!muxed) {
@@ -1317,7 +1412,11 @@ class YtDlpEngine(
         running[tag] = pid
         try {
             if (tag in cancelled) throw CanceledException()
-            YoutubeDL.getInstance().execute(request, pid) { progress, eta, line -> onProgress(progress, eta, line.orEmpty()) }
+            YoutubeDL.getInstance().execute(request, pid) { progress, eta, line ->
+                // Which format(s) yt-dlp settled on, e.g. "Downloading 1 format(s): 140-3".
+                if (line != null && "Downloading 1 format" in line) Log.i(TAG, line.trim())
+                onProgress(progress, eta, line.orEmpty())
+            }
         } finally {
             running.remove(tag, pid)
         }

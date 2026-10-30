@@ -16,6 +16,7 @@ import com.anydrop.app.data.repository.DownloadTask
 import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.TaskStatus
+import com.anydrop.app.engine.AudioVoice
 import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.Playlists
 import com.anydrop.app.engine.asAudio
@@ -77,6 +78,14 @@ class TapeDeckViewModel @Inject constructor(
 
     /** The fetched list as it came (before the Maximum quality cap); what the session saves. */
     private var rawFormats: List<FormatInfo> = emptyList()
+
+    /** The voices of the fetched video when it has several (its own and translations); else empty. */
+    private val _audioVoices = MutableStateFlow<List<AudioVoice>>(emptyList())
+    val audioVoices: StateFlow<List<AudioVoice>> = _audioVoices.asStateFlow()
+
+    /** The voice saved with the video (a language code) when it has several. */
+    private val _audioLanguage = MutableStateFlow("")
+    val audioLanguage: StateFlow<String> = _audioLanguage.asStateFlow()
 
     private val _selectedFormat = MutableStateFlow<FormatInfo?>(null)
     val selectedFormat: StateFlow<FormatInfo?> = _selectedFormat.asStateFlow()
@@ -185,7 +194,7 @@ class TapeDeckViewModel @Inject constructor(
         val formats = deckSessionRepository.loadFormats()
         if (formats.isNotEmpty()) {
             rawFormats = formats
-            _availableFormats.value = capByMaxQuality(formats)
+            _availableFormats.value = shown(formats)
             val selectedId = deckSessionRepository.selectedFormatId()
             _selectedFormat.value = _availableFormats.value.firstOrNull { it.id == selectedId }
             _playlistOffer.value = !formats.isPlaylist && Playlists.hasList(sessionUrl) && !Magnet.isTorrentLink(sessionUrl)
@@ -198,6 +207,7 @@ class TapeDeckViewModel @Inject constructor(
         _selectedFormat.value = null
         _availableFormats.value = emptyList()
         rawFormats = emptyList()
+        _audioVoices.value = emptyList()
         _pageTitle.value = ""
         fetchedUploader = ""
         fetchedWebpageUrl = ""
@@ -276,7 +286,8 @@ class TapeDeckViewModel @Inject constructor(
             creator = fetchedUploader,
             webpageUrl = fetchedWebpageUrl.ifBlank { urlValue },
             // Media found on the page is fetched with the same browser session that found it.
-            cookieHeader = if (format.isFromPage) MediaSniffer.cookieHeaderFor(format.directUrl) else null
+            cookieHeader = if (format.isFromPage) MediaSniffer.cookieHeaderFor(format.directUrl) else null,
+            audioLanguage = AudioVoice.toRequest(_audioVoices.value, _audioLanguage.value, format)
         )
     }
 
@@ -465,7 +476,7 @@ class TapeDeckViewModel @Inject constructor(
                 val at = rawFormats.indexOfFirst { it.group == group }
                 if (at < 0) return@launch
                 rawFormats = rawFormats.filterNot { it.group == group }.toMutableList().apply { addAll(at.coerceAtMost(size), probed) }
-                _availableFormats.value = capByMaxQuality(rawFormats)
+                _availableFormats.value = shown(rawFormats)
                 saveSession()
             } catch (e: CancellationException) {
                 throw e
@@ -538,7 +549,7 @@ class TapeDeckViewModel @Inject constructor(
             fetchedUploader = result.uploader
             fetchedWebpageUrl = result.webpageUrl
             rawFormats = if (wholePage) result.formats.withoutRepeatsOfMain() else result.formats
-            _availableFormats.value = capByMaxQuality(rawFormats)
+            _availableFormats.value = shown(rawFormats)
             // Pre-pick the best entry so RECORD works with one tap (images are picked by the user;
             // a whole page or a torrent is picked from its list).
             if (_selectedFormat.value == null && !wholePage && rawFormats.none { it.isTorrent } && !rawFormats.isWholePage) {
@@ -590,7 +601,7 @@ class TapeDeckViewModel @Inject constructor(
             }
             if (_url.value.trim() != urlValue || rawFormats !== formats) return@launch
             rawFormats = if (probed.isWholePage) probed.withoutRepeatsOfMain() else probed
-            _availableFormats.value = capByMaxQuality(rawFormats)
+            _availableFormats.value = shown(rawFormats)
             _selectedFormat.value = _selectedFormat.value?.let { sel ->
                 _availableFormats.value.firstOrNull { it.id == sel.id && it.directUrl == sel.directUrl && it.imageUrl == sel.imageUrl }
             }
@@ -613,5 +624,32 @@ class TapeDeckViewModel @Inject constructor(
             YtDlpFormatParser.extractHeight(f.resolution) <= max
         val keepAll = formats.groupBy { it.group }.filterValues { list -> list.none(::fits) }.keys
         return formats.filter { fits(it) || it.group in keepAll }
+    }
+
+    /**
+     * What the deck lists from [formats]: capped by Maximum quality and, when the video has
+     * several voices, only the chosen voice's audio qualities. Also refreshes the voices offered.
+     */
+    private fun shown(formats: List<FormatInfo>): List<FormatInfo> {
+        val voices = AudioVoice.of(formats)
+        _audioVoices.value = voices
+        if (voices.isNotEmpty() && voices.none { it.language == _audioLanguage.value }) {
+            _audioLanguage.value = AudioVoice.pick(voices, settingsRepository.preferredAudioLanguage)
+        }
+        val language = _audioLanguage.value
+        return capByMaxQuality(formats).filter { !it.isAudioOnly || it.language.isBlank() || it.language == language }
+    }
+
+    /** Picks the voice to save with the video, for a video that has several. */
+    fun selectAudioLanguage(language: String) {
+        if (_audioVoices.value.none { it.language == language }) return
+        _audioLanguage.value = language
+        settingsRepository.preferredAudioLanguage = language
+        val selected = _selectedFormat.value
+        _availableFormats.value = shown(rawFormats)
+        // An audio quality of another voice is no longer listed: pick this voice's best instead.
+        if (selected != null && selected.isAudioOnly && selected.language != language) {
+            _selectedFormat.value = _availableFormats.value.firstOrNull { it.isAudioOnly }
+        }
     }
 }

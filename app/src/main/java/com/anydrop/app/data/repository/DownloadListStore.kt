@@ -53,6 +53,7 @@ class DownloadListStore @Inject constructor(
                     put("requestTitle", t.request.title)
                     put("creator", t.request.creator)
                     put("webpageUrl", t.request.webpageUrl)
+                    put("audioLanguage", t.request.audioLanguage)
                     put("format", FormatJson.toJson(t.request.format))
                 })
             }
@@ -74,7 +75,8 @@ class DownloadListStore @Inject constructor(
                             format = FormatJson.fromJson(o.getJSONObject("format")),
                             title = o.optString("requestTitle"),
                             creator = o.optString("creator"),
-                            webpageUrl = o.optString("webpageUrl")
+                            webpageUrl = o.optString("webpageUrl"),
+                            audioLanguage = o.optString("audioLanguage")
                         ),
                         status = runCatching { TaskStatus.valueOf(o.optString("status")) }.getOrDefault(TaskStatus.FAILED),
                         percent = o.optInt("percent"),
