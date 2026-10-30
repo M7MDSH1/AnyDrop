@@ -55,6 +55,11 @@
     <string name="audio_voice_title">AUDIO LANGUAGE</string>
     <string name="audio_voice_original">original</string>
     <string name="audio_voice_translated">translated</string>
+    <string name="subtitles_title">SUBTITLES</string>
+    <string name="subtitles_off">Off</string>
+    <string name="subtitles_auto">auto</string>
+    <string name="progress_subtitles">Saving subtitles…</string>
+    <string name="player_subtitles">Subtitles</string>
     <string name="paste_url_hint">Paste URL here…</string>
     <string name="paste_btn">PASTE</string>
     <string name="recording_indicator">● REC</string>

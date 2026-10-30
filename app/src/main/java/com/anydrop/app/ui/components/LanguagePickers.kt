@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.anydrop.app.R
 import com.anydrop.app.engine.AudioTracks
 import com.anydrop.app.engine.AudioVoice
+import com.anydrop.app.engine.Captions
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.Hairline
@@ -45,10 +46,59 @@ fun AudioVoicePicker(
     modifier: Modifier = Modifier
 ) {
     if (voices.isEmpty()) return
-    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val locale = currentLocale()
+    val original = stringResource(R.string.audio_voice_original)
+    val translated = stringResource(R.string.audio_voice_translated)
+    ChoiceRow(
+        title = stringResource(R.string.audio_voice_title),
+        choices = voices.map { voice ->
+            val role = when (voice.role) {
+                AudioTracks.Role.ORIGINAL -> original
+                AudioTracks.Role.DUBBED -> translated
+                AudioTracks.Role.OTHER -> ""
+            }
+            voice.language to listOf(languageName(voice.language, locale), role).filter { it.isNotBlank() }.joinToString(" · ")
+        },
+        selected = selected,
+        onSelect = onSelect,
+        modifier = modifier
+    )
+}
+
+/** Subtitles to save with the video: none, or one of the languages it has. Shown when it has any. */
+@Composable
+fun SubtitlePicker(
+    captions: List<Captions.Caption>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (captions.isEmpty()) return
+    val locale = currentLocale()
+    val auto = stringResource(R.string.subtitles_auto)
+    ChoiceRow(
+        title = stringResource(R.string.subtitles_title),
+        choices = listOf("" to stringResource(R.string.subtitles_off)) + captions.map { c ->
+            val name = languageName(c.language.removeSuffix("-orig"), locale)
+            c.language to if (c.auto) "$name · $auto" else name
+        },
+        selected = selected,
+        onSelect = onSelect,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun ChoiceRow(
+    title: String,
+    choices: List<Pair<String, String>>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier
+) {
     Column(modifier.fillMaxWidth()) {
         Text(
-            stringResource(R.string.audio_voice_title),
+            title,
             color = White.copy(alpha = 0.4f),
             fontSize = 9.sp,
             fontFamily = FontFamily.Monospace,
@@ -59,16 +109,11 @@ fun AudioVoicePicker(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            voices.forEach { voice ->
-                val isSelected = voice.language == selected
+            choices.forEach { (key, label) ->
+                val isSelected = key == selected
                 val shape = RoundedCornerShape(16.dp)
-                val role = when (voice.role) {
-                    AudioTracks.Role.ORIGINAL -> stringResource(R.string.audio_voice_original)
-                    AudioTracks.Role.DUBBED -> stringResource(R.string.audio_voice_translated)
-                    AudioTracks.Role.OTHER -> ""
-                }
                 Text(
-                    listOf(languageName(voice.language, locale), role).filter { it.isNotBlank() }.joinToString(" · "),
+                    label,
                     color = if (isSelected) Amber else White.copy(alpha = 0.8f),
                     fontSize = 12.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
@@ -76,13 +121,16 @@ fun AudioVoicePicker(
                         .clip(shape)
                         .background(if (isSelected) Amber.copy(alpha = 0.16f) else Black)
                         .border(1.dp, if (isSelected) Amber else Hairline, shape)
-                        .clickable { onSelect(voice.language) }
+                        .clickable { onSelect(key) }
                         .padding(horizontal = 12.dp, vertical = 7.dp)
                 )
             }
         }
     }
 }
+
+@Composable
+private fun currentLocale(): Locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
 
 /** "es-US" → "Spanish (United States)", in the app's language. */
 private fun languageName(code: String, locale: Locale): String {

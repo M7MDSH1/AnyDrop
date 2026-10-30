@@ -55,6 +55,11 @@
     <string name="audio_voice_title">لغة الصوت</string>
     <string name="audio_voice_original">الأصلي</string>
     <string name="audio_voice_translated">مترجم</string>
+    <string name="subtitles_title">الترجمة</string>
+    <string name="subtitles_off">بدون</string>
+    <string name="subtitles_auto">تلقائية</string>
+    <string name="progress_subtitles">جارٍ حفظ الترجمة…</string>
+    <string name="player_subtitles">الترجمة</string>
     <string name="paste_url_hint">الصق الرابط هنا…</string>
     <string name="paste_btn">لصق</string>
     <string name="recording_indicator">● تسجيل</string>
