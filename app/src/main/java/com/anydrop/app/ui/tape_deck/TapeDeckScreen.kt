@@ -79,6 +79,8 @@ import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.distinctPageVideos
 import com.anydrop.app.engine.torrentFileList
 import com.anydrop.app.ui.components.TorrentPicker
+import com.anydrop.app.engine.LinkList
+import com.anydrop.app.engine.isLinkList
 import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.isWholePage
 import com.anydrop.app.ui.components.PlaylistOffer
@@ -306,9 +308,11 @@ fun TapeDeckScreen(
             onGo = { if (canDownload) ensureNotificationPermission { viewModel.startDownload() } }
         )
 
-        // A torrent has no page to read: the video/page switch only shows for web links.
+        // A torrent has no page to read, and pasted links are a list already: the video/page
+        // switch only shows for one web link.
         val isTorrent = remember(url) { Magnet.isTorrentLink(url) }
-        if (!isTorrent) {
+        val isLinkList = remember(url) { LinkList.isList(url) }
+        if (!isTorrent && !isLinkList) {
             Spacer(modifier = Modifier.height(8.dp))
             FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
         }
@@ -386,8 +390,9 @@ fun TapeDeckScreen(
                 resolving = resolving,
                 onResolve = viewModel::resolvePageItem,
                 onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } },
-                playlist = availableFormats.isPlaylist,
-                onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } }
+                playlist = availableFormats.isPlaylist || availableFormats.isLinkList,
+                onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } },
+                linkList = availableFormats.isLinkList
             )
             Spacer(modifier = Modifier.height(12.dp))
         } else if (postItems.isNotEmpty()) {

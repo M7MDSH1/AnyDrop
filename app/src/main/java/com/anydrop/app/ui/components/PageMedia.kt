@@ -252,7 +252,9 @@ fun PageMediaPicker(
      * [onDownloadAudio] receives instead of [onDownload].
      */
     playlist: Boolean = false,
-    onDownloadAudio: (List<FormatInfo>) -> Unit = {}
+    onDownloadAudio: (List<FormatInfo>) -> Unit = {},
+    /** Links pasted together (shown like a playlist, under their own heading). */
+    linkList: Boolean = false
 ) {
     val keys = items.map { it.key }
     // A playlist is downloaded as a whole by default. On a page, its own video starts
@@ -277,15 +279,24 @@ fun PageMediaPicker(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (playlist) stringResource(R.string.playlist_count, items.size)
-                    else stringResource(R.string.page_items_count, items.size),
+                    when {
+                        linkList -> stringResource(R.string.links_count, items.size)
+                        playlist -> stringResource(R.string.playlist_count, items.size)
+                        else -> stringResource(R.string.page_items_count, items.size)
+                    },
                     color = Amber,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 12.sp,
                     letterSpacing = tracked(1f)
                 )
                 Text(
-                    stringResource(if (playlist) R.string.playlist_hint else R.string.page_items_hint),
+                    stringResource(
+                        when {
+                            linkList -> R.string.links_hint
+                            playlist -> R.string.playlist_hint
+                            else -> R.string.page_items_hint
+                        }
+                    ),
                     color = White.copy(alpha = 0.5f),
                     fontSize = 11.sp
                 )

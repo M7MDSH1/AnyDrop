@@ -396,6 +396,8 @@
     <string name="fetching_playlist">Reading the playlist…</string>
     <string name="playlist_count">PLAYLIST · %1$d VIDEOS</string>
     <string name="playlist_hint">Pick the videos to download, or download them all.</string>
+    <string name="links_count">%1$d LINKS</string>
+    <string name="links_hint">Each link downloads as its own video — or as its sound only.</string>
     <string name="playlist_as_video">VIDEO</string>
     <string name="playlist_as_audio">AUDIO ONLY</string>
     <string name="playlist_offer">This video is part of a playlist.</string>
