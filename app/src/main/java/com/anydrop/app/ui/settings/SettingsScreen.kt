@@ -75,9 +75,12 @@ fun SettingsScreen(
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
     val darkMode by viewModel.darkMode.collectAsState()
     val language by viewModel.language.collectAsState()
+    val wifiOnly by viewModel.wifiOnly.collectAsState()
+    val maxParallel by viewModel.maxParallel.collectAsState()
 
     var showQualityDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showParallelDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -133,6 +136,18 @@ fun SettingsScreen(
             title = stringResource(R.string.settings_max_quality),
             subtitle = stringResource(maxQualityLabelRes(maxQualityHeight)),
             onClick = { showQualityDialog = true }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsCard(
+            title = stringResource(R.string.settings_download_over),
+            subtitle = stringResource(if (wifiOnly) R.string.download_over_wifi else R.string.download_over_any),
+            onClick = { viewModel.toggleWifiOnly() }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsCard(
+            title = stringResource(R.string.settings_parallel),
+            subtitle = stringResource(R.string.parallel_value, maxParallel),
+            onClick = { showParallelDialog = true }
         )
         Spacer(modifier = Modifier.height(8.dp))
         SettingsCard(
@@ -229,6 +244,50 @@ fun SettingsScreen(
         )
     }
 
+    if (showParallelDialog) {
+        AlertDialog(
+            containerColor = Black,
+            titleContentColor = Amber,
+            textContentColor = White,
+            onDismissRequest = { showParallelDialog = false },
+            title = {
+                Text(
+                    stringResource(R.string.settings_parallel),
+                    fontFamily = FontFamily.Monospace,
+                    color = Amber
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    parallelOptions.forEach { count ->
+                        TextButton(
+                            onClick = {
+                                viewModel.setMaxParallel(count)
+                                showParallelDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.parallel_option, count),
+                                color = if (maxParallel == count) Amber else White,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showParallelDialog = false }) {
+                    Text(
+                        stringResource(R.string.btn_cancel),
+                        color = White.copy(alpha = 0.5f),
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        )
+    }
+
     if (showLanguageDialog) {
         AlertDialog(
             containerColor = Black,
@@ -277,6 +336,8 @@ fun SettingsScreen(
         )
     }
 }
+
+private val parallelOptions = listOf(1, 2, 3, SettingsRepository.MAX_PARALLEL)
 
 private val languageOptions = listOf(
     AppLanguage.SYSTEM,

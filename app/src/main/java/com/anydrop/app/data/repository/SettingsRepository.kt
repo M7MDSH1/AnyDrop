@@ -68,6 +68,16 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getString(KEY_SUBTITLE_LANGUAGE, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_SUBTITLE_LANGUAGE, value).apply()
 
+    /** Downloads wait for Wi-Fi (or Ethernet) instead of using mobile data. */
+    var wifiOnly: Boolean
+        get() = prefs.getBoolean(KEY_WIFI_ONLY, false)
+        set(value) = prefs.edit().putBoolean(KEY_WIFI_ONLY, value).apply()
+
+    /** How many downloads run together; the rest wait their turn (playlists add many at once). */
+    var maxParallelDownloads: Int
+        get() = prefs.getInt(KEY_MAX_PARALLEL, DEFAULT_PARALLEL).coerceIn(1, MAX_PARALLEL)
+        set(value) = prefs.edit().putInt(KEY_MAX_PARALLEL, value.coerceIn(1, MAX_PARALLEL)).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -105,6 +115,11 @@ class SettingsRepository @Inject constructor(
         private const val KEY_MOVIE_MODE = "player_movie_mode"
         private const val KEY_AUDIO_LANGUAGE = "preferred_audio_language"
         private const val KEY_SUBTITLE_LANGUAGE = "preferred_subtitle_language"
+        private const val KEY_WIFI_ONLY = "download_wifi_only"
+        private const val KEY_MAX_PARALLEL = "download_max_parallel"
+
+        const val DEFAULT_PARALLEL = 3
+        const val MAX_PARALLEL = 5
         private const val KEY_YTDLP_LAST_UPDATE = "ytdlp_last_update"
 
         const val MAX_QUALITY_BEST = 4320

@@ -3,6 +3,7 @@ package com.anydrop.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.data.repository.AppLanguage
+import com.anydrop.app.data.repository.DownloadGate
 import com.anydrop.app.data.repository.LanguageRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,8 +17,29 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val languageRepository: LanguageRepository
+    private val languageRepository: LanguageRepository,
+    private val downloadGate: DownloadGate
 ) : ViewModel() {
+
+    private val _wifiOnly = MutableStateFlow(settingsRepository.wifiOnly)
+    val wifiOnly: StateFlow<Boolean> = _wifiOnly.asStateFlow()
+
+    private val _maxParallel = MutableStateFlow(settingsRepository.maxParallelDownloads)
+    val maxParallel: StateFlow<Int> = _maxParallel.asStateFlow()
+
+    /** Queued downloads follow the new rule at once (they wait, or start). */
+    fun toggleWifiOnly() {
+        val next = !settingsRepository.wifiOnly
+        settingsRepository.wifiOnly = next
+        _wifiOnly.value = next
+        downloadGate.recheck()
+    }
+
+    fun setMaxParallel(count: Int) {
+        settingsRepository.maxParallelDownloads = count
+        _maxParallel.value = settingsRepository.maxParallelDownloads
+        downloadGate.recheck()
+    }
 
     private val _maxQualityHeight = MutableStateFlow(settingsRepository.maxQualityHeight)
     val maxQualityHeight: StateFlow<Int> = _maxQualityHeight.asStateFlow()

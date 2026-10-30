@@ -1251,8 +1251,8 @@ class YtDlpEngine(
                     videoProgress.map(p, eta, line)?.let { trySend(it) }
                 }
             }
+            // Paused: the streams are kept (named after the output), so RESUME picks them up.
             if (tag in cancelled) {
-                videoFile?.delete()
                 finish(tag, false, "")
                 return@callbackFlow
             }
@@ -1269,8 +1269,6 @@ class YtDlpEngine(
                 audioProgress.map(p, eta, line)?.let { trySend(it) }
             }
             if (tag in cancelled) {
-                videoFile.delete()
-                audioFile?.delete()
                 finish(tag, false, "")
                 return@callbackFlow
             }

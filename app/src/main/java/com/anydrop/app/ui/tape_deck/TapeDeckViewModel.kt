@@ -193,6 +193,9 @@ class TapeDeckViewModel @Inject constructor(
     fun dismissTask(tag: String) = downloadQueue.dismiss(tag)
     fun openTask(tag: String) = downloadQueue.open(tag)
     fun clearFinishedTasks() = downloadQueue.clearFinished()
+    fun pauseAllTasks() = downloadQueue.pauseAll()
+    fun resumeAllTasks() = downloadQueue.resumeAll()
+    fun useMobileData(tag: String) = downloadQueue.useMobileData(tag)
 
     /** Restore the last URL + fetched formats + selection so the deck looks the same. */
     private fun restoreSession() {

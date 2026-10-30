@@ -478,7 +478,10 @@ fun TapeDeckScreen(
                 onRetry = viewModel::retryTask,
                 onOpen = viewModel::openTask,
                 onDismiss = viewModel::dismissTask,
-                onClearFinished = viewModel::clearFinishedTasks
+                onClearFinished = viewModel::clearFinishedTasks,
+                onPauseAll = viewModel::pauseAllTasks,
+                onResumeAll = viewModel::resumeAllTasks,
+                onUseMobileData = viewModel::useMobileData
             )
         }
 

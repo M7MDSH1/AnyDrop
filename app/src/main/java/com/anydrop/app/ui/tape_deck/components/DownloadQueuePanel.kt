@@ -68,7 +68,10 @@ fun DownloadQueuePanel(
     onOpen: (String) -> Unit,
     onDismiss: (String) -> Unit,
     onClearFinished: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPauseAll: () -> Unit = {},
+    onResumeAll: () -> Unit = {},
+    onUseMobileData: (String) -> Unit = {}
 ) {
     if (tasks.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
@@ -81,24 +84,16 @@ fun DownloadQueuePanel(
                 letterSpacing = tracked(2f),
                 modifier = Modifier.weight(1f)
             )
-            if (tasks.any { !it.isActive }) {
-                Text(
-                    stringResource(R.string.queue_clear),
-                    color = Amber,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onClearFinished)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+            // Several running: pause them together; several paused: resume them together.
+            if (tasks.count { it.isActive } > 1) HeaderAction(stringResource(R.string.queue_pause_all), onPauseAll)
+            if (tasks.count { it.status == TaskStatus.CANCELLED } > 1) HeaderAction(stringResource(R.string.queue_resume_all), onResumeAll)
+            if (tasks.any { !it.isActive }) HeaderAction(stringResource(R.string.queue_clear), onClearFinished)
         }
         Spacer(Modifier.height(8.dp))
         val ordered = tasks.sortedWith(compareBy<DownloadTask> { if (it.isActive) 0 else 1 }.thenByDescending { it.startedAt })
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ordered.take(12).forEach { task ->
-                TaskCard(task, onStop, onRetry, onOpen, onDismiss)
+                TaskCard(task, onStop, onRetry, onOpen, onDismiss, onUseMobileData)
             }
         }
     }
@@ -110,7 +105,8 @@ private fun TaskCard(
     onStop: (String) -> Unit,
     onRetry: (String) -> Unit,
     onOpen: (String) -> Unit,
-    onDismiss: (String) -> Unit
+    onDismiss: (String) -> Unit,
+    onUseMobileData: (String) -> Unit
 ) {
     val statusColor = when (task.status) {
         TaskStatus.RUNNING -> Amber
@@ -175,7 +171,9 @@ private fun TaskCard(
             Spacer(Modifier.width(6.dp))
             when (task.status) {
                 TaskStatus.RUNNING -> ActionChip(stringResource(R.string.task_stop), StatusRed) { onStop(task.tag) }
-                TaskStatus.FAILED, TaskStatus.CANCELLED -> ActionChip(stringResource(R.string.btn_retry), Amber) { onRetry(task.tag) }
+                TaskStatus.FAILED -> ActionChip(stringResource(R.string.btn_retry), Amber) { onRetry(task.tag) }
+                // Paused: RESUME carries on from the partial file.
+                TaskStatus.CANCELLED -> ActionChip(stringResource(R.string.task_resume), Amber) { onRetry(task.tag) }
                 TaskStatus.DONE -> ActionChip(stringResource(R.string.task_open), StatusGreen) { onOpen(task.tag) }
             }
             if (!task.isActive) {
@@ -195,7 +193,16 @@ private fun TaskCard(
 
         if (task.status == TaskStatus.RUNNING) {
             Spacer(Modifier.height(10.dp))
-            if (task.percent <= 0) {
+            if (task.queued) {
+                // Waiting: an empty track, not the "busy" animation.
+                LinearProgressIndicator(
+                    progress = { 0f },
+                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
+                    color = Amber,
+                    trackColor = MediumGray,
+                    strokeCap = StrokeCap.Round
+                )
+            } else if (task.percent <= 0) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
                     color = Amber,
@@ -234,6 +241,10 @@ private fun TaskCard(
                     )
                 }
             }
+            if (task.waitingForWifi) {
+                Spacer(Modifier.height(8.dp))
+                ActionChip(stringResource(R.string.task_use_mobile_data), Amber) { onUseMobileData(task.tag) }
+            }
         }
 
         if (task.status == TaskStatus.FAILED && task.error.isNotBlank()) {
@@ -269,6 +280,20 @@ private fun statusLabel(task: DownloadTask): String = when (task.status) {
 
 /** Keeps "39.2 MB" / "1080p" in reading order inside Arabic text (Unicode LTR isolate). */
 private fun String.ltr(): String = if (isBlank()) this else "⁦$this⁩"
+
+@Composable
+private fun HeaderAction(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        color = Amber,
+        fontSize = 11.sp,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
+}
 
 @Composable
 private fun ActionChip(label: String, color: Color, onClick: () -> Unit) {

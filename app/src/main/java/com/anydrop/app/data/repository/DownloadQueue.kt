@@ -68,15 +68,21 @@ data class DownloadTask(
     /** The tool's own error output behind [error], for "Copy error details". */
     val errorDetail: String = "",
     val filePath: String = "",
-    val startedAt: Long = System.currentTimeMillis()
+    val startedAt: Long = System.currentTimeMillis(),
+    /** In the queue, not downloading yet (its turn, or Wi-Fi, hasn't come). */
+    val queued: Boolean = false,
+    /** Queued, held back by "Wi-Fi only" while the phone is on mobile data. */
+    val waitingForWifi: Boolean = false
 ) {
+    /** Queued or downloading (a PAUSE stops it). */
     val isActive: Boolean get() = status == TaskStatus.RUNNING
 }
 
 /**
  * The download tracker: every download started from the deck, the share sheet or the
- * browser shows up here with live progress, and can be stopped, retried or opened.
- * Downloads run in [appDownloadScope], not in a ViewModel. The list itself is kept on disk
+ * browser shows up here with live progress, and can be paused, resumed, retried or opened.
+ * Downloads run in [appDownloadScope], not in a ViewModel, each starting when [DownloadGate]
+ * gives it its turn ("Downloads at once", "Wi-Fi only"). The list itself is kept on disk
  * ([DownloadListStore]), so it's still there after Android closes the app.
  */
 @Singleton
@@ -86,7 +92,8 @@ class DownloadQueue @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val cookieRepository: CookieRepository,
     private val settingsRepository: SettingsRepository,
-    private val store: DownloadListStore
+    private val store: DownloadListStore,
+    private val gate: DownloadGate
 ) {
     private val _tasks = MutableStateFlow(restore(store.load()))
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
@@ -119,44 +126,80 @@ class DownloadQueue @Inject constructor(
         }
     }
 
-    /** Starts one download. Returns its tag (= [outputPath]). */
+    /** Queues one download; it starts when it gets its turn. Returns its tag (= [outputPath]). */
     fun launch(request: DownloadRequest, outputPath: String): String {
-        jobs.remove(outputPath)?.cancel()
-        addTask(request, outputPath)
-        DownloadService.startDownload(context, outputPath, request.title)
-        jobs[outputPath] = appDownloadScope.launch { run(request, outputPath) }
+        launchAll(listOf(request to outputPath))
         return outputPath
     }
 
-    /**
-     * Several images of one carousel, one after another. The service is told about the whole
-     * batch up front so its notification isn't torn down between images.
-     */
-    fun launchBatch(items: List<Pair<DownloadRequest, String>>) {
+    /** Several downloads (a playlist, a carousel, a page's videos), started in this order. */
+    fun launchBatch(items: List<Pair<DownloadRequest, String>>) = launchAll(items)
+
+    private fun launchAll(items: List<Pair<DownloadRequest, String>>) {
         if (items.isEmpty()) return
-        items.forEachIndexed { i, (request, path) ->
-            addTask(request, path, if (i == 0) R.string.progress_starting else R.string.progress_queued)
+        items.forEach { (request, path) ->
+            jobs.remove(path)?.cancel()
+            addTask(request, path, R.string.progress_queued)
         }
-        DownloadService.startDownload(context, items.first().second, items.first().first.title, batchTags = items.map { it.second })
-        val job = appDownloadScope.launch {
-            items.forEach { (request, path) ->
-                if (_tasks.value.firstOrNull { it.tag == path }?.status != TaskStatus.RUNNING) return@forEach
-                DownloadService.startDownload(context, path, request.title)
-                run(request, path)
-            }
-        }
-        items.forEach { (_, path) -> jobs[path] = job }
+        // The notification stays up while downloads wait their turn or for Wi-Fi.
+        DownloadService.register(context, items.map { it.second }, items.first().first.title)
+        items.forEach { (request, path) -> jobs[path] = appDownloadScope.launch { runWhenAllowed(request, path) } }
     }
 
+    /** Waits for [tag]'s turn (see [DownloadGate]), then downloads it. */
+    private suspend fun runWhenAllowed(request: DownloadRequest, tag: String) {
+        try {
+            gate.awaitTurn(tag) { wait ->
+                val wifi = wait == DownloadGate.Wait.WIFI
+                update(tag) {
+                    it.copy(
+                        phase = context.getString(if (wifi) R.string.progress_waiting_wifi else R.string.progress_queued),
+                        waitingForWifi = wifi
+                    )
+                }
+                DownloadService.setWaitingForWifi(context, tag, wifi)
+            }
+            // Paused while it waited.
+            if (_tasks.value.firstOrNull { it.tag == tag }?.status != TaskStatus.RUNNING) return
+            update(tag) { it.copy(phase = context.getString(R.string.progress_starting), queued = false, waitingForWifi = false) }
+            DownloadService.startDownload(context, tag, request.title)
+            run(request, tag)
+        } finally {
+            gate.release(tag)
+        }
+    }
+
+    /** Pauses a download (queued or running). Its partial file is kept: RESUME carries on from it. */
     fun cancel(tag: String) {
         val task = _tasks.value.firstOrNull { it.tag == tag } ?: return
         if (!task.isActive) return
-        downloadRepository.cancelDownload(tag)
-        update(tag) { it.copy(status = TaskStatus.CANCELLED, speed = "", eta = "") }
-        DownloadService.cancelDownload(context, tag)
-        // Batch jobs are shared by several images; only stop single-download jobs outright.
-        if (jobs.values.count { it == jobs[tag] } <= 1) jobs.remove(tag)?.cancel()
+        update(tag) { it.copy(status = TaskStatus.CANCELLED, speed = "", eta = "", waitingForWifi = false) }
+        stop(tag)
     }
+
+    private fun stop(tag: String) {
+        downloadRepository.cancelDownload(tag)
+        DownloadService.cancelDownload(context, tag)
+        jobs.remove(tag)?.cancel()
+    }
+
+    /** Pauses every queued and running download. */
+    fun pauseAll() {
+        // All marked paused first, so a waiting one can't take a slot freed by another's pause.
+        val active = _tasks.value.filter { it.isActive }.map { it.tag }.toSet()
+        _tasks.update { list ->
+            list.map { if (it.tag in active) it.copy(status = TaskStatus.CANCELLED, speed = "", eta = "", waitingForWifi = false) else it }
+        }
+        active.forEach(::stop)
+    }
+
+    /** Resumes every paused download, in the order they were first added. */
+    fun resumeAll() {
+        _tasks.value.filter { it.status == TaskStatus.CANCELLED }.sortedBy { it.startedAt }.forEach { retry(it.tag) }
+    }
+
+    /** Lets a download waiting for Wi-Fi go ahead on mobile data. */
+    fun useMobileData(tag: String) = gate.allowMobileData(tag)
 
     fun retry(tag: String) {
         val task = _tasks.value.firstOrNull { it.tag == tag } ?: return
@@ -233,7 +276,8 @@ class DownloadQueue @Inject constructor(
             quality = format.resolution,
             kind = kind,
             request = request,
-            phase = context.getString(phase)
+            phase = context.getString(phase),
+            queued = true
         )
         _tasks.update { list -> listOf(task) + list.filterNot { it.tag == tag } }
     }
