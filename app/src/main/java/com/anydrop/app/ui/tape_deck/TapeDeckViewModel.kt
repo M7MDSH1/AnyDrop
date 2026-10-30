@@ -28,6 +28,7 @@ import com.anydrop.app.engine.TorrentFile
 import com.anydrop.app.engine.asDownload
 import com.anydrop.app.engine.toFormat
 import com.anydrop.app.engine.MediaSniffer
+import com.anydrop.app.engine.YtDlpEngine
 import com.anydrop.app.engine.YtDlpEngine.FetchResult
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.YtDlpFormatParser
@@ -455,7 +456,8 @@ class TapeDeckViewModel @Inject constructor(
                 title = title,
                 creator = if (f.pageUrl.isBlank()) fetchedUploader else "",
                 webpageUrl = f.pageUrl.ifBlank { fetchedWebpageUrl.ifBlank { urlValue } },
-                cookieHeader = if (f.isFromPage) MediaSniffer.cookieHeaderFor(f.directUrl) else null
+                cookieHeader = if (f.isFromPage) MediaSniffer.cookieHeaderFor(f.directUrl) else null,
+                audioLanguage = if (f.group == YtDlpEngine.MAIN_GROUP) AudioVoice.toRequest(_audioVoices.value, _audioLanguage.value, f) else ""
             )
             val path = if (f.isImage) {
                 libraryRepository.getImageOutputPath(source, title, "img${idx + 1}")
