@@ -16,6 +16,7 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Rational
+import android.util.TypedValue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -947,6 +948,12 @@ private fun VideoPlayerContent(
                     useController = false
                     keepScreenOn = true
                     resizeMode = resizeModes[resizeModeIndex].first
+                    // Subtitles at a readable size in both orientations (a share of the video's
+                    // height is tiny when the phone is upright), styled by the phone's caption settings.
+                    subtitleView?.apply {
+                        setUserDefaultStyle()
+                        setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                    }
                 }
             },
             update = { view ->
