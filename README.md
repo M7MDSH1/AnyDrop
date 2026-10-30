@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.5.2**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.6.0**
 
 ---
 
@@ -14,6 +14,10 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **No login needed** for public posts — Instagram reels, posts and carousels (and any
   site yt-dlp can't handle) are read straight from the web page, like a browser would.
 - **Audio-only** extraction (.m4a) at selectable bitrates.
+- **Audio language** — videos with several voices (YouTube's other languages and
+  automatic dubbing) let you pick which one to save, with the video or alone.
+- **Subtitles** — save a video's subtitles (the creator's own or the site's automatic
+  ones) next to it; the player shows them, with a CC button to turn them off.
 - **Images** — single photos and photo posts.
 - **Whole posts** — share a carousel that mixes photos and videos and AnyDrop fetches
   every item, shows them in a grid (videos marked ▶) and downloads the ones you pick,
@@ -21,6 +25,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **This video or the whole page** — a link can fetch just its video, or everything on
   its page: the page's own video in every quality, the other clips it plays and the
   videos it links to (like the suggestions under a player), to pick from.
+- **Paste many links at once** — a note or message with several links becomes a list:
+  each link downloads as its own video, or as its sound only.
 - **Playlists** — a YouTube playlist or mix lists all its videos (up to 200) with
   covers and lengths; pick some or download them all, as **video or audio only**
   (.m4a). Opening one video of a playlist offers the whole list in one tap.
@@ -30,8 +36,12 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **Cover, length and quality for every video** — videos read off a page are checked
   for their real length and resolution and get a cover frame, so the real video stands
   out from ads and previews.
-- **Download tracker** — run several downloads at once and follow each one's real
-  progress, speed and time left, with STOP / RETRY / OPEN.
+- **Download tracker** — follow each download's real progress, speed and time left,
+  with PAUSE / RESUME / RETRY / OPEN (and PAUSE ALL / RESUME ALL). The list stays after
+  the app is closed, and an interrupted download carries on where it stopped. A failed
+  one has **COPY ERROR DETAILS** for bug reports.
+- **Download settings** — **Wi-Fi only** (downloads wait for Wi-Fi, or use mobile data for
+  one) and **how many downloads run at once** (the rest wait their turn).
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
   sheet fetches the formats, you pick quality/images and hit **RECORD**, and it
   downloads in the background without leaving the app you were in.
@@ -48,13 +58,16 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
   player) to keep it in **Favorites**, and make your own collections (e.g. "Family"):
   select items, tap the folder button, and the collection shows only what you added.
   Rename or delete a collection with a long-press — the files themselves stay put.
-- **Audio tab** — plays device audio with background playback + media notification;
-  rename or delete songs from their menu.
+- **Audio tab** — plays device audio in the background with a media notification, one
+  song after another (also with the screen off), with shuffle, repeat, an **Up next**
+  list and a **sleep timer** (15–60 minutes or the end of the song). Rename or delete
+  songs from their menu.
 - **Built-in player** — tap the video to show or hide the controls; a smooth seek bar
   with live frame preview while you drag, stacking double-tap seek, gestures (volume,
   brightness), playback speed, PiP shaped like the video, aspect-ratio toggle, resume
   where you left off, **share the video or the link it came from**, a ♡ favorite button,
-  swipe left/right between items, and a zoomable image viewer.
+  swipe left/right between items, a **Listen** button that keeps playing a video's sound
+  with the screen off, and a zoomable image viewer.
 - **Movie mode** — one tap on the 🎬 icon in the player: swiping left/right moves through
   the video instead of switching videos, previous/next disappear, and Back leaves the
   player. It stays on until you turn it off.
@@ -67,6 +80,7 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **English & Arabic**, with a **dark ↔ light** theme, both switchable from Settings.
 - **Optional login (cookies)** — only for private content: sign in inside the app, and
   disconnect or remove a site's session any time.
+- Works on newer phones with 16 KB memory pages, ffmpeg included.
 - Downloads are saved to your device and exported to the public gallery (Movies /
   Pictures / Music → `AnyDrop/`) so other apps (WhatsApp, Google Photos) can see them.
 
