@@ -46,7 +46,9 @@ data class DownloadRequest(
     /** Browser session cookies for media found on a page (never written to disk). */
     val cookieHeader: String? = null,
     /** The voice to save when the video has several audio languages (blank = the usual audio). */
-    val audioLanguage: String = ""
+    val audioLanguage: String = "",
+    /** Subtitles to save next to the video (a yt-dlp language code; blank = none). */
+    val subtitleLanguage: String = ""
 )
 
 /** One row of the download tracker. [tag] is the output path — also the notification tag. */
@@ -324,6 +326,10 @@ class DownloadQueue @Inject constructor(
                 }
                 is DownloadState.Completed -> {
                     val path = state.mediaItem.localFilePath
+                    if (request.subtitleLanguage.isNotBlank() && !request.format.isAudioOnly && !request.format.isImage) {
+                        update(tag) { it.copy(phase = context.getString(R.string.progress_subtitles)) }
+                        downloadRepository.downloadSubtitles(request.url, request.subtitleLanguage, path, cookieRepository.getCookieFile().takeIf { it.exists() })
+                    }
                     libraryRepository.writeMetadata(
                         mediaFilePath = path,
                         url = request.webpageUrl.ifBlank { request.url },

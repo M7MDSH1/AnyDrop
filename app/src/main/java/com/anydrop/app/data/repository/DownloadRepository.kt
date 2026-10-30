@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.map
 import java.io.File
 
@@ -83,6 +84,10 @@ class DownloadRepository(
             }
             .flowOn(ioDispatcher)
     }
+
+    /** The video's subtitles next to it (see [YtDlpEngine.downloadSubtitles]). */
+    suspend fun downloadSubtitles(url: String, language: String, videoPath: String, cookieFile: File? = null): File? =
+        withContext(ioDispatcher) { ytDlpEngine.downloadSubtitles(url, language, videoPath, cookieFile) }
 
     fun downloadAudio(
         url: String,

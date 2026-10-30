@@ -46,6 +46,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.ClosedCaptionDisabled
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -116,6 +118,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -285,7 +288,8 @@ fun PlayerScreen(
             favorite = favorite,
             onToggleFavorite = viewModel::toggleFavorite,
             movieMode = movieMode,
-            onToggleMovieMode = viewModel::toggleMovieMode
+            onToggleMovieMode = viewModel::toggleMovieMode,
+            subtitles = remember(currentMedia) { viewModel.subtitlesFor(currentMedia!!) }
         )
     }
 }
@@ -590,7 +594,9 @@ private fun VideoPlayerContent(
     favorite: Boolean? = null,
     onToggleFavorite: () -> Unit = {},
     movieMode: Boolean = false,
-    onToggleMovieMode: () -> Unit = {}
+    onToggleMovieMode: () -> Unit = {},
+    /** Subtitles saved with the video, language → file. */
+    subtitles: Map<String, File> = emptyMap()
 ) {
     val context: Context = activity
     // Movie mode keeps the viewer on this video: no previous/next (buttons, PiP actions,
@@ -618,10 +624,17 @@ private fun VideoPlayerContent(
             // Pause when headphones are unplugged / Bluetooth disconnects.
             .setHandleAudioBecomingNoisy(true)
             .build().also { exo ->
-                exo.setMediaItem(Media3Item.fromUri(uri))
+                exo.setMediaItem(mediaWithSubtitles(uri, subtitles))
                 exo.prepare()
                 exo.playWhenReady = true
             }
+    }
+    // Saved subtitles show from the start; the CC button hides them.
+    var subtitlesOn by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(subtitlesOn) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesOn)
+            .build()
     }
 
     var isPlaying by remember { mutableStateOf(true) }
@@ -1363,6 +1376,15 @@ private fun VideoPlayerContent(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (subtitles.isNotEmpty()) {
+                            IconButton(onClick = { subtitlesOn = !subtitlesOn; resetHideTimer() }) {
+                                Icon(
+                                    if (subtitlesOn) Icons.Filled.ClosedCaption else Icons.Filled.ClosedCaptionDisabled,
+                                    contentDescription = stringResource(R.string.player_subtitles),
+                                    tint = if (subtitlesOn) VideoAccent else OnVideo.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = {
                                 onToggleMovieMode()
@@ -1438,6 +1460,21 @@ private fun VideoPlayerContent(
 private val OnVideo = Color.White
 private val VideoAccent = DarkPalette.accent
 private val VideoMenu = DarkPalette.surface
+
+/** The video with its saved subtitles attached (the first one shows by default). */
+private fun mediaWithSubtitles(uri: Uri, subtitles: Map<String, File>): Media3Item =
+    Media3Item.Builder()
+        .setUri(uri)
+        .setSubtitleConfigurations(
+            subtitles.entries.mapIndexed { i, (language, file) ->
+                Media3Item.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                    .setMimeType(if (file.extension.equals("srt", true)) MimeTypes.APPLICATION_SUBRIP else MimeTypes.TEXT_VTT)
+                    .setLanguage(language.removeSuffix("-orig"))
+                    .setSelectionFlags(if (i == 0) C.SELECTION_FLAG_DEFAULT else 0)
+                    .build()
+            }
+        )
+        .build()
 
 /** Movie mode: how far a swipe across the whole screen seeks. */
 private const val SWIPE_SEEK_SCREEN_MS = 90_000f

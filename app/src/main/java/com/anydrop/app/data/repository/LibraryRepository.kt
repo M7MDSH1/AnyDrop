@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.anydrop.app.data.model.MediaItem
+import com.anydrop.app.engine.YtDlpEngine
 import com.anydrop.app.data.model.MediaSource
 import com.anydrop.app.util.SearchText
 import kotlinx.coroutines.Dispatchers
@@ -542,8 +543,28 @@ class LibraryRepository(private val context: Context) {
                         }
                     }
                 }
+                subtitleFiles(baseName).forEach { it.delete() }
             }
         } catch (_: Exception) {}
+    }
+
+    /** Subtitles saved next to AnyDrop's copy of a video ("<name>.<language>.srt" / .vtt). */
+    private fun subtitleFiles(baseName: String): List<File> =
+        getVideoDir().listFiles { f ->
+            f.isFile && f.name.startsWith("$baseName.") && f.extension.lowercase() in YtDlpEngine.SUBTITLE_EXTS
+        }?.toList().orEmpty()
+
+    /** A video's subtitles, language → file (see [YtDlpEngine.downloadSubtitles]). */
+    fun subtitlesFor(item: MediaItem): Map<String, File> {
+        if (item.isAudio || item.isImage) return emptyMap()
+        val base = (if (item.localFilePath.startsWith("content://")) File(item.title) else File(item.localFilePath))
+            .nameWithoutExtension.ifBlank { return emptyMap() }
+        return subtitleFiles(base).associateBy { it.name.removePrefix("$base.").substringBeforeLast('.') }
+    }
+
+    /** Subtitles follow their video when it's renamed. */
+    private fun renameSubtitles(oldBase: String, newBase: String) {
+        subtitleFiles(oldBase).forEach { f -> f.renameTo(File(f.parentFile, newBase + f.name.removePrefix(oldBase))) }
     }
 
     /**
@@ -569,6 +590,7 @@ class LibraryRepository(private val context: Context) {
         if (dest.exists()) return RenameResult.Failed(RenameResult.Reason.NAME_TAKEN)
         if (!file.renameTo(dest)) return RenameResult.Failed(RenameResult.Reason.ERROR)
         File("${file.absolutePath}.meta.json").takeIf { it.exists() }?.renameTo(File("${dest.absolutePath}.meta.json"))
+        renameSubtitles(file.nameWithoutExtension, dest.nameWithoutExtension)
         renameGalleryTwin(file.name, dest.name)
         return RenameResult.Done(
             item.copy(id = dest.nameWithoutExtension, title = dest.nameWithoutExtension, localFilePath = dest.absolutePath, localUri = Uri.fromFile(dest))
@@ -609,6 +631,7 @@ class LibraryRepository(private val context: Context) {
                 File("${twin.absolutePath}.meta.json").takeIf { it.exists() }?.renameTo(File(dir, "$target.meta.json"))
             }
         }
+        renameSubtitles(File(oldName).nameWithoutExtension, name)
         return RenameResult.Done(item.copy(title = if (item.isAudio) name else target))
     }
 

@@ -8,6 +8,7 @@ import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.data.model.MediaSource
 import com.anydrop.app.data.repository.SettingsRepository
+import com.anydrop.app.data.repository.readAppLanguageSync
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDL.CanceledException
@@ -46,6 +47,8 @@ class YtDlpEngine(
         private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
         private val VIDEO_EXTS = listOf("mp4", "mkv", "webm", "mov", "m4v")
         private val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
+        /** Subtitle files the player can show. */
+        val SUBTITLE_EXTS = setOf("srt", "vtt")
         /** The most videos listed from one playlist. */
         private const val MAX_PLAYLIST = 200
         /** How much of yt-dlp's error output is kept for "Copy error details". */
@@ -135,7 +138,9 @@ class YtDlpEngine(
          * yt-dlp's catch-all extractor found no video, only the page's picture (as on a page
          * with several players): worth reading the page itself before settling for that.
          */
-        val coverOnly: Boolean = false
+        val coverOnly: Boolean = false,
+        /** Subtitles the video offers (see [Captions]); empty when none or not known. */
+        val captions: List<Captions.Caption> = emptyList()
     )
 
     fun init() {
@@ -254,6 +259,40 @@ class YtDlpEngine(
             Log.w(TAG, "ffmpeg merge failed", e)
             tmp.delete()
             false
+        }
+    }
+
+    /** The language the app shows (its own setting, else the phone's), for automatic captions. */
+    private fun appLanguage(): String =
+        readAppLanguageSync(context).tag.ifBlank { java.util.Locale.getDefault().language }
+
+    /**
+     * Saves the video's subtitles in [language] next to [videoPath] as "<name>.<language>.srt"
+     * (or .vtt when there's no ffmpeg to convert), where the player finds them. Best effort:
+     * the video is already saved, so a failure here only means no subtitles.
+     */
+    fun downloadSubtitles(url: String, language: String, videoPath: String, cookieFile: File? = null): File? {
+        val video = File(videoPath)
+        val dir = video.parentFile ?: return null
+        val base = video.nameWithoutExtension
+        return try {
+            val request = YoutubeDLRequest(url).apply {
+                applyCommonOptions(cookieFile, url = url)
+                addOption("--skip-download")
+                addOption("--write-subs")
+                addOption("--write-auto-subs")
+                addOption("--sub-langs", language)
+                addOption("--sub-format", "srt/vtt/best")
+                if (ffmpegUsable) addOption("--convert-subs", "srt")
+                addOption("-o", File(dir, "$base.%(ext)s").absolutePath)
+            }
+            YoutubeDL.getInstance().execute(request)
+            dir.listFiles { f -> f.name.startsWith("$base.$language.") && f.extension.lowercase() in SUBTITLE_EXTS }
+                ?.maxByOrNull { it.lastModified() }
+                ?.also { Log.i(TAG, "Subtitles saved: ${it.name}") }
+        } catch (e: Exception) {
+            Log.w(TAG, "Subtitles failed for $language", e)
+            null
         }
     }
 
@@ -710,7 +749,11 @@ class YtDlpEngine(
                         .let { it.isNullOrBlank() || it.contains("Generic", ignoreCase = true) || it == "HTML5MediaEmbed" }
                     Log.i(TAG, "yt-dlp (${runCatching { info.extractorKey }.getOrNull()}): ${videoFormats.size} video, ${audioFormats.size} audio, ${imageFormats.size} image, ${thumbImages.size} from thumbnails")
                     if (formats.isNotEmpty()) {
-                        return@withContext FetchResult(formats, title, uploader, webpageUrl, coverOnly = thumbImages.isNotEmpty() && generic)
+                        return@withContext FetchResult(
+                            formats, title, uploader, webpageUrl,
+                            coverOnly = thumbImages.isNotEmpty() && generic,
+                            captions = Captions.parse(json, appLanguage())
+                        )
                     }
                     Log.w(TAG, "Client '$client' returned no usable formats, trying next")
                 } catch (e: Exception) {

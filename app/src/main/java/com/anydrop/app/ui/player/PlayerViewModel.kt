@@ -54,6 +54,9 @@ class PlayerViewModel @Inject constructor(
         _currentMedia.value?.let { collectionsRepository.toggleFavorite(listOf(it)) }
     }
 
+    /** Subtitles saved next to the video (language → file). */
+    fun subtitlesFor(item: MediaItem): Map<String, java.io.File> = libraryRepository.subtitlesFor(item)
+
     /** Movie mode (see [SettingsRepository.movieMode]); it stays on for the next video too. */
     private val _movieMode = MutableStateFlow(settingsRepository.movieMode)
     val movieMode: StateFlow<Boolean> = _movieMode.asStateFlow()

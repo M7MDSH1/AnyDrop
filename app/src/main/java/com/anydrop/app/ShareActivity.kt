@@ -65,6 +65,7 @@ import com.anydrop.app.engine.distinctPageVideos
 import com.anydrop.app.engine.torrentFileList
 import com.anydrop.app.ui.components.TorrentPicker
 import com.anydrop.app.ui.components.AudioVoicePicker
+import com.anydrop.app.ui.components.SubtitlePicker
 import com.anydrop.app.ui.components.CopyErrorDetailsButton
 import com.anydrop.app.engine.isPlaylist
 import com.anydrop.app.engine.isWholePage
@@ -191,6 +192,8 @@ private fun ShareSheet(
     val formats by viewModel.availableFormats.collectAsState()
     val audioVoices by viewModel.audioVoices.collectAsState()
     val audioLanguage by viewModel.audioLanguage.collectAsState()
+    val captions by viewModel.captions.collectAsState()
+    val subtitleLanguage by viewModel.subtitleLanguage.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
     val fetchWholePage by viewModel.fetchWholePage.collectAsState()
@@ -362,6 +365,8 @@ private fun ShareSheet(
                     }
                     AudioVoicePicker(voices = audioVoices, selected = audioLanguage, onSelect = viewModel::selectAudioLanguage)
                     if (audioVoices.isNotEmpty()) Spacer(Modifier.height(12.dp))
+                    SubtitlePicker(captions = captions, selected = subtitleLanguage, onSelect = viewModel::selectSubtitles)
+                    if (captions.isNotEmpty()) Spacer(Modifier.height(12.dp))
                     ShareQualityList(
                         showCovers = severalVideos,
                         // Mixed carousels list their photos too; otherwise just video/audio.

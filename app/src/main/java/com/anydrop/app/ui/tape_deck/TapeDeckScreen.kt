@@ -58,6 +58,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.anydrop.app.data.model.DownloadState
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.ui.components.AudioVoicePicker
+import com.anydrop.app.ui.components.SubtitlePicker
 import com.anydrop.app.ui.components.DuplicatePromptDialog
 import com.anydrop.app.ui.components.ErrorDetails
 import com.anydrop.app.ui.tape_deck.components.LinkField
@@ -119,6 +120,8 @@ fun TapeDeckScreen(
     val availableFormats by viewModel.availableFormats.collectAsState()
     val audioVoices by viewModel.audioVoices.collectAsState()
     val audioLanguage by viewModel.audioLanguage.collectAsState()
+    val captions by viewModel.captions.collectAsState()
+    val subtitleLanguage by viewModel.subtitleLanguage.collectAsState()
     val selectedFormat by viewModel.selectedFormat.collectAsState()
     val isLoadingFormats by viewModel.isLoadingFormats.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
@@ -407,6 +410,8 @@ fun TapeDeckScreen(
             // A video with several voices (its own, translations): which one to save.
             AudioVoicePicker(voices = audioVoices, selected = audioLanguage, onSelect = viewModel::selectAudioLanguage)
             if (audioVoices.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
+            SubtitlePicker(captions = captions, selected = subtitleLanguage, onSelect = viewModel::selectSubtitles)
+            if (captions.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
             FormatSelector(
                 formats = availableFormats,
                 selectedFormat = selectedFormat,

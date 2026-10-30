@@ -63,6 +63,11 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getString(KEY_AUDIO_LANGUAGE, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_AUDIO_LANGUAGE, value).apply()
 
+    /** Subtitles picked last (a language code, blank = off), offered first when a video has them. */
+    var preferredSubtitleLanguage: String
+        get() = prefs.getString(KEY_SUBTITLE_LANGUAGE, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SUBTITLE_LANGUAGE, value).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -99,6 +104,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_MOVIE_MODE = "player_movie_mode"
         private const val KEY_AUDIO_LANGUAGE = "preferred_audio_language"
+        private const val KEY_SUBTITLE_LANGUAGE = "preferred_subtitle_language"
         private const val KEY_YTDLP_LAST_UPDATE = "ytdlp_last_update"
 
         const val MAX_QUALITY_BEST = 4320

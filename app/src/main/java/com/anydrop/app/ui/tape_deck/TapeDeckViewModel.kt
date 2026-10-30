@@ -17,6 +17,7 @@ import com.anydrop.app.data.repository.LibraryRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.TaskStatus
 import com.anydrop.app.engine.AudioVoice
+import com.anydrop.app.engine.Captions
 import com.anydrop.app.engine.Magnet
 import com.anydrop.app.engine.Playlists
 import com.anydrop.app.engine.asAudio
@@ -86,6 +87,14 @@ class TapeDeckViewModel @Inject constructor(
     /** The voice saved with the video (a language code) when it has several. */
     private val _audioLanguage = MutableStateFlow("")
     val audioLanguage: StateFlow<String> = _audioLanguage.asStateFlow()
+
+    /** Subtitles the fetched video offers. */
+    private val _captions = MutableStateFlow<List<Captions.Caption>>(emptyList())
+    val captions: StateFlow<List<Captions.Caption>> = _captions.asStateFlow()
+
+    /** Subtitles saved with the video (a language code; blank = none). */
+    private val _subtitleLanguage = MutableStateFlow("")
+    val subtitleLanguage: StateFlow<String> = _subtitleLanguage.asStateFlow()
 
     private val _selectedFormat = MutableStateFlow<FormatInfo?>(null)
     val selectedFormat: StateFlow<FormatInfo?> = _selectedFormat.asStateFlow()
@@ -208,6 +217,8 @@ class TapeDeckViewModel @Inject constructor(
         _availableFormats.value = emptyList()
         rawFormats = emptyList()
         _audioVoices.value = emptyList()
+        _captions.value = emptyList()
+        _subtitleLanguage.value = ""
         _pageTitle.value = ""
         fetchedUploader = ""
         fetchedWebpageUrl = ""
@@ -287,8 +298,16 @@ class TapeDeckViewModel @Inject constructor(
             webpageUrl = fetchedWebpageUrl.ifBlank { urlValue },
             // Media found on the page is fetched with the same browser session that found it.
             cookieHeader = if (format.isFromPage) MediaSniffer.cookieHeaderFor(format.directUrl) else null,
-            audioLanguage = AudioVoice.toRequest(_audioVoices.value, _audioLanguage.value, format)
+            audioLanguage = AudioVoice.toRequest(_audioVoices.value, _audioLanguage.value, format),
+            subtitleLanguage = _subtitleLanguage.value.takeIf { !format.isAudioOnly && !format.isImage }.orEmpty()
         )
+    }
+
+    /** Subtitles to save with the video ([language] blank = none). */
+    fun selectSubtitles(language: String) {
+        if (language.isNotBlank() && _captions.value.none { it.language == language }) return
+        _subtitleLanguage.value = language
+        settingsRepository.preferredSubtitleLanguage = language
     }
 
     private fun launch(request: DownloadRequest, outputPath: String) {
@@ -546,6 +565,10 @@ class TapeDeckViewModel @Inject constructor(
             }
             if (generation != fetchGeneration) return
             _pageTitle.value = result.title
+            _captions.value = result.captions
+            // The subtitles picked last time, when this video has them.
+            _subtitleLanguage.value = settingsRepository.preferredSubtitleLanguage
+                .takeIf { wanted -> result.captions.any { it.language == wanted } }.orEmpty()
             fetchedUploader = result.uploader
             fetchedWebpageUrl = result.webpageUrl
             rawFormats = if (wholePage) result.formats.withoutRepeatsOfMain() else result.formats
