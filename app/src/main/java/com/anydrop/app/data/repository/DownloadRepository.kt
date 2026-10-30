@@ -35,17 +35,50 @@ class DownloadRepository(
     suspend fun getFormats(
         url: String,
         cookieFile: File? = null
-    ): YtDlpEngine.FetchResult = ytDlpEngine.getFormats(url, cookieFile)
+    ): YtDlpEngine.FetchResult = recent("video", url) { ytDlpEngine.getFormats(url, cookieFile) }
 
     /** The videos of a playlist link, or null when it isn't one. */
     suspend fun getPlaylist(url: String, cookieFile: File? = null): YtDlpEngine.FetchResult? =
-        ytDlpEngine.getPlaylist(url, cookieFile)
+        recentOrNull("playlist", url) { ytDlpEngine.getPlaylist(url, cookieFile) }
 
     /** Every video on the page, and the videos it links to ("whole page" mode). */
     suspend fun getPageMedia(
         url: String,
         cookieFile: File? = null
-    ): YtDlpEngine.FetchResult = ytDlpEngine.getPageMedia(url, cookieFile)
+    ): YtDlpEngine.FetchResult = recent("page", url) { ytDlpEngine.getPageMedia(url, cookieFile) }
+
+    /**
+     * Links fetched in the last few minutes, so going back to one (or pasting it again) shows it
+     * at once. Kept briefly: sites' direct media links expire, and a fresh look picks up changes.
+     */
+    private val recentFetches = object : LinkedHashMap<String, Pair<Long, YtDlpEngine.FetchResult?>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, YtDlpEngine.FetchResult?>>) = size > 20
+    }
+
+    private suspend fun recentOrNull(
+        kind: String,
+        url: String,
+        fetch: suspend () -> YtDlpEngine.FetchResult?
+    ): YtDlpEngine.FetchResult? {
+        val key = "$kind|${url.trim()}"
+        val now = System.currentTimeMillis()
+        synchronized(recentFetches) {
+            recentFetches[key]?.let { (at, result) -> if (now - at < RECENT_MS) return result }
+        }
+        val result = fetch()
+        // Only what was found is kept; a failure is looked at again next time.
+        if (result != null && result.formats.isNotEmpty()) {
+            synchronized(recentFetches) { recentFetches[key] = now to result }
+        }
+        return result
+    }
+
+    private suspend fun recent(kind: String, url: String, fetch: suspend () -> YtDlpEngine.FetchResult): YtDlpEngine.FetchResult =
+        recentOrNull(kind, url, fetch) ?: YtDlpEngine.FetchResult(emptyList())
+
+    private companion object {
+        const val RECENT_MS = 10 * 60_000L
+    }
 
     /** Length, real resolution and a cover for video files found on [pageUrl]. */
     suspend fun probePageMedia(formats: List<YtDlpEngine.FormatInfo>, pageUrl: String): List<YtDlpEngine.FormatInfo> =
