@@ -336,6 +336,8 @@ private fun ShareSheet(
 
                 // Whole page: everything on it, to pick from.
                 pageItems.isNotEmpty() -> {
+                    AudioVoicePicker(voices = audioVoices, selected = audioLanguage, onSelect = viewModel::selectAudioLanguage)
+                    if (audioVoices.isNotEmpty()) Spacer(Modifier.height(12.dp))
                     PageMediaPicker(
                         items = pageItems,
                         pageTitle = pageTitle,

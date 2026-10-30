@@ -474,7 +474,10 @@ class YtDlpEngine(
             mainFailure = e
             null
         }
-        val main = async { if (pageOnly) null else ytdlpOrNull() }
+        // Signed in, Instagram may add translated voices to the video's data, which only yt-dlp
+        // reads: it's asked too, and its version of the post's video is used when it has voices.
+        val signedIn = pageOnly && isSignedIn(cookieFile, host)
+        val main = async { if (pageOnly && !signedIn) null else ytdlpOrNull() }
         val page = async {
             try {
                 webExtractor.extract(url, usesDesktopPage(host), timeoutMs = 30_000, wholePage = true)
@@ -489,7 +492,13 @@ class YtDlpEngine(
         // Instagram is read from its page. When the page shows nothing (a private or
         // age-restricted post), yt-dlp is asked after all: for the video, or for the reason.
         val pageEmpty = scan == null || (scan.videos.isEmpty() && scan.images.isEmpty())
-        val ytdlp = if (pageOnly && pageEmpty) ytdlpOrNull() else main.await()
+        val asked = main.await()
+        val ytdlp = when {
+            !pageOnly -> asked
+            asked != null && (pageEmpty || AudioVoice.of(asked.formats).isNotEmpty()) -> asked
+            pageEmpty && !signedIn -> ytdlpOrNull()
+            else -> null
+        }
         // Just the page's picture from yt-dlp is no video; the page's own reading has the real ones.
         val mainResult = ytdlp?.let { if (it.coverOnly) it.copy(formats = emptyList()) else it }
 
@@ -499,6 +508,11 @@ class YtDlpEngine(
             ?: scan?.title?.ifBlank { null } ?: mainResult?.title.orEmpty()
         val mainVideo = mainResult?.formats.orEmpty()
             .filter { !it.isAudioOnly && !it.isImage }
+            .map { it.copy(group = MAIN_GROUP, title = title) }
+        // The page's own video in several languages: its voices go along, for the voice picker.
+        val mainVoices = mainResult?.formats.orEmpty()
+            .filter { it.isAudioOnly && it.language.isNotBlank() }
+            .takeIf { AudioVoice.of(it).isNotEmpty() }.orEmpty()
             .map { it.copy(group = MAIN_GROUP, title = title) }
         val mainImages = mainResult?.formats.orEmpty()
             .filter { it.isImage }
@@ -525,7 +539,7 @@ class YtDlpEngine(
                     pageUrl = link.url
                 )
             }
-        val all = mainVideo + mainImages + onPage + linked
+        val all = mainVideo + mainVoices + mainImages + onPage + linked
         if (all.isEmpty()) {
             mainFailure?.let { throw friendlyFailure(it, signedIn = isSignedIn(cookieFile, host)) }
             if (mainResult == null && scan == null) {

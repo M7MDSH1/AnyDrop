@@ -383,6 +383,8 @@ fun TapeDeckScreen(
             )
             Spacer(modifier = Modifier.height(12.dp))
         } else if (pageItems.isNotEmpty()) {
+            AudioVoicePicker(voices = audioVoices, selected = audioLanguage, onSelect = viewModel::selectAudioLanguage)
+            if (audioVoices.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
             PageMediaPicker(
                 items = pageItems,
                 pageTitle = pageTitle,
