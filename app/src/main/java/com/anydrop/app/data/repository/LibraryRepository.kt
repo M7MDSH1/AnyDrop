@@ -6,6 +6,7 @@ import android.content.IntentSender
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.engine.YtDlpEngine
@@ -513,6 +514,103 @@ class LibraryRepository(private val context: Context) {
         invalidateIndexCache()
 
         return DeletionResult(needConsent, consentSender)
+    }
+
+    /**
+     * Where a video another app opened in AnyDrop ("Open with", AnyDrop as the video player, or
+     * OPEN in the downloads list) can be deleted from, or null when Android offers no way (a file
+     * inside another app). AnyDrop's own downloads map back to their file; gallery and Files-app
+     * links to their gallery entry, which Android deletes once the user agrees.
+     */
+    fun deletableUriFor(uri: Uri): Uri? {
+        ownFileFor(uri)?.let { return Uri.fromFile(it) }
+        if (uri.scheme == "content" && uri.authority == MediaStore.AUTHORITY) return uri
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            runCatching { DocumentsContract.isDocumentUri(context, uri) }.getOrDefault(false)
+        ) {
+            runCatching { MediaStore.getMediaUri(context, uri) }.getOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    /** A file in AnyDrop's own folder behind [uri] (its FileProvider link, or a file:// path). */
+    private fun ownFileFor(uri: Uri): File? {
+        val appDir = context.getExternalFilesDir(null) ?: return null
+        val file = when {
+            uri.scheme == "file" -> uri.path?.let(::File)
+            uri.authority == "${context.packageName}.fileprovider" -> {
+                // Paths from res/xml/file_paths.xml that point into AnyDrop's own folder.
+                val segments = uri.pathSegments
+                val base = when (segments.firstOrNull()) {
+                    "anydrop_downloads" -> File(appDir, "AnyDrop")
+                    "anydrop_root" -> appDir
+                    else -> null
+                }
+                if (base == null || segments.size < 2) null else File(base, segments.drop(1).joinToString("/"))
+            }
+            else -> null
+        } ?: return null
+        val inside = runCatching { file.canonicalPath.startsWith(appDir.canonicalPath + File.separator) }.getOrDefault(false)
+        return file.takeIf { inside && it.isFile }
+    }
+
+    /**
+     * Deletes a video opened from outside the library ([target] from [deletableUriFor]). AnyDrop's
+     * own files go with their metadata and gallery copy, as from the library; anything else only
+     * itself (Android asks the user first when another app made it).
+     */
+    fun deleteExternal(target: Uri, displayName: String): DeletionResult {
+        if (target.scheme == "file") {
+            val file = File(target.path ?: return DeletionResult())
+            deleteGalleryTwin(file.name)
+            return deleteItems(
+                listOf(MediaItem(id = file.nameWithoutExtension, title = file.nameWithoutExtension, localFilePath = file.absolutePath))
+            )
+        }
+        // AnyDrop's gallery copy: its private twin goes too, so it doesn't come back.
+        if (isInAnyDropGallery(target)) {
+            return deleteItems(listOf(MediaItem(id = target.toString(), title = displayName, localUri = target)))
+        }
+        val result = try {
+            context.contentResolver.delete(target, null, null)
+            DeletionResult()
+        } catch (e: SecurityException) {
+            val sender = if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                (e as? android.app.RecoverableSecurityException)?.userAction?.actionIntent?.intentSender
+            } else null
+            DeletionResult(listOf(target), sender)
+        } catch (_: Exception) {
+            DeletionResult()
+        }
+        invalidateIndexCache()
+        return result
+    }
+
+    private fun isInAnyDropGallery(uri: Uri): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return runCatching {
+            context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.RELATIVE_PATH), null, null, null)?.use { c ->
+                c.moveToFirst() && c.getString(0).orEmpty().contains("AnyDrop")
+            } ?: false
+        }.getOrDefault(false)
+    }
+
+    /** Deletes AnyDrop's gallery copy of [fileName] (Movies/Music/Pictures → AnyDrop), if there is one. */
+    private fun deleteGalleryTwin(fileName: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        listOf(
+            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        ).forEach { collection ->
+            runCatching {
+                context.contentResolver.delete(
+                    collection,
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                    arrayOf(fileName, "%AnyDrop%")
+                )
+            }
+        }
     }
 
     /**

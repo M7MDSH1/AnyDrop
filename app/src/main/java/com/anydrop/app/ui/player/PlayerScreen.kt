@@ -34,6 +34,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.SkipNext
@@ -174,6 +176,10 @@ fun PlayerScreen(
     // the OS consent flow (same pattern as the library/audio screens).
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    // A video from another app can be deleted when Android lets AnyDrop (asking the user first
+    // when another app made it); a file inside another app can't.
+    val canDeleteExternal by viewModel.canDeleteExternal.collectAsState()
+    val deleteRequest: (() -> Unit)? = if (externalFile && !canDeleteExternal) null else ({ showDeleteConfirm = true })
 
     fun advanceAfterDelete() {
         val target = pendingDeleteTarget
@@ -270,7 +276,7 @@ fun PlayerScreen(
                 queue = queue,
                 current = currentMedia!!,
                 onCurrentChange = onNavigateToMedia,
-                onDeleteRequest = { showDeleteConfirm = true },
+                onDeleteRequest = deleteRequest,
                 videoAsAudio = videoAsAudio,
                 startPositionMs = listenFrom ?: 0L
             )
@@ -294,7 +300,7 @@ fun PlayerScreen(
             hasPrevious = previousMediaId != null,
             onNext = { nextMediaId?.let(onNavigateToMedia) },
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
-            onDeleteRequest = if (externalFile) null else ({ showDeleteConfirm = true }),
+            onDeleteRequest = deleteRequest,
             title = if (externalFile) currentMedia!!.title else null,
             shareItem = currentMedia!!,
             favorite = favorite,
@@ -502,6 +508,7 @@ private fun VideoPlayerContent(
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var shareMenuOpen by remember { mutableStateOf(false) }
+    var moreMenuOpen by remember { mutableStateOf(false) }
     var showSeekFeedback by remember { mutableStateOf<String?>(null) }
     // Which side the feedback shows on: -1 left (rewind), 1 right (forward), 0 centre.
     var seekFeedbackSide by remember { mutableIntStateOf(0) }
@@ -533,7 +540,7 @@ private fun VideoPlayerContent(
     val hideHandler = remember { Handler(Looper.getMainLooper()) }
     val hideRunnable = remember {
         // An open menu lives inside the controls; hiding them would close it under the finger.
-        Runnable { if (!showSpeedMenu && !shareMenuOpen) showControls = false }
+        Runnable { if (!showSpeedMenu && !shareMenuOpen && !moreMenuOpen) showControls = false }
     }
     fun resetHideTimer() {
         hideHandler.removeCallbacks(hideRunnable)
@@ -1049,12 +1056,46 @@ private fun VideoPlayerContent(
                         )
                     )
             ) {
-                Row(
+                // The top bar always has room for the heart, share and delete. The other buttons
+                // show while they fit (a long name only gets shortened); on a narrow screen, or
+                // next to a file name, the last of them move under ⋮ instead of being squeezed out.
+                val more = buildList {
+                    add(
+                        ChromeAction(Icons.Default.AspectRatio, stringResource(R.string.player_aspect_ratio)) {
+                            resizeModeIndex = (resizeModeIndex + 1) % resizeModes.size
+                            showFeedback(resizeModes[resizeModeIndex].second)
+                        }
+                    )
+                    add(ChromeAction(Icons.Default.ScreenRotation, stringResource(R.string.player_rotate)) { toggleOrientation(activity) })
+                    onListen?.let { listen ->
+                        add(
+                            ChromeAction(Icons.Filled.Headphones, stringResource(R.string.player_listen)) {
+                                Toast.makeText(context, R.string.video_as_audio_toast, Toast.LENGTH_SHORT).show()
+                                listen(player.currentPosition)
+                            }
+                        )
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        add(
+                            ChromeAction(Icons.Default.PictureInPicture, stringResource(R.string.player_pip)) {
+                                enterPip(activity, player.pipAspectRatio(), isPlaying, canPrevious, canNext)
+                            }
+                        )
+                    }
+                }
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                         .align(Alignment.TopCenter)
-                        .graphicsLayer { alpha = chromeAlpha },
+                        .graphicsLayer { alpha = chromeAlpha }
+                ) {
+                    val fixed = listOf(favorite != null, shareItem != null, onDeleteRequest != null).count { it }
+                    val slots = ((maxWidth - if (title != null) MIN_TITLE_WIDTH else 0.dp) / CHROME_BUTTON).toInt() - fixed
+                    val inline = if (slots >= more.size) more else more.take((slots - 1).coerceAtLeast(0))
+                    val overflow = more.drop(inline.size)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1092,31 +1133,36 @@ private fun VideoPlayerContent(
                             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.menu_delete), tint = LedRed)
                         }
                     }
-                    IconButton(onClick = {
-                        resizeModeIndex = (resizeModeIndex + 1) % resizeModes.size
-                        showFeedback(resizeModes[resizeModeIndex].second)
-                        resetHideTimer()
-                    }) {
-                        Icon(Icons.Default.AspectRatio, contentDescription = stringResource(R.string.player_aspect_ratio), tint = OnVideo)
-                    }
-                    IconButton(onClick = { toggleOrientation(activity); resetHideTimer() }) {
-                        Icon(Icons.Default.ScreenRotation, contentDescription = stringResource(R.string.player_rotate), tint = OnVideo)
-                    }
-                    onListen?.let { listen ->
-                        IconButton(onClick = {
-                            Toast.makeText(context, R.string.video_as_audio_toast, Toast.LENGTH_SHORT).show()
-                            listen(player.currentPosition)
-                        }) {
-                            Icon(Icons.Filled.Headphones, contentDescription = stringResource(R.string.player_listen), tint = OnVideo)
+                    inline.forEach { action ->
+                        IconButton(onClick = { action.onClick(); resetHideTimer() }) {
+                            Icon(action.icon, contentDescription = action.label, tint = OnVideo)
                         }
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        IconButton(onClick = {
-                            enterPip(activity, player.pipAspectRatio(), isPlaying, canPrevious, canNext); resetHideTimer()
-                        }) {
-                            Icon(Icons.Default.PictureInPicture, contentDescription = stringResource(R.string.player_pip), tint = OnVideo)
+                    if (overflow.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = { moreMenuOpen = true; resetHideTimer() }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.player_more), tint = OnVideo)
+                            }
+                            DropdownMenu(
+                                expanded = moreMenuOpen,
+                                onDismissRequest = { moreMenuOpen = false; resetHideTimer() },
+                                modifier = Modifier.background(VideoMenu)
+                            ) {
+                                overflow.forEach { action ->
+                                    DropdownMenuItem(
+                                        text = { Text(action.label, color = Color.White) },
+                                        leadingIcon = { Icon(action.icon, contentDescription = null, tint = OnVideo) },
+                                        onClick = {
+                                            moreMenuOpen = false
+                                            action.onClick()
+                                            resetHideTimer()
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
+                }
                 }
 
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -1318,6 +1364,13 @@ private fun VideoPlayerContent(
 private val OnVideo = Color.White
 private val VideoAccent = DarkPalette.accent
 private val VideoMenu = DarkPalette.surface
+
+/** A top-bar button of the video player, shown as an icon or as a line of the ⋮ menu. */
+private class ChromeAction(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+
+private val CHROME_BUTTON = 48.dp
+/** Room kept for a file's name in the top bar (a few words) before buttons move under ⋮. */
+private val MIN_TITLE_WIDTH = 140.dp
 
 /** The video with its saved subtitles attached (the first one shows by default). */
 private fun mediaWithSubtitles(uri: Uri, subtitles: Map<String, File>): Media3Item =
