@@ -90,13 +90,20 @@ fun ScrubBar(
         // Room at both ends so the grown thumb never clips.
         val edgePx = with(density) { 10.dp.toPx() }
         val spanPx = (widthPx - 2 * edgePx).coerceAtLeast(1f)
-        fun fractionAt(x: Float) = ((x - edgePx) / spanPx).coerceIn(0f, 1f)
         fun targetMs() = (scrubFraction * currentDuration).toLong()
 
         Canvas(
             modifier = Modifier
                 .matchParentSize()
                 .pointerInput(Unit) {
+                    // The bar's width as it is now: this handler outlives a rotation, which
+                    // widens or narrows the bar, so a width read once mapped the finger to the
+                    // wrong time (seeking right after turning the phone landed far off).
+                    fun fractionAt(x: Float): Float {
+                        val edge = 10.dp.toPx()
+                        val span = (size.width - 2 * edge).coerceAtLeast(1f)
+                        return ((x - edge) / span).coerceIn(0f, 1f)
+                    }
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         if (currentDuration <= 0L) return@awaitEachGesture

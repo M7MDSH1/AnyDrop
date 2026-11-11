@@ -13,6 +13,9 @@ import com.anydrop.app.data.repository.MediaRefIndex
 import com.anydrop.app.data.repository.PlaybackProgressRepository
 import com.anydrop.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -144,7 +147,17 @@ class PlayerViewModel @Inject constructor(
     fun openExternal(uri: Uri, title: String) {
         if (_currentMedia.value?.localUri == uri) return
         startSession(MediaItem(id = uri.toString(), title = title, localUri = uri), fromLibrary = false)
+        // Whether (and how) Android lets AnyDrop delete it: the player shows delete when so.
+        viewModelScope.launch {
+            _externalDeleteTarget.value = withContext(Dispatchers.IO) { libraryRepository.deletableUriFor(uri) }
+        }
     }
+
+    /** Where a video opened from another app can be deleted (see [LibraryRepository.deletableUriFor]). */
+    private val _externalDeleteTarget = MutableStateFlow<Uri?>(null)
+    val canDeleteExternal: StateFlow<Boolean> = _externalDeleteTarget
+        .map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** Begin a watch session for [media], resetting every per-video piece of state. */
     private fun startSession(media: MediaItem, fromLibrary: Boolean = true) {
@@ -233,6 +246,10 @@ class PlayerViewModel @Inject constructor(
      */
     fun deleteCurrent(): PlayerDeleteResult {
         val media = _currentMedia.value ?: return PlayerDeleteResult(DeletionResult(), null)
+        // A video from another app: just that file; the player closes afterwards.
+        _externalDeleteTarget.value?.let { target ->
+            return PlayerDeleteResult(libraryRepository.deleteExternal(target, media.title), null)
+        }
         val all = _allMedia.value
         val index = all.indexOfFirst { it.id == media.id }
         val advanceTargetId = if (index >= 0) {

@@ -70,6 +70,7 @@
     <string name="sleep_timer_left">يتوقف بعد %1$s</string>
     <string name="sleep_timer_end_of_track_on">يتوقف عند انتهاء هذا المقطع</string>
     <string name="player_listen">استماع (صوت فقط)</string>
+    <string name="player_more">المزيد</string>
     <string name="video_as_audio_toast">يُشغَّل الصوت فقط — يمكنك إطفاء الشاشة</string>
     <string name="video_as_audio_hint">صوت فقط · يستمر مع إطفاء الشاشة</string>
     <string name="paste_url_hint">الصق الرابط هنا…</string>

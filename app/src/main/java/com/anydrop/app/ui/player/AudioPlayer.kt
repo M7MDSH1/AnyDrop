@@ -99,7 +99,8 @@ internal fun AudioPlayerContent(
     queue: List<MediaItem>,
     current: MediaItem,
     onCurrentChange: (String) -> Unit,
-    onDeleteRequest: () -> Unit = {},
+    /** Null hides delete (a file inside another app). */
+    onDeleteRequest: (() -> Unit)? = null,
     videoAsAudio: Boolean = false,
     startPositionMs: Long = 0L
 ) {
@@ -212,8 +213,10 @@ internal fun AudioPlayerContent(
                     tint = if (timerEndsAt != null || timerEndOfTrack) Amber else White
                 )
             }
-            IconButton(onClick = onDeleteRequest) {
-                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.menu_delete), tint = LedRed)
+            onDeleteRequest?.let { requestDelete ->
+                IconButton(onClick = requestDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.menu_delete), tint = LedRed)
+                }
             }
         }
         Column(

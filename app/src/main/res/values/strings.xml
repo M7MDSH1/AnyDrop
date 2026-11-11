@@ -70,6 +70,7 @@
     <string name="sleep_timer_left">Stops in %1$s</string>
     <string name="sleep_timer_end_of_track_on">Stops at the end of this song</string>
     <string name="player_listen">Listen (sound only)</string>
+    <string name="player_more">More</string>
     <string name="video_as_audio_toast">Playing the sound only — you can turn the screen off</string>
     <string name="video_as_audio_hint">Sound only · keeps playing with the screen off</string>
     <string name="paste_url_hint">Paste URL here…</string>
