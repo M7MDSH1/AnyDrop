@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.6.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.6.1**
 
 ---
 
@@ -72,7 +72,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
   the video instead of switching videos, previous/next disappear, and Back leaves the
   player. It stays on until you turn it off.
 - **Default video player** — AnyDrop appears in "Open with" and can be set as the
-  phone's video player for files from any app.
+  phone's video player for files from any app; those videos can be deleted from the
+  player too (Android asks first when another app made them).
 - **Update notifications** — AnyDrop checks this repo's releases (no account, no paid
   service) and tells you when a new version is out, then downloads and installs it in one tap.
   Said "later" or "skip"? **Settings → Updates** keeps an **Update** button until you
