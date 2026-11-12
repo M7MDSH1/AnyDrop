@@ -87,7 +87,7 @@
 
     <!-- Library -->
     <string name="library_title">المكتبة</string>
-    <string name="tapes_count">الأشرطة: %1$d</string>
+    <string name="tapes_count">%1$d عنصر</string>
     <string name="sort_date">التاريخ</string>
     <string name="sort_length">المدة</string>
     <string name="filter_all">الكل</string>
@@ -96,7 +96,7 @@
     <string name="library_empty">مجموعتك فارغة.\nنزّل شيئًا لتبدأ!</string>
     <string name="library_search_hint">ابحث في مكتبتك…</string>
     <string name="search_clear_desc">مسح البحث</string>
-    <string name="tapes_count_filtered">الأشرطة: %1$d من %2$d</string>
+    <string name="tapes_count_filtered">%1$d من %2$d عنصر</string>
     <string name="library_no_results">لا شيء يطابق «%1$s»</string>
     <string name="library_clear_search">مسح البحث</string>
     <string name="scope_all">كل الوسائط</string>

@@ -87,7 +87,7 @@
 
     <!-- Library -->
     <string name="library_title">Library</string>
-    <string name="tapes_count">TAPES: %1$d</string>
+    <string name="tapes_count">%1$d items</string>
     <string name="sort_date">Date</string>
     <string name="sort_length">Length</string>
     <string name="filter_all">All</string>
@@ -96,7 +96,7 @@
     <string name="library_empty">Your tape collection is empty.\nDownload something to get started!</string>
     <string name="library_search_hint">Search your library…</string>
     <string name="search_clear_desc">Clear search</string>
-    <string name="tapes_count_filtered">TAPES: %1$d / %2$d</string>
+    <string name="tapes_count_filtered">%1$d of %2$d items</string>
     <string name="library_no_results">Nothing matches “%1$s”</string>
     <string name="library_clear_search">Clear search</string>
     <string name="scope_all">All media</string>

@@ -1,5 +1,14 @@
 package com.anydrop.app.ui.library
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.ui.graphics.Color
+import com.anydrop.app.ui.components.DurationBadge
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
+
 import com.anydrop.app.ui.theme.AccentText
 import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
@@ -321,9 +330,8 @@ fun LibraryScreen(
             Text(
                 text = stringResource(R.string.library_title),
                 style = MaterialTheme.typography.headlineMedium,
-                color = AccentText,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                color = White,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             )
         }
 
@@ -359,10 +367,8 @@ fun LibraryScreen(
                 } else {
                     stringResource(R.string.tapes_count_filtered, mediaItems.size, unsearchedCount)
                 },
-                color = White.copy(alpha = 0.4f),
-                fontSize = 10.sp,
-                fontFamily = AppFont,
-                letterSpacing = tracked(2f)
+                color = TextFaint,
+                fontSize = 13.sp
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
@@ -384,23 +390,11 @@ fun LibraryScreen(
         // Media-type filter: All / Videos / Images.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
+            horizontalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            SortButton(
-                label = stringResource(R.string.filter_all),
-                active = filter == MediaFilter.ALL,
-                onClick = { viewModel.setFilter(MediaFilter.ALL) }
-            )
-            SortButton(
-                label = stringResource(R.string.filter_videos),
-                active = filter == MediaFilter.VIDEOS,
-                onClick = { viewModel.setFilter(MediaFilter.VIDEOS) }
-            )
-            SortButton(
-                label = stringResource(R.string.filter_images),
-                active = filter == MediaFilter.IMAGES,
-                onClick = { viewModel.setFilter(MediaFilter.IMAGES) }
-            )
+            FilterTab(stringResource(R.string.filter_all), filter == MediaFilter.ALL) { viewModel.setFilter(MediaFilter.ALL) }
+            FilterTab(stringResource(R.string.filter_videos), filter == MediaFilter.VIDEOS) { viewModel.setFilter(MediaFilter.VIDEOS) }
+            FilterTab(stringResource(R.string.filter_images), filter == MediaFilter.IMAGES) { viewModel.setFilter(MediaFilter.IMAGES) }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -414,7 +408,7 @@ fun LibraryScreen(
                 Icon(
                     Icons.Filled.SearchOff,
                     contentDescription = null,
-                    tint = White.copy(alpha = 0.25f),
+                    tint = TextFaint,
                     modifier = Modifier.size(48.dp)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -448,7 +442,7 @@ fun LibraryScreen(
                             is LibraryScope.Collection -> R.string.collection_empty
                         }
                     ),
-                    color = White.copy(alpha = 0.3f),
+                    color = TextFaint,
                     fontFamily = AppFont,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
@@ -457,9 +451,9 @@ fun LibraryScreen(
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 state = listState
             ) {
                 items(mediaItems, key = { it.id }) { item ->
@@ -504,17 +498,17 @@ private fun LibrarySearchField(
     val focusManager = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
     val borderColor by animateColorAsState(
-        if (focused) Amber else LightGray,
+        if (focused) Amber else Color.Transparent,
         animationSpec = tween(180),
         label = "searchBorder"
     )
-    val shape = RoundedCornerShape(10.dp)
+    val shape = CircleShape
 
     BasicTextField(
         value = query,
         onValueChange = { onQueryChange(it.replace("\n", "")) },
         singleLine = true,
-        textStyle = TextStyle(color = White, fontFamily = AppFont, fontSize = 13.sp),
+        textStyle = TextStyle(color = White, fontFamily = AppFont, fontSize = 15.sp),
         cursorBrush = SolidColor(Amber),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
@@ -525,27 +519,27 @@ private fun LibrarySearchField(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(46.dp)
+                    .height(56.dp)
                     .clip(shape)
-                    .background(Black)
-                    .border(1.dp, borderColor, shape)
-                    .padding(start = 14.dp, end = 4.dp),
+                    .background(MediumGray)
+                    .border(1.5.dp, borderColor, shape)
+                    .padding(start = 20.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     Icons.Filled.Search,
                     contentDescription = null,
-                    tint = if (focused || query.isNotEmpty()) Amber else White.copy(alpha = 0.4f),
-                    modifier = Modifier.size(20.dp)
+                    tint = if (focused || query.isNotEmpty()) AccentText else TextFaint,
+                    modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) {
                         Text(
                             stringResource(R.string.library_search_hint),
-                            color = White.copy(alpha = 0.4f),
+                            color = TextFaint,
                             fontFamily = AppFont,
-                            fontSize = 13.sp,
+                            fontSize = 15.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -561,7 +555,7 @@ private fun LibrarySearchField(
                         Icon(
                             Icons.Filled.Close,
                             contentDescription = stringResource(R.string.search_clear_desc),
-                            tint = White.copy(alpha = 0.6f),
+                            tint = TextMuted,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -580,11 +574,28 @@ private fun SortButton(label: String, active: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
-            color = if (active) Amber else White.copy(alpha = 0.4f),
-            fontSize = 10.sp,
-            fontFamily = AppFont,
-            letterSpacing = tracked(1f)
+            color = if (active) AccentText else TextMuted,
+            fontSize = 13.sp,
+            fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium
         )
+    }
+}
+
+/** All / Videos / Images: text tabs, the current one underlined in the accent. */
+@Composable
+private fun FilterTab(label: String, active: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier.clickable(role = androidx.compose.ui.semantics.Role.Tab, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            label,
+            color = if (active) White else TextMuted,
+            fontSize = 14.sp,
+            fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium,
+            modifier = Modifier.padding(vertical = 6.dp)
+        )
+        Box(Modifier.height(2.dp).width(28.dp).background(if (active) Amber else Color.Transparent))
     }
 }
 
@@ -605,112 +616,87 @@ private fun LibraryCard(
     onInfo: () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    Card(
+    val thumbShape = RoundedCornerShape(14.dp)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (selected) Modifier.border(2.dp, Amber, RoundedCornerShape(6.dp)) else Modifier
-            )
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        shape = RoundedCornerShape(6.dp),
-        colors = CardDefaults.cardColors(containerColor = Black)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                    .background(MediumGray),
-                contentAlignment = Alignment.Center
-            ) {
-                if (item.localUri != null) {
-                    AsyncImage(
-                        model = item.localUri,
-                        contentDescription = item.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (item.localFilePath.isNotEmpty()) {
-                    AsyncImage(
-                        model = item.localFilePath,
-                        contentDescription = item.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Text("\uD83C\uDF9E", fontSize = 24.sp)
-                }
-                if (showDuration && item.durationMs > 0) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .background(Black.copy(alpha = 0.7f), RoundedCornerShape(2.dp))
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = formatDuration(item.durationMs),
-                            color = White,
-                            fontSize = 10.sp,
-                            fontFamily = AppFont
-                        )
-                    }
-                }
-                // Selection tick overlay.
-                if (selectionMode) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(4.dp)
-                            .background(if (selected) Amber else Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (selected) "✓" else "○",
-                            color = if (selected) OnAccent else White,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 0.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = item.title,
-                    color = White,
-                    fontSize = 11.sp,
-                    fontFamily = AppFont,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    // Titles read in their own direction ("@name …" stays intact in Arabic).
-                    style = TextStyle(textDirection = TextDirection.Content),
-                    modifier = Modifier.weight(1f).padding(vertical = 8.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(thumbShape)
+                .background(MediumGray)
+                .then(if (selected) Modifier.border(2.dp, Amber, thumbShape) else Modifier),
+            contentAlignment = Alignment.Center
+        ) {
+            if (item.localUri != null) {
+                AsyncImage(
+                    model = item.localUri,
+                    contentDescription = item.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
-                IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add),
-                        tint = if (favorite) LedRed else White.copy(alpha = 0.5f),
-                        modifier = Modifier.size(18.dp)
-                    )
+            } else if (item.localFilePath.isNotEmpty()) {
+                AsyncImage(
+                    model = item.localFilePath,
+                    contentDescription = item.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Filled.Movie, contentDescription = null, tint = TextFaint, modifier = Modifier.size(28.dp))
+            }
+            if (item.durationMs > 0) {
+                DurationBadge(formatDuration(item.durationMs), Modifier.align(Alignment.BottomEnd).padding(6.dp))
+            }
+            // Selection mark.
+            if (selectionMode) {
+                Icon(
+                    if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (selected) Amber else androidx.compose.ui.graphics.Color.White,
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp).size(24.dp)
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.title,
+                color = White,
+                fontSize = 14.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                // Titles read in their own direction ("@name ..." stays intact in Arabic).
+                style = TextStyle(textDirection = TextDirection.Content),
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add),
+                    tint = if (favorite) AccentText else TextMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Box {
+                IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.menu_desc), tint = TextMuted, modifier = Modifier.size(20.dp))
                 }
-                Box {
-                    IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.menu_desc), tint = White.copy(alpha = 0.6f))
-                    }
-                    MediaItemDropdown(
-                        item = item,
-                        expanded = menuOpen,
-                        onDismiss = { menuOpen = false },
-                        onDelete = onDelete,
-                        onInfo = onInfo,
-                        onAddToCollection = onAddToCollection,
-                        onRename = onRename
-                    )
-                }
+                MediaItemDropdown(
+                    item = item,
+                    expanded = menuOpen,
+                    onDismiss = { menuOpen = false },
+                    onDelete = onDelete,
+                    onInfo = onInfo,
+                    onAddToCollection = onAddToCollection,
+                    onRename = onRename
+                )
             }
         }
     }

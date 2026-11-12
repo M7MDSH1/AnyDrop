@@ -1,5 +1,9 @@
 package com.anydrop.app.ui.library
 
+import androidx.compose.ui.graphics.Color
+import com.anydrop.app.ui.theme.AccentSoft
+import com.anydrop.app.ui.theme.TextMuted
+
 import com.anydrop.app.ui.theme.AccentText
 import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -159,16 +163,20 @@ private fun ScopeChip(
     val haptics = LocalHapticFeedback.current
     val shape = RoundedCornerShape(50)
     val content = when {
-        selected -> OnAccent
-        accentOutline -> Amber
-        else -> White.copy(alpha = 0.85f)
+        selected -> AccentText
+        accentOutline -> AccentText
+        else -> White
     }
     Row(
         modifier = Modifier
-            .height(34.dp)
+            .height(40.dp)
             .clip(shape)
-            .background(if (selected) Amber else Black)
-            .border(1.dp, if (selected) Amber else if (accentOutline) Amber.copy(alpha = 0.6f) else Hairline, shape)
+            .background(if (selected) AccentSoft else if (accentOutline) Color.Transparent else MediumGray)
+            .border(
+                if (selected) 1.5.dp else 1.dp,
+                if (selected) Amber else if (accentOutline) Hairline else Color.Transparent,
+                shape
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick?.let { long ->
@@ -178,18 +186,18 @@ private fun ScopeChip(
                     }
                 }
             )
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = if (selected) OnAccent else if (icon == Icons.Filled.Favorite) LedRed else content, modifier = Modifier.size(16.dp))
+            Icon(icon, null, tint = if (icon == Icons.Filled.Favorite) AccentText else content, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
         }
         // Long collection names stay one line on the chip.
-        Text(label, color = content, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
+        Text(label, color = content, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
         if (count != null) {
             Spacer(Modifier.width(6.dp))
-            Text("$count", color = content.copy(alpha = 0.7f), fontSize = 12.sp)
+            Text("$count", color = if (selected) AccentText else TextMuted, fontSize = 13.sp)
         }
     }
 }
