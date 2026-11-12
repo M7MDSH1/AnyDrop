@@ -161,6 +161,12 @@
     <string name="settings_auto_detect">اكتشاف الروابط تلقائيًا</string>
     <string name="auto_detect_on">مفعّل — الروابط المنسوخة تُعرض في الديك</string>
     <string name="auto_detect_off">معطّل</string>
+    <string name="settings_audio_languages">لغات الصوت</string>
+    <string name="audio_languages_on">مفعّل — اختر صوتًا مدبلجًا أو مترجمًا عندما يكون للفيديو أكثر من صوت</string>
+    <string name="audio_languages_off">معطّل — تُنزَّل الفيديوهات بصوتها المعتاد</string>
+    <string name="settings_subtitles">الترجمة</string>
+    <string name="subtitles_setting_on">مفعّل — اعرض ترجمة الفيديو لحفظها معه</string>
+    <string name="subtitles_setting_off">معطّل</string>
     <string name="settings_download_path">موقع التنزيل</string>
     <string name="settings_download_path_sub">فيديو → Movies/AnyDrop · صور → Pictures/AnyDrop · صوت → Music/AnyDrop</string>
     <string name="settings_version">ANYDROP v%1$s</string>

@@ -58,6 +58,22 @@ class SettingsViewModel @Inject constructor(
         _maxQualityHeight.value = height
     }
 
+    private val _audioLanguages = MutableStateFlow(settingsRepository.audioLanguages)
+    val audioLanguages: StateFlow<Boolean> = _audioLanguages.asStateFlow()
+
+    private val _subtitles = MutableStateFlow(settingsRepository.subtitles)
+    val subtitles: StateFlow<Boolean> = _subtitles.asStateFlow()
+
+    fun toggleAudioLanguages() {
+        settingsRepository.audioLanguages = !settingsRepository.audioLanguages
+        _audioLanguages.value = settingsRepository.audioLanguages
+    }
+
+    fun toggleSubtitles() {
+        settingsRepository.subtitles = !settingsRepository.subtitles
+        _subtitles.value = settingsRepository.subtitles
+    }
+
     fun toggleAutoDetectLinks() {
         val next = !settingsRepository.autoDetectLinks
         settingsRepository.autoDetectLinks = next
