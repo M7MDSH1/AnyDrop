@@ -141,7 +141,9 @@ class YtDlpEngine(
          */
         val coverOnly: Boolean = false,
         /** Subtitles the video offers (see [Captions]); empty when none or not known. */
-        val captions: List<Captions.Caption> = emptyList()
+        val captions: List<Captions.Caption> = emptyList(),
+        /** For Instagram links: what each engine found, to copy and send when a voice is missing. */
+        val mediaInfo: String = ""
     )
 
     fun init() {
@@ -500,12 +502,24 @@ class YtDlpEngine(
                 } else null
                 val page = webFormats(url, desktop = true)
                 val ytdlp = voiced?.await()
+                val info = buildString {
+                    appendLine("Link: $url")
+                    appendLine("Signed in: $signedIn, engine: ${engineVersion().orEmpty()}")
+                    appendLine("Page: " + (page?.formats?.joinToString { it.resolution.ifBlank { it.extension } } ?: "nothing"))
+                    append("yt-dlp: " + when {
+                        voiced == null -> "not asked (needs a sign-in and the Audio languages setting)"
+                        ytdlp == null -> "failed"
+                        else -> ytdlp.formats.joinToString { f ->
+                            listOf(f.id, f.resolution, f.acodec, f.language.ifBlank { "no language" }).joinToString("/")
+                        }
+                    })
+                }
                 when {
                     ytdlp != null && AudioVoice.of(ytdlp.formats).isNotEmpty() -> ytdlp
                     page != null -> page
                     ytdlp != null && ytdlp.formats.isNotEmpty() && !ytdlp.coverOnly -> ytdlp
                     else -> null
-                }
+                }?.copy(mediaInfo = info)
             }
             found?.let { return it }
         }
@@ -1076,11 +1090,12 @@ class YtDlpEngine(
         url: String,
         outputPath: String,
         formatId: String = "bestvideo+bestaudio/best",
-        cookieFile: File? = null
+        cookieFile: File? = null,
+        clip: IntRange? = null
     ): Flow<DownloadState> = callbackFlow {
         val tag = outputPath
         cancelled.remove(tag)
-        trySend(DownloadState.Progress(0, phase = context.getString(R.string.progress_starting)))
+        trySend(DownloadState.Progress(0, phase = context.getString(if (clip != null) R.string.progress_clip else R.string.progress_starting)))
 
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
@@ -1110,6 +1125,11 @@ class YtDlpEngine(
                 request.applyCommonOptions(cookieFile, client, isTiktok = isTiktok, url = url)
                 request.addOption("-f", fmt)
                 request.addOption("-o", outputPath)
+                if (clip != null) {
+                    // Only this stretch is fetched: ffmpeg reads it straight from the site.
+                    request.addOption("--download-sections", ClipRange.section(clip.first, clip.last))
+                    request.addOption("--merge-output-format", "mp4")
+                }
 
                 try {
                     val progress = ProgressMapper()
@@ -1175,7 +1195,8 @@ class YtDlpEngine(
         language: String = "",
         formatId: String = "",
         abr: Int = 0,
-        song: SongTags = SongTags()
+        song: SongTags = SongTags(),
+        clip: IntRange? = null
     ): Flow<DownloadState> = callbackFlow {
         val tag = outputPath
         cancelled.remove(tag)
@@ -1216,6 +1237,7 @@ class YtDlpEngine(
                 request.addOption("-f", listOfNotNull(picked, fallback).joinToString("/"))
             }
             request.addOption("-o", "$outBase.%(ext)s")
+            if (clip != null) request.addOption("--download-sections", ClipRange.section(clip.first, clip.last))
 
             try {
                 val progress = ProgressMapper()

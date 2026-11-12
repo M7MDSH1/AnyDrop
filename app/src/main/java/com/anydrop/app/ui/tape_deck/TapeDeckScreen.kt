@@ -1,6 +1,17 @@
 package com.anydrop.app.ui.tape_deck
 
 import androidx.compose.foundation.selection.selectable
+import com.anydrop.app.ui.theme.StatusRed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.ContentCut
+import com.anydrop.app.ui.components.AppChip
+import com.anydrop.app.engine.ClipRange
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.RadioButtonChecked
@@ -144,6 +155,10 @@ fun TapeDeckScreen(
     val selectedFormat by viewModel.selectedFormat.collectAsState()
     val isLoadingFormats by viewModel.isLoadingFormats.collectAsState()
     val preview by viewModel.preview.collectAsState()
+    val mediaInfo by viewModel.mediaInfo.collectAsState()
+    val clipOn by viewModel.clipOn.collectAsState()
+    val clipFrom by viewModel.clipFrom.collectAsState()
+    val clipTo by viewModel.clipTo.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
     val tasks by viewModel.tasks.collectAsState()
@@ -205,7 +220,11 @@ fun TapeDeckScreen(
         )
     }
 
-    val canDownload = selectedFormat != null && url.isNotBlank()
+    val clipFormat = selectedFormat?.takeIf { viewModel.clipAllowed(it) }
+    val clipping = clipOn && clipFormat != null
+    val clipValid = !clipping ||
+        ClipRange.isValid(ClipRange.parse(clipFrom), ClipRange.parse(clipTo), clipFormat?.durationSec ?: 0)
+    val canDownload = selectedFormat != null && url.isNotBlank() && clipValid
     // Whole-page lists, carousels and torrents have their own download button; a single video
     // gets the one at the bottom of the screen.
     val pageItems = remember(availableFormats) { if (availableFormats.isWholePage) availableFormats.pageItems() else emptyList() }
@@ -401,6 +420,19 @@ fun TapeDeckScreen(
             if (audioVoices.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
             SubtitlePicker(captions = captions, selected = subtitleLanguage, onSelect = viewModel::selectSubtitles)
             if (captions.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
+            // Instagram with "Audio languages" on: what was found, to send when a voice is missing.
+            if (mediaInfo.isNotBlank()) {
+                PillButton(
+                    text = stringResource(R.string.copy_media_info),
+                    onClick = {
+                        ErrorDetails.copy(context, mediaInfo)
+                        Toast.makeText(context, R.string.media_info_copied, Toast.LENGTH_SHORT).show()
+                    },
+                    style = PillStyle.Ghost,
+                    small = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             FormatSelector(
                 formats = availableFormats,
                 selectedFormat = selectedFormat,
@@ -409,6 +441,13 @@ fun TapeDeckScreen(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
+            if (!multiItem && clipFormat != null) {
+                ClipPicker(
+                    on = clipOn, from = clipFrom, to = clipTo, valid = clipValid,
+                    onToggle = viewModel::setClipOn, onFrom = viewModel::setClipFrom, onTo = viewModel::setClipTo
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
         }
 
         // Preview the image before downloading (when an image format is selected).
@@ -485,7 +524,13 @@ fun TapeDeckScreen(
             val size = selectedFormat?.filesize?.let(::formatFileSize).orEmpty()
             RecordButton(
                 enabled = canDownload,
-                label = if (size.isNotEmpty()) stringResource(R.string.btn_download_size, size) else stringResource(R.string.btn_record),
+                label = when {
+                    clipping && !clipValid ->
+                        stringResource(R.string.clip_invalid, ClipRange.format(clipFormat?.durationSec ?: 0))
+                    clipping -> stringResource(R.string.btn_download_clip)
+                    size.isNotEmpty() -> stringResource(R.string.btn_download_size, size)
+                    else -> stringResource(R.string.btn_record)
+                },
                 onRecord = { ensureNotificationPermission { viewModel.startDownload() } }
             )
         }
@@ -607,4 +652,60 @@ private fun String.isLinkLike(): Boolean {
     val c = lowercase()
     return c.startsWith("http://") || c.startsWith("https://") || Magnet.isMagnet(c) ||
         Constants.SUPPORTED_DOMAINS.any { c.contains(it) }
+}
+
+/** "Only a part": saves the stretch between two times instead of the whole video. */
+@Composable
+private fun ClipPicker(
+    on: Boolean,
+    from: String,
+    to: String,
+    valid: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onFrom: (String) -> Unit,
+    onTo: (String) -> Unit
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        AppChip(
+            label = stringResource(R.string.clip_part),
+            selected = on,
+            onClick = { onToggle(!on) },
+            icon = Icons.Filled.ContentCut
+        )
+        if (on) {
+            Spacer(Modifier.width(10.dp))
+            ClipTime(from, stringResource(R.string.clip_from), !valid, onFrom, Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            ClipTime(to, stringResource(R.string.clip_to), !valid, onTo, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ClipTime(value: String, label: String, error: Boolean, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .height(40.dp)
+            .clip(CircleShape)
+            .background(MediumGray)
+            .border(1.5.dp, if (error) StatusRed else Color.Transparent, CircleShape)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = TextFaint, fontSize = 12.sp)
+        Spacer(Modifier.width(8.dp))
+        BasicTextField(
+            value = value,
+            // The number pad has a "." where a time wants ":".
+            onValueChange = { typed ->
+                val text = typed.replace('.', ':')
+                if (text.length <= 8 && text.all { it.isDigit() || it == ':' }) onChange(text)
+            },
+            singleLine = true,
+            textStyle = TextStyle(color = White, fontSize = 15.sp, fontFamily = NumberFont),
+            cursorBrush = SolidColor(Amber),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.weight(1f)
+        )
+    }
 }

@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.settings
 
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.Bolt
 import android.text.format.Formatter
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.Storage
@@ -108,6 +109,7 @@ fun SettingsScreen(
     val audioLanguages by viewModel.audioLanguages.collectAsState()
     val subtitles by viewModel.subtitles.collectAsState()
     val blockAds by viewModel.blockAds.collectAsState()
+    val quickShare by viewModel.quickShare.collectAsState()
     val storage by viewModel.storage.collectAsState()
     val engineVersion by viewModel.engineVersion.collectAsState()
     val engineState by viewModel.engineState.collectAsState()
@@ -168,6 +170,12 @@ fun SettingsScreen(
                     subtitle = stringResource(maxQualityLabelRes(maxQualityHeight)),
                     onClick = { showQualityDialog = true }
                 ) { Chevron() }
+                SettingsRow(
+                    icon = Icons.Filled.Bolt,
+                    title = stringResource(R.string.settings_quick_share),
+                    subtitle = stringResource(if (quickShare) R.string.quick_share_on else R.string.quick_share_off),
+                    onClick = { viewModel.toggleQuickShare() }
+                ) { AppSwitch(quickShare, { viewModel.toggleQuickShare() }) }
                 SettingsRow(
                     icon = Icons.Filled.FolderOpen,
                     title = stringResource(R.string.settings_download_path),

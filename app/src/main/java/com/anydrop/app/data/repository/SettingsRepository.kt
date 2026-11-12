@@ -93,6 +93,14 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean(KEY_BLOCK_ADS, true)
         set(value) = prefs.edit().putBoolean(KEY_BLOCK_ADS, value).apply()
 
+    /**
+     * A link shared to AnyDrop downloads right away in the best quality "Maximum quality"
+     * allows, without the list. Off by default.
+     */
+    var quickShare: Boolean
+        get() = prefs.getBoolean(KEY_QUICK_SHARE, false)
+        set(value) = prefs.edit().putBoolean(KEY_QUICK_SHARE, value).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -133,6 +141,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_AUDIO_LANGUAGES = "offer_audio_languages"
         private const val KEY_SUBTITLES = "offer_subtitles"
         private const val KEY_BLOCK_ADS = "block_ads"
+        private const val KEY_QUICK_SHARE = "quick_share"
         private const val KEY_YOUTUBE_CLIENT = "youtube_client"
 
         /** [blockAds] for code built outside Hilt (the browser's state holder). */

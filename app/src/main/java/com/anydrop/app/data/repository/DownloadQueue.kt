@@ -1,6 +1,7 @@
 package com.anydrop.app.data.repository
 
 import android.content.ActivityNotFoundException
+import com.anydrop.app.engine.ClipRange
 import kotlinx.coroutines.delay
 import android.content.Context
 import android.content.Intent
@@ -49,8 +50,14 @@ data class DownloadRequest(
     /** The voice to save when the video has several audio languages (blank = the usual audio). */
     val audioLanguage: String = "",
     /** Subtitles to save next to the video (a yt-dlp language code; blank = none). */
-    val subtitleLanguage: String = ""
-)
+    val subtitleLanguage: String = "",
+    /** Save only this stretch of the video, in seconds (both 0 = all of it). */
+    val clipStart: Int = 0,
+    val clipEnd: Int = 0
+) {
+    val isClip: Boolean get() = clipEnd > clipStart
+    val clip: IntRange? get() = if (isClip) clipStart..clipEnd else null
+}
 
 /** One row of the download tracker. [tag] is the output path — also the notification tag. */
 data class DownloadTask(
@@ -275,7 +282,7 @@ class DownloadQueue @Inject constructor(
         val task = DownloadTask(
             tag = tag,
             title = request.title.ifBlank { File(tag).nameWithoutExtension },
-            quality = format.resolution,
+            quality = format.resolution + request.clip?.let { " · ${ClipRange.format(it.first)}–${ClipRange.format(it.last)}" }.orEmpty(),
             kind = kind,
             request = request,
             phase = context.getString(phase),
@@ -300,8 +307,15 @@ class DownloadQueue @Inject constructor(
             )
             format.isAudioOnly -> downloadRepository.downloadAudio(
                 request.url, outputPath, cookieFile, request.audioLanguage, formatId = format.id, abr = format.abr,
-                song = YtDlpEngine.SongTags(request.title, request.creator, format.previewUrl)
+                song = YtDlpEngine.SongTags(request.title, request.creator, format.previewUrl), clip = request.clip
             )
+            // A part of the video: yt-dlp fetches just that stretch, picture and sound together.
+            request.isClip -> {
+                val voice = request.audioLanguage.takeIf { it.isNotBlank() }?.let { "[language=$it]" } ?: "[ext=m4a]"
+                val ownSound = format.acodec.isNotEmpty() && format.acodec != "none" && request.audioLanguage.isBlank()
+                val selector = if (ownSound) format.id else "${format.id}+bestaudio$voice/${format.id}+bestaudio/best"
+                downloadRepository.download(request.url, outputPath, selector, cookieFile, request.clip)
+            }
             // A chosen voice goes with any video, even one that has its own audio (only its picture is kept).
             format.acodec.isNotEmpty() && format.acodec != "none" && request.audioLanguage.isBlank() ->
                 downloadRepository.download(request.url, outputPath, format.id, cookieFile)

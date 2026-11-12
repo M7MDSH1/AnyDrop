@@ -112,6 +112,14 @@ class SettingsViewModel @Inject constructor(
         _blockAds.value = settingsRepository.blockAds
     }
 
+    private val _quickShare = MutableStateFlow(settingsRepository.quickShare)
+    val quickShare: StateFlow<Boolean> = _quickShare.asStateFlow()
+
+    fun toggleQuickShare() {
+        settingsRepository.quickShare = !settingsRepository.quickShare
+        _quickShare.value = settingsRepository.quickShare
+    }
+
     fun toggleAudioLanguages() {
         settingsRepository.audioLanguages = !settingsRepository.audioLanguages
         _audioLanguages.value = settingsRepository.audioLanguages

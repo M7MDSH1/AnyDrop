@@ -105,9 +105,10 @@ class DownloadRepository(
         url: String,
         outputPath: String,
         formatId: String = "bestvideo+bestaudio/best",
-        cookieFile: File? = null
+        cookieFile: File? = null,
+        clip: IntRange? = null
     ): Flow<DownloadState> {
-        return ytDlpEngine.download(url, outputPath, formatId, cookieFile)
+        return ytDlpEngine.download(url, outputPath, formatId, cookieFile, clip)
             .map { state ->
                 if (state is DownloadState.Completed) {
                     indexInMediaStore(state.mediaItem)
@@ -137,6 +138,9 @@ class DownloadRepository(
 
     fun engineVersion(): String? = ytDlpEngine.engineVersion()
 
+    /** Saving only a part of a video needs a working ffmpeg (it reads that stretch from the site). */
+    val clipSupported: Boolean get() = ytDlpEngine.ffmpegUsable
+
     /** Looks for a newer download engine. True when one was installed; throws when it can't look. */
     suspend fun updateEngine(): Boolean = withContext(ioDispatcher) { ytDlpEngine.updateEngine() }
 
@@ -154,9 +158,10 @@ class DownloadRepository(
         language: String = "",
         formatId: String = "",
         abr: Int = 0,
-        song: YtDlpEngine.SongTags = YtDlpEngine.SongTags()
+        song: YtDlpEngine.SongTags = YtDlpEngine.SongTags(),
+        clip: IntRange? = null
     ): Flow<DownloadState> {
-        return ytDlpEngine.downloadAudio(url, outputPath, cookieFile, language, formatId, abr, song)
+        return ytDlpEngine.downloadAudio(url, outputPath, cookieFile, language, formatId, abr, song, clip)
             .map { state ->
                 if (state is DownloadState.Completed) {
                     indexInMediaStore(state.mediaItem)

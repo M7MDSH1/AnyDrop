@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.tape_deck
 
 import android.app.Application
+import com.anydrop.app.engine.ClipRange
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import com.anydrop.app.engine.LinkPreview
@@ -110,6 +111,47 @@ class TapeDeckViewModel @Inject constructor(
 
     private val _isLoadingFormats = MutableStateFlow(false)
     val isLoadingFormats: StateFlow<Boolean> = _isLoadingFormats.asStateFlow()
+
+    /** Saving only a part of the video: on or off, and the two times as typed ("1:05"). */
+    private val _clipOn = MutableStateFlow(false)
+    val clipOn: StateFlow<Boolean> = _clipOn.asStateFlow()
+    private val _clipFrom = MutableStateFlow("0:00")
+    val clipFrom: StateFlow<String> = _clipFrom.asStateFlow()
+    private val _clipTo = MutableStateFlow("")
+    val clipTo: StateFlow<String> = _clipTo.asStateFlow()
+
+    private val clipSupported: Boolean by lazy { downloadRepository.clipSupported }
+
+    /** A part can be cut from videos yt-dlp reads itself and whose length is known. */
+    fun clipAllowed(format: FormatInfo): Boolean =
+        format.durationSec > 0 && !format.isImage && !format.isFromPage && !format.isTorrent && !format.isLink &&
+            format.slide < 0 && clipSupported
+
+    fun setClipOn(on: Boolean) {
+        _clipOn.value = on
+        // Starts as the first half minute, to be changed.
+        if (on && _clipTo.value.isBlank()) {
+            _clipTo.value = ClipRange.format(minOf(30, _selectedFormat.value?.durationSec ?: 30))
+        }
+    }
+
+    fun setClipFrom(text: String) { _clipFrom.value = text }
+    fun setClipTo(text: String) { _clipTo.value = text }
+
+    /** The stretch to save. Null: the whole video, or (with the clip on) times that don't fit it. */
+    private fun clipFor(format: FormatInfo): IntRange? {
+        if (!_clipOn.value || !clipAllowed(format)) return null
+        val start = ClipRange.parse(_clipFrom.value)
+        val end = ClipRange.parse(_clipTo.value)
+        return if (ClipRange.isValid(start, end, format.durationSec)) start!!..end!! else null
+    }
+
+    /** Shared links download right away (see [SettingsRepository.quickShare]). */
+    val quickShare: Boolean get() = settingsRepository.quickShare
+
+    /** What the engines found for an Instagram link, for "Copy media info" (blank = nothing to copy). */
+    private val _mediaInfo = MutableStateFlow("")
+    val mediaInfo: StateFlow<String> = _mediaInfo.asStateFlow()
 
     /** The link's title and cover, shown while its qualities are still being read. */
     private val _preview = MutableStateFlow<LinkPreview.Preview?>(null)
@@ -255,6 +297,10 @@ class TapeDeckViewModel @Inject constructor(
         previewJob?.cancel()
         _preview.value = null
         previewAuthor = ""
+        _mediaInfo.value = ""
+        _clipOn.value = false
+        _clipFrom.value = "0:00"
+        _clipTo.value = ""
     }
 
     /**
@@ -359,9 +405,13 @@ class TapeDeckViewModel @Inject constructor(
 
     /** What the queue needs to (re)start this download. */
     private fun requestFor(format: FormatInfo, urlValue: String): DownloadRequest {
+        val clip = clipFor(format)
         return DownloadRequest(
             url = urlValue,
-            format = format,
+            // A clip's size is its share of the whole (for the list and the free-space check).
+            format = if (clip == null) format else format.copy(filesize = format.filesize * (clip.last - clip.first) / format.durationSec),
+            clipStart = clip?.first ?: 0,
+            clipEnd = clip?.last ?: 0,
             title = _pageTitle.value,
             creator = fetchedUploader,
             webpageUrl = fetchedWebpageUrl.ifBlank { urlValue },
@@ -392,6 +442,9 @@ class TapeDeckViewModel @Inject constructor(
         val format = _selectedFormat.value ?: return
         val request = requestFor(format, urlValue)
         val title = request.title
+        // The clip is on but its times don't fit: never the whole video by surprise.
+        if (_clipOn.value && clipAllowed(format) && !request.isClip) return
+        val clipLabel = request.clip?.let { " " + ClipRange.label(it.first, it.last) }.orEmpty()
 
         // If the user picked an image (photo posts from Instagram/X/TikTok), download
         // the image file directly.
@@ -403,12 +456,12 @@ class TapeDeckViewModel @Inject constructor(
         // If the user picked an audio-only quality from the format list, extract
         // just the audio to .m4a instead of downloading video.
         if (format.isAudioOnly) {
-            val audioQuality = if (format.abr > 0) "${format.abr}kbps" else "audio"
+            val audioQuality = (if (format.abr > 0) "${format.abr}kbps" else "audio") + clipLabel
             launch(request, libraryRepository.getAudioOutputPath(urlValue, title, audioQuality))
             return
         }
 
-        val quality = format.resolution.ifBlank { "video" }
+        val quality = format.resolution.ifBlank { "video" } + clipLabel
 
         // Resolve what to do about pre-existing files that share this name.
         // Identity is decided by the source URL (sidecar), NOT the filename —
@@ -655,6 +708,7 @@ class TapeDeckViewModel @Inject constructor(
             }
             if (generation != fetchGeneration) return
             _pageTitle.value = result.title
+            _mediaInfo.value = if (settingsRepository.audioLanguages) result.mediaInfo else ""
             _captions.value = if (settingsRepository.subtitles) result.captions else emptyList()
             // The subtitles picked last time, when this video has them.
             _subtitleLanguage.value = settingsRepository.preferredSubtitleLanguage
