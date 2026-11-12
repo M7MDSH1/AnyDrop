@@ -1,6 +1,9 @@
 package com.anydrop.app.data.repository
 
 import android.content.Context
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Deferred
+import com.anydrop.app.appDownloadScope
 import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
@@ -65,13 +68,27 @@ class DownloadRepository(
         synchronized(recentFetches) {
             recentFetches[key]?.let { (at, result) -> if (now - at < RECENT_MS) return result }
         }
-        val result = fetch()
-        // Only what was found is kept; a failure is looked at again next time.
-        if (result != null && result.formats.isNotEmpty()) {
-            synchronized(recentFetches) { recentFetches[key] = now to result }
+        // The same link asked for twice at once (read ahead when it was copied, then used):
+        // one lookup, shared. It runs on the app's scope, so it finishes and is kept even if
+        // whoever asked first goes away.
+        val lookup = synchronized(inFlight) {
+            inFlight[key] ?: appDownloadScope.async {
+                try {
+                    runCatching { fetch() }.onSuccess { result ->
+                        // Only what was found is kept; a failure is looked at again next time.
+                        if (result != null && result.formats.isNotEmpty()) {
+                            synchronized(recentFetches) { recentFetches[key] = System.currentTimeMillis() to result }
+                        }
+                    }
+                } finally {
+                    synchronized(inFlight) { inFlight.remove(key) }
+                }
+            }.also { inFlight[key] = it }
         }
-        return result
+        return lookup.await().getOrThrow()
     }
+
+    private val inFlight = HashMap<String, Deferred<Result<YtDlpEngine.FetchResult?>>>()
 
     private suspend fun recent(kind: String, url: String, fetch: suspend () -> YtDlpEngine.FetchResult): YtDlpEngine.FetchResult =
         recentOrNull(kind, url, fetch) ?: YtDlpEngine.FetchResult(emptyList())
@@ -118,6 +135,11 @@ class DownloadRepository(
             .flowOn(ioDispatcher)
     }
 
+    fun engineVersion(): String? = ytDlpEngine.engineVersion()
+
+    /** Looks for a newer download engine. True when one was installed; throws when it can't look. */
+    suspend fun updateEngine(): Boolean = withContext(ioDispatcher) { ytDlpEngine.updateEngine() }
+
     suspend fun linkSummary(url: String, cookieFile: File? = null): YtDlpEngine.LinkSummary? =
         ytDlpEngine.getLinkSummary(url, cookieFile)
 
@@ -131,9 +153,10 @@ class DownloadRepository(
         cookieFile: File? = null,
         language: String = "",
         formatId: String = "",
-        abr: Int = 0
+        abr: Int = 0,
+        song: YtDlpEngine.SongTags = YtDlpEngine.SongTags()
     ): Flow<DownloadState> {
-        return ytDlpEngine.downloadAudio(url, outputPath, cookieFile, language, formatId, abr)
+        return ytDlpEngine.downloadAudio(url, outputPath, cookieFile, language, formatId, abr, song)
             .map { state ->
                 if (state is DownloadState.Completed) {
                     indexInMediaStore(state.mediaItem)

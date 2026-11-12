@@ -1,6 +1,9 @@
 package com.anydrop.app.ui.tape_deck
 
 import android.app.Application
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.anydrop.app.engine.LinkPreview
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.R
@@ -108,6 +111,16 @@ class TapeDeckViewModel @Inject constructor(
     private val _isLoadingFormats = MutableStateFlow(false)
     val isLoadingFormats: StateFlow<Boolean> = _isLoadingFormats.asStateFlow()
 
+    /** The link's title and cover, shown while its qualities are still being read. */
+    private val _preview = MutableStateFlow<LinkPreview.Preview?>(null)
+    val preview: StateFlow<LinkPreview.Preview?> = _preview.asStateFlow()
+    private var previewJob: Job? = null
+
+    // The site's own name for who made the video. yt-dlp sometimes has only the "@handle".
+    private var previewAuthor = ""
+
+    private fun String.isHandleOrBlank() = isBlank() || startsWith("@")
+
     private val _autoDetectLinks = MutableStateFlow(settingsRepository.autoDetectLinks)
     val autoDetectLinks: StateFlow<Boolean> = _autoDetectLinks.asStateFlow()
 
@@ -209,6 +222,7 @@ class TapeDeckViewModel @Inject constructor(
         if (sessionUrl.isBlank()) return
         _url.value = sessionUrl
         _pageTitle.value = deckSessionRepository.lastTitle()
+        fetchedUploader = deckSessionRepository.lastUploader()
         val formats = deckSessionRepository.loadFormats()
         if (formats.isNotEmpty()) {
             rawFormats = formats
@@ -238,6 +252,21 @@ class TapeDeckViewModel @Inject constructor(
         probeJob?.cancel()
         linkSummaryJob?.cancel()
         searchJob?.cancel()
+        previewJob?.cancel()
+        _preview.value = null
+        previewAuthor = ""
+    }
+
+    /**
+     * A copied link was noticed: it's read now, so its qualities are already there when the
+     * user takes it (the lookup is shared and kept, see [DownloadRepository.getFormats]).
+     */
+    fun prefetch(link: String) {
+        val url = link.trim()
+        if (_fetchWholePage.value || LinkList.isList(url) || Magnet.isTorrentLink(url) || Playlists.isListOnly(url)) return
+        viewModelScope.launch {
+            runCatching { downloadRepository.getFormats(url, cookieRepository.getCookieFile().takeIf { it.exists() }) }
+        }
     }
 
     private var linkSummaryJob: Job? = null
@@ -301,7 +330,7 @@ class TapeDeckViewModel @Inject constructor(
     }
 
     private fun saveSession(selectedId: String = _selectedFormat.value?.id.orEmpty()) {
-        deckSessionRepository.saveSession(_url.value.trim(), rawFormats, selectedId, _pageTitle.value)
+        deckSessionRepository.saveSession(_url.value.trim(), rawFormats, selectedId, _pageTitle.value, fetchedUploader)
     }
 
     /** User tapped "Replace" — delete the oldest copy, re-download to the base name. */
@@ -590,6 +619,22 @@ class TapeDeckViewModel @Inject constructor(
         _fetchingPlaylist.value = playlistWanted
         _isLoadingFormats.value = true
         _selectedFormat.value = null
+        previewJob?.cancel()
+        _preview.value = null
+        previewAuthor = ""
+        if (!linkList && !playlistWanted && !wholePage && !Magnet.isTorrentLink(urlValue)) {
+            previewJob = viewModelScope.launch {
+                val found = withContext(Dispatchers.IO) { LinkPreview.fetch(urlValue) }
+                if (generation != fetchGeneration) return@launch
+                if (_isLoadingFormats.value) _preview.value = found
+                previewAuthor = found?.author.orEmpty()
+                // The qualities came first: the name still replaces a bare handle.
+                if (previewAuthor.isNotBlank() && rawFormats.isNotEmpty() && fetchedUploader.isHandleOrBlank()) {
+                    fetchedUploader = previewAuthor
+                    saveSession()
+                }
+            }
+        }
         try {
             val cookieFile = cookieRepository.getCookieFile().takeIf { it.exists() }
             val result: FetchResult = when {
@@ -614,7 +659,7 @@ class TapeDeckViewModel @Inject constructor(
             // The subtitles picked last time, when this video has them.
             _subtitleLanguage.value = settingsRepository.preferredSubtitleLanguage
                 .takeIf { wanted -> _captions.value.any { it.language == wanted } }.orEmpty()
-            fetchedUploader = result.uploader
+            fetchedUploader = if (result.uploader.isHandleOrBlank()) previewAuthor.ifBlank { result.uploader } else result.uploader
             fetchedWebpageUrl = result.webpageUrl
             rawFormats = if (wholePage && !linkList) result.formats.withoutRepeatsOfMain() else result.formats
             if (linkList) fillLinkSummaries(urlValue)
@@ -648,7 +693,10 @@ class TapeDeckViewModel @Inject constructor(
                 detail = (e.cause ?: e).toString()
             )
         } finally {
-            if (generation == fetchGeneration) _isLoadingFormats.value = false
+            if (generation == fetchGeneration) {
+                _isLoadingFormats.value = false
+                _preview.value = null
+            }
         }
     }
 

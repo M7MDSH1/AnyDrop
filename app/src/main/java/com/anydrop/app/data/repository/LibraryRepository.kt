@@ -170,6 +170,14 @@ class LibraryRepository(private val context: Context) {
     }
 
     // Organized subfolders inside AnyDrop/ for each media type.
+    /** Bytes AnyDrop's own folder holds, and bytes still free where it is. Reads the disk: not for the main thread. */
+    fun storage(): Pair<Long, Long> {
+        val dir = getDownloadDir()
+        val used = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        val free = runCatching { android.os.StatFs(dir.path).availableBytes }.getOrDefault(0L)
+        return used to free
+    }
+
     fun getVideoDir(): File = File(getDownloadDir(), "Videos").apply { if (!exists()) mkdirs() }
     fun getImageDir(): File = File(getDownloadDir(), "Images").apply { if (!exists()) mkdirs() }
     fun getAudioDir(): File = File(getDownloadDir(), "Audio").apply { if (!exists()) mkdirs() }
@@ -219,7 +227,9 @@ class LibraryRepository(private val context: Context) {
             MediaStore.Video.Media.DATA,
             MediaStore.Video.Media.DURATION,
             MediaStore.Video.Media.SIZE,
-            MediaStore.Video.Media.DATE_ADDED
+            MediaStore.Video.Media.DATE_ADDED,
+            MediaStore.Video.Media.WIDTH,
+            MediaStore.Video.Media.HEIGHT
         )
 
         val orderBy = when (mode) {
@@ -259,6 +269,11 @@ class LibraryRepository(private val context: Context) {
                 val dateAdded = it.getLong(it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
                 @Suppress("DEPRECATION")
                 val storedAt = it.getString(it.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)).orEmpty()
+                // "1080p" is the short side, so an upright phone video isn't called 1920p.
+                val shortSide = minOf(
+                    it.getInt(it.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)),
+                    it.getInt(it.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT))
+                )
                 items.add(MediaItem(
                     id = "vid_$id",
                     title = name,
@@ -268,6 +283,7 @@ class LibraryRepository(private val context: Context) {
                     fileSize = fileSize,
                     downloadedAt = dateAdded * 1000, // DATE_ADDED is in seconds
                     source = MediaSource.UNKNOWN,
+                    quality = if (shortSide > 0) "${shortSide}p" else "",
                     fromAnyDrop = isAnyDropPath(storedAt)
                 ))
             }

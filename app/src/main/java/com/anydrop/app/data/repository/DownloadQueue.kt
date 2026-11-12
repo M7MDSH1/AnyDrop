@@ -1,6 +1,7 @@
 package com.anydrop.app.data.repository
 
 import android.content.ActivityNotFoundException
+import kotlinx.coroutines.delay
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -163,7 +164,8 @@ class DownloadQueue @Inject constructor(
             if (_tasks.value.firstOrNull { it.tag == tag }?.status != TaskStatus.RUNNING) return
             update(tag) { it.copy(phase = context.getString(R.string.progress_starting), queued = false, waitingForWifi = false) }
             DownloadService.startDownload(context, tag, request.title)
-            run(request, tag)
+            val missing = missingSpace(request, tag)
+            if (missing != null) fail(tag, request, DownloadState.Error(missing)) else run(request, tag)
         } finally {
             gate.release(tag)
         }
@@ -297,7 +299,8 @@ class DownloadQueue @Inject constructor(
                 request.webpageUrl.ifBlank { request.url }, format, outputPath, request.cookieHeader
             )
             format.isAudioOnly -> downloadRepository.downloadAudio(
-                request.url, outputPath, cookieFile, request.audioLanguage, formatId = format.id, abr = format.abr
+                request.url, outputPath, cookieFile, request.audioLanguage, formatId = format.id, abr = format.abr,
+                song = YtDlpEngine.SongTags(request.title, request.creator, format.previewUrl)
             )
             // A chosen voice goes with any video, even one that has its own audio (only its picture is kept).
             format.acodec.isNotEmpty() && format.acodec != "none" && request.audioLanguage.isBlank() ->
@@ -351,7 +354,60 @@ class DownloadQueue @Inject constructor(
         return videos.firstOrNull { YtDlpFormatParser.extractHeight(it.resolution) in 1..max } ?: videos.firstOrNull()
     }
 
+    /**
+     * "Not enough space" when the download's known size won't fit, else null. Sizes are often
+     * estimates, so only a clear shortfall stops it (a resumed download's part file counts as there).
+     */
+    private fun missingSpace(request: DownloadRequest, tag: String): String? {
+        val size = request.format.filesize
+        if (size <= 0) return null
+        val folder = File(tag).parentFile ?: return null
+        val free = runCatching { android.os.StatFs(folder.path).availableBytes }.getOrNull() ?: return null
+        val done = File("$tag.part").length()
+        if (free >= size - done + SPACE_MARGIN) return null
+        return context.getString(R.string.error_not_enough_space, sizeLabel(size), sizeLabel(free))
+    }
+
+    private fun fail(tag: String, request: DownloadRequest, error: DownloadState.Error) {
+        update(tag) {
+            it.copy(status = TaskStatus.FAILED, error = error.message, errorDetail = error.detail, speed = "", eta = "")
+        }
+        DownloadService.notifyFailed(context, tag, request.title.ifBlank { context.getString(R.string.error_download_failed) })
+    }
+
+    /**
+     * Downloads [tag], trying again by itself when the connection was the problem: after a
+     * short wait, or as soon as the phone is back online. Each try carries on from the part file.
+     */
     private suspend fun run(request: DownloadRequest, tag: String) {
+        var attempt = 0
+        while (true) {
+            // A link whose video was found on an earlier try keeps what it found.
+            val current = _tasks.value.firstOrNull { it.tag == tag }?.request ?: request
+            val failure = runOnce(current, tag) ?: return
+            if (_tasks.value.firstOrNull { it.tag == tag }?.status != TaskStatus.RUNNING) return
+            val offline = !gate.online.value
+            val again = attempt < DownloadRetry.MAX_ATTEMPTS &&
+                (offline || DownloadRetry.isTransient(failure.message + "\n" + failure.detail))
+            if (!again) {
+                fail(tag, current, failure)
+                return
+            }
+            attempt++
+            update(tag) {
+                it.copy(
+                    phase = context.getString(if (offline) R.string.progress_waiting_connection else R.string.progress_retrying),
+                    speed = "", eta = ""
+                )
+            }
+            gate.awaitOnline()
+            delay(DownloadRetry.delayMs(attempt))
+        }
+    }
+
+    /** One try. Returns its failure, or null when it ended any other way (finished, paused). */
+    private suspend fun runOnce(request: DownloadRequest, tag: String): DownloadState.Error? {
+        var failure: DownloadState.Error? = null
         flowFor(request, tag).collect { state ->
             // A STOP from the user wins over late events from the dying process.
             if (_tasks.value.firstOrNull { it.tag == tag }?.status == TaskStatus.CANCELLED) return@collect
@@ -392,16 +448,17 @@ class DownloadQueue @Inject constructor(
                     DownloadService.finishDownload(context, tag, request.title.ifBlank { context.getString(R.string.download_complete) })
                     libraryRepository.refreshLibrary()
                 }
-                is DownloadState.Error -> {
-                    update(tag) {
-                        it.copy(status = TaskStatus.FAILED, error = state.message, errorDetail = state.detail, speed = "", eta = "")
-                    }
-                    DownloadService.notifyFailed(context, tag, request.title.ifBlank { context.getString(R.string.error_download_failed) })
-                }
+                is DownloadState.Error -> failure = state
                 is DownloadState.Cancelled -> update(tag) { it.copy(status = TaskStatus.CANCELLED, speed = "", eta = "") }
                 DownloadState.Idle -> Unit
             }
         }
+        return failure
+    }
+
+    private companion object {
+        /** Room left over after a download, so the phone isn't filled to the last byte. */
+        const val SPACE_MARGIN = 50_000_000L
     }
 
     private fun sizeLabel(bytes: Long): String = when {

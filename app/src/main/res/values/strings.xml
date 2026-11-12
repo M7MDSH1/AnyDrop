@@ -445,4 +445,15 @@
     <string name="browser_block_ads_count">Block ads here (%1$d)</string>
     <string name="browser_popup_blocked">Pop-up blocked</string>
     <string name="browser_popup_open">Open</string>
+    <string name="progress_retrying">Connection problem, trying again…</string>
+    <string name="progress_waiting_connection">Waiting for a connection…</string>
+    <string name="error_not_enough_space">Not enough space: this needs %1$s and the phone has %2$s free.</string>
+    <string name="settings_storage">Storage</string>
+    <string name="storage_value">Downloads take %1$s · %2$s free</string>
+    <string name="settings_engine">Download engine</string>
+    <string name="engine_idle">%1$s. Tap to look for a newer one.</string>
+    <string name="engine_checking">Looking for a newer version…</string>
+    <string name="engine_updated">Updated to %1$s</string>
+    <string name="engine_current">%1$s is the newest</string>
+    <string name="engine_failed">Couldn\'t check. Are you online?</string>
 </resources>

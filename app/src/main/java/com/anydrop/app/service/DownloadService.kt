@@ -1,6 +1,7 @@
 package com.anydrop.app.service
 
 import android.app.PendingIntent
+import com.anydrop.app.data.repository.DownloadQueue
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -57,6 +58,9 @@ class DownloadService : Service() {
     @Inject
     lateinit var downloadTracker: DownloadTracker
 
+    @Inject
+    lateinit var downloadQueue: DownloadQueue
+
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(
             LocaleHelper.wrapAppLocale(newBase, readAppLanguageSync(newBase))
@@ -111,10 +115,23 @@ class DownloadService : Service() {
                     .setSilent(true)
                     .setGroup(GROUP_DOWNLOADS)
                     .setContentIntent(openDownloadsIntent(this))
+                    .addAction(0, getString(R.string.task_stop), buttonIntent(Constants.ACTION_DOWNLOAD_PAUSE_REQUEST, tag))
+                    .addAction(0, getString(R.string.btn_cancel), buttonIntent(Constants.ACTION_DOWNLOAD_REMOVE_REQUEST, tag))
                     .build()
                 NotificationManagerCompat.from(this)
                     .notify(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID, notification)
                 if (children.add(tag)) refreshSummary()
+            }
+            // Pause keeps the download in the list (Resume carries on); Cancel takes it out.
+            Constants.ACTION_DOWNLOAD_PAUSE_REQUEST, Constants.ACTION_DOWNLOAD_REMOVE_REQUEST -> {
+                val tag = intent.getStringExtra("tag")
+                if (tag != null) {
+                    downloadQueue.cancel(tag)
+                    if (intent.action == Constants.ACTION_DOWNLOAD_REMOVE_REQUEST) downloadQueue.dismiss(tag)
+                    // A button on a notification left from an earlier run: nothing to act on.
+                    NotificationManagerCompat.from(this).cancel(tag, Constants.DOWNLOAD_PROGRESS_NOTIFICATION_ID)
+                }
+                if (activeTags.isEmpty() && !foregroundPinned) stopSelf()
             }
             Constants.ACTION_DOWNLOAD_COMPLETE ->
                 finishWith(intent, getString(R.string.notification_complete), R.drawable.ic_stat_anydrop)
@@ -225,6 +242,13 @@ class DownloadService : Service() {
             .setSilent(true)
             .setContentIntent(openDownloadsIntent(this))
             .apply { if (asSummary) setGroup(GROUP_DOWNLOADS).setGroupSummary(true) }
+
+    private fun buttonIntent(action: String, tag: String): PendingIntent = PendingIntent.getService(
+        this,
+        tag.hashCode(),
+        Intent(this, DownloadService::class.java).setAction(action).putExtra("tag", tag),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    )
 
     override fun onBind(intent: Intent?): IBinder? = null
 

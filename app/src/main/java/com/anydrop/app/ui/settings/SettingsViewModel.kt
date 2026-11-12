@@ -1,6 +1,12 @@
 package com.anydrop.app.ui.settings
 
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import com.anydrop.app.data.repository.LibraryRepository
+import com.anydrop.app.data.repository.DownloadRepository
 import androidx.lifecycle.viewModelScope
 import com.anydrop.app.data.repository.AppLanguage
 import com.anydrop.app.data.repository.DownloadGate
@@ -18,8 +24,42 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val languageRepository: LanguageRepository,
-    private val downloadGate: DownloadGate
+    private val downloadGate: DownloadGate,
+    private val downloadRepository: DownloadRepository,
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
+
+    /** Bytes AnyDrop's downloads take, and bytes free (null until measured). */
+    private val _storage = MutableStateFlow<Pair<Long, Long>?>(null)
+    val storage: StateFlow<Pair<Long, Long>?> = _storage.asStateFlow()
+
+    fun refreshStorage() {
+        viewModelScope.launch { _storage.value = withContext(Dispatchers.IO) { libraryRepository.storage() } }
+    }
+
+    enum class EngineState { IDLE, CHECKING, UPDATED, CURRENT, FAILED }
+
+    private val _engineVersion = MutableStateFlow(downloadRepository.engineVersion().orEmpty())
+    val engineVersion: StateFlow<String> = _engineVersion.asStateFlow()
+
+    private val _engineState = MutableStateFlow(EngineState.IDLE)
+    val engineState: StateFlow<EngineState> = _engineState.asStateFlow()
+
+    /** Looks for a newer download engine (yt-dlp) now, instead of at the daily check. */
+    fun updateEngine() {
+        if (_engineState.value == EngineState.CHECKING) return
+        _engineState.value = EngineState.CHECKING
+        viewModelScope.launch {
+            _engineState.value = try {
+                if (downloadRepository.updateEngine()) EngineState.UPDATED else EngineState.CURRENT
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                EngineState.FAILED
+            }
+            _engineVersion.value = downloadRepository.engineVersion().orEmpty()
+        }
+    }
 
     private val _wifiOnly = MutableStateFlow(settingsRepository.wifiOnly)
     val wifiOnly: StateFlow<Boolean> = _wifiOnly.asStateFlow()

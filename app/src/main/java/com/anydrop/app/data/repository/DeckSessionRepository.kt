@@ -27,16 +27,22 @@ class DeckSessionRepository @Inject constructor(
     }
 
     /** Persist URL + the freshly fetched format list (raw, uncapped) + selection + the page's title. */
-    fun saveSession(url: String, formats: List<FormatInfo>, selectedFormatId: String, title: String = "") {
+    fun saveSession(
+        url: String, formats: List<FormatInfo>, selectedFormatId: String, title: String = "", uploader: String = ""
+    ) {
         prefs.edit()
             .putString(KEY_URL, url)
             .putString(KEY_FORMATS, formatsToJson(formats))
             .putString(KEY_SELECTED_ID, selectedFormatId)
             .putString(KEY_TITLE, title)
+            .putString(KEY_UPLOADER, uploader)
             .apply()
     }
 
     fun lastTitle(): String = prefs.getString(KEY_TITLE, "").orEmpty()
+
+    /** Who made the fetched video (goes on the download as its creator / a song's artist). */
+    fun lastUploader(): String = prefs.getString(KEY_UPLOADER, "").orEmpty()
 
     fun loadFormats(): List<FormatInfo> {
         val raw = prefs.getString(KEY_FORMATS, "").orEmpty()
@@ -66,6 +72,7 @@ class DeckSessionRepository @Inject constructor(
         private const val KEY_FORMATS = "last_formats"
         private const val KEY_SELECTED_ID = "last_selected_format"
         private const val KEY_TITLE = "last_title"
+        private const val KEY_UPLOADER = "last_uploader"
         private const val KEY_LAST_TAB = "last_tab"
         private const val KEY_LAST_PLAYED = "last_played_media"
 

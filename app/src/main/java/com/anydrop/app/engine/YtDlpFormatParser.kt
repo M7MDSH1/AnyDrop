@@ -9,6 +9,25 @@ import org.json.JSONObject
  */
 object YtDlpFormatParser {
 
+    /**
+     * The size to show for a quality: what the site says, else bitrate x length (an estimate,
+     * but closer to useful than no size at all). 0 when neither is known.
+     */
+    fun sizeOrEstimate(reportedBytes: Long, kbps: Int, durationSec: Int): Long =
+        if (reportedBytes > 0 || kbps <= 0 || durationSec <= 0) reportedBytes.coerceAtLeast(0)
+        else kbps.toLong() * 125L * durationSec
+
+
+    /**
+     * Who made the video, from yt-dlp's JSON. "uploader" is missing on some sites and player
+     * clients, where the channel (or its handle) is still given.
+     */
+    fun creatorOf(json: String): String = runCatching {
+        val info = JSONObject(json.trim())
+        listOf("uploader", "channel", "creator", "artist", "uploader_id")
+            .firstNotNullOfOrNull { key -> info.optString(key).trim().takeIf { it.isNotBlank() && it != "null" } }
+    }.getOrNull().orEmpty()
+
     /** First number in a resolution label, e.g. "1080p60" -> 1080, "Audio 128kbps" -> 128. */
     fun extractHeight(resolution: String): Int {
         return Regex("(\\d+)").find(resolution)?.value?.toIntOrNull() ?: 0

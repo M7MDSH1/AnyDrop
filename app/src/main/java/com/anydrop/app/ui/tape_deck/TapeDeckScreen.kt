@@ -143,6 +143,7 @@ fun TapeDeckScreen(
     val subtitleLanguage by viewModel.subtitleLanguage.collectAsState()
     val selectedFormat by viewModel.selectedFormat.collectAsState()
     val isLoadingFormats by viewModel.isLoadingFormats.collectAsState()
+    val preview by viewModel.preview.collectAsState()
     val duplicatePrompt by viewModel.duplicatePrompt.collectAsState()
     val autoDetectLinks by viewModel.autoDetectLinks.collectAsState()
     val tasks by viewModel.tasks.collectAsState()
@@ -188,6 +189,7 @@ fun TapeDeckScreen(
             if (clip.isLinkLike()) {
                 lastSeenClip = clip
                 detectedLink = clip
+                viewModel.prefetch(clip)
             }
         }
     }
@@ -299,6 +301,11 @@ fun TapeDeckScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         if (isLoadingFormats) {
+            // What the link is, as soon as the site says: the qualities take longer.
+            preview?.let {
+                MediaSummaryCard(cover = it.cover, durationSec = 0, title = it.title)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.Center,

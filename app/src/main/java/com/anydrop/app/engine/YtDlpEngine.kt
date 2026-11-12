@@ -45,6 +45,7 @@ class YtDlpEngine(
     companion object {
         private const val TAG = "YtDlpEngine"
         private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+        private const val RETRY_UPDATE_INTERVAL_MS = 60L * 60L * 1000L
         private val VIDEO_EXTS = listOf("mp4", "mkv", "webm", "mov", "m4v")
         private val AUDIO_EXTS = listOf("m4a", "mp3", "opus", "aac", "ogg", "webm")
         /** Subtitle files the player can show. */
@@ -173,6 +174,28 @@ class YtDlpEngine(
         }.apply { isDaemon = true }.start()
     }
 
+    /** The download engine's (yt-dlp) version, e.g. "2026.11.03". */
+    fun engineVersion(): String? = runCatching {
+        YoutubeDL.getInstance().versionName(context) ?: YoutubeDL.getInstance().version(context)
+    }.getOrNull()
+
+    /** Looks for a newer download engine now. True when one was installed. Blocking; throws when offline. */
+    fun updateEngine(): Boolean {
+        val status = YoutubeDL.getInstance().updateYoutubeDL(context, YoutubeDL.UpdateChannel.NIGHTLY)
+        settingsRepository.markYtDlpUpdateCheck()
+        return status == YoutubeDL.UpdateStatus.DONE
+    }
+
+    /** After a failed fetch: true when a newer engine was just installed (looked for at most hourly). */
+    private fun updatedForRetry(): Boolean {
+        if (System.currentTimeMillis() - settingsRepository.lastYtDlpUpdateCheck() < RETRY_UPDATE_INTERVAL_MS) return false
+        return try {
+            updateEngine().also { Log.i(TAG, "Engine update after a failed fetch: installed=$it") }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     /**
      * ffmpeg's package (unpacked from libffmpeg.zip.so) carries five WebP libraries built for
      * 4 KB memory pages, which stops ffmpeg from starting on phones with 16 KB pages
@@ -262,6 +285,66 @@ class YtDlpEngine(
         }
     }
 
+    /** What a saved song is labelled with, so music apps show more than a file name. */
+    data class SongTags(val title: String = "", val artist: String = "", val coverUrl: String = "")
+
+    /**
+     * Writes [tags] into an M4A: title, artist and the cover picture. Nothing is re-encoded but
+     * the picture, and any failure leaves the song as it was (it plays either way).
+     */
+    private fun tagSong(song: File, tags: SongTags) {
+        if (!ffmpegUsable || song.extension.lowercase() != "m4a") return
+        if (tags.title.isBlank() && tags.artist.isBlank() && tags.coverUrl.isBlank()) return
+        val key = partialKey(song.absolutePath)
+        val cover = File(song.parentFile, ".temp_cover_$key")
+        val tmp = File(song.parentFile, ".temp_tagged_$key.m4a")
+        try {
+            val hasCover = tags.coverUrl.startsWith("http") && fetchSmallFile(tags.coverUrl, cover)
+            val args = mutableListOf("-y", "-hide_banner", "-loglevel", "error", "-i", song.absolutePath)
+            if (hasCover) {
+                args += listOf(
+                    "-i", cover.absolutePath, "-map", "0:a", "-map", "1:v:0",
+                    "-c:a", "copy", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"
+                )
+            } else {
+                args += listOf("-map", "0:a", "-c", "copy")
+            }
+            if (tags.title.isNotBlank()) args += listOf("-metadata", "title=${tags.title}")
+            if (tags.artist.isNotBlank()) args += listOf("-metadata", "artist=${tags.artist}")
+            args += listOf("-movflags", "+faststart", tmp.absolutePath)
+            val process = ffmpegProcess(*args.toTypedArray())
+            val log = process.inputStream.bufferedReader().readText()
+            val ok = process.waitFor(2, TimeUnit.MINUTES) && process.exitValue() == 0 && tmp.length() > song.length() / 2
+            if (ok) {
+                // Renamed over the original, so there is never a moment without the song.
+                if (!tmp.renameTo(song)) tmp.copyTo(song, overwrite = true)
+            } else {
+                Log.w(TAG, "Song tags not written: ${log.take(300)}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Song tags not written", e)
+        } finally {
+            cover.delete()
+            tmp.delete()
+        }
+    }
+
+    /** Saves a small file (a cover picture) from the web. False when it can't be had. */
+    private fun fetchSmallFile(url: String, into: File): Boolean = try {
+        val connection = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 8000
+            readTimeout = 8000
+        }
+        try {
+            connection.inputStream.use { input -> into.outputStream().use { input.copyTo(it) } }
+        } finally {
+            connection.disconnect()
+        }
+        into.length() in 1..8_000_000
+    } catch (e: Exception) {
+        false
+    }
+
     /** The language the app shows (its own setting, else the phone's), for automatic captions. */
     private fun appLanguage(): String =
         readAppLanguageSync(context).tag.ifBlank { java.util.Locale.getDefault().language }
@@ -303,6 +386,17 @@ class YtDlpEngine(
      * and fall back automatically instead of hardcoding one that will go stale.
      */
     private val youtubeClientFallbackOrder = listOf("android", "tv", "web_creator", "mweb", "web")
+
+    /** The clients to try for [url]: for YouTube, the one that worked last time first. */
+    private fun clientsFor(url: String): List<String?> {
+        if (!isYoutubeUrl(url)) return listOf(null)
+        val last = settingsRepository.youtubeClient?.takeIf { it in youtubeClientFallbackOrder }
+        return listOfNotNull(last) + youtubeClientFallbackOrder.filter { it != last }
+    }
+
+    private fun rememberClient(client: String?) {
+        if (client != null && settingsRepository.youtubeClient != client) settingsRepository.youtubeClient = client
+    }
 
     private fun hostOf(url: String): String =
         runCatching { Uri.parse(url.trim()).host?.lowercase() }.getOrNull().orEmpty()
@@ -440,6 +534,16 @@ class YtDlpEngine(
         }
 
         if (result.formats.isNotEmpty()) return result
+        // Sites change and yt-dlp catches up within days: with a newer engine, look once more.
+        if (failure != null && failure !is UnsupportedSiteException && withContext(Dispatchers.IO) { updatedForRetry() }) {
+            try {
+                ytdlpFormats(url, cookieFile).takeIf { it.formats.isNotEmpty() }?.let { return it }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
         failure?.let { throw friendlyFailure(it, signedIn = isSignedIn(cookieFile, host)) }
         return FetchResult(emptyList())
     }
@@ -686,7 +790,7 @@ class YtDlpEngine(
     private suspend fun ytdlpFormats(url: String, cookieFile: File? = null): FetchResult {
         return withContext(Dispatchers.IO) {
             val isTiktok = isTiktokUrl(url)
-            val clients = if (isYoutubeUrl(url)) youtubeClientFallbackOrder else listOf<String?>(null)
+            val clients = clientsFor(url)
 
             for ((index, client) in clients.withIndex()) {
                 val request = YoutubeDLRequest(url)
@@ -706,6 +810,7 @@ class YtDlpEngine(
                     }
                     val title = info.title?.trim().orEmpty()
                     val uploader = runCatching { info.uploader?.trim().orEmpty() }.getOrDefault("")
+                        .ifBlank { YtDlpFormatParser.creatorOf(json) }
                     val webpageUrl = runCatching { info.webpageUrl?.trim().orEmpty() }.getOrDefault("")
                     val cover = runCatching { info.thumbnail?.trim().orEmpty() }.getOrDefault("")
                     val duration = runCatching { info.duration }.getOrDefault(0).coerceAtLeast(0)
@@ -713,6 +818,11 @@ class YtDlpEngine(
 
                     fun hasVideo(vc: String?) = !vc.isNullOrEmpty() && vc != "none"
                     fun hasAudio(ac: String?) = !ac.isNullOrEmpty() && ac != "none"
+                    fun sizeOf(format: com.yausername.youtubedl_android.mapper.VideoFormat): Long =
+                        YtDlpFormatParser.sizeOrEstimate(
+                            format.fileSize.coerceAtLeast(format.fileSizeApproximate),
+                            if (format.tbr > 0) format.tbr else format.abr, duration
+                        )
 
                     // Video formats (anything with a video codec).
                     val videoFormats = raw
@@ -726,7 +836,7 @@ class YtDlpEngine(
                                 id = format.formatId ?: "",
                                 extension = format.ext ?: "",
                                 resolution = resolution,
-                                filesize = format.fileSize.coerceAtLeast(format.fileSizeApproximate),
+                                filesize = sizeOf(format),
                                 vcodec = format.vcodec ?: "",
                                 acodec = format.acodec ?: ""
                             )
@@ -745,7 +855,7 @@ class YtDlpEngine(
                                 id = format.formatId ?: "",
                                 extension = format.ext ?: "m4a",
                                 resolution = if (abr > 0) "Audio ${abr}kbps" else "Audio",
-                                filesize = format.fileSize.coerceAtLeast(format.fileSizeApproximate),
+                                filesize = sizeOf(format),
                                 vcodec = "none",
                                 acodec = format.acodec ?: "",
                                 isAudioOnly = true,
@@ -797,8 +907,9 @@ class YtDlpEngine(
                     // yt-dlp's catch-all extractors (any page with a player) vs. a site's own one.
                     val generic = runCatching { info.extractorKey }.getOrNull()
                         .let { it.isNullOrBlank() || it.contains("Generic", ignoreCase = true) || it == "HTML5MediaEmbed" }
-                    Log.i(TAG, "yt-dlp (${runCatching { info.extractorKey }.getOrNull()}): ${videoFormats.size} video, ${audioFormats.size} audio, ${imageFormats.size} image, ${thumbImages.size} from thumbnails")
+                    Log.i(TAG, "yt-dlp (${runCatching { info.extractorKey }.getOrNull()}, by '$uploader'): ${videoFormats.size} video, ${audioFormats.size} audio, ${imageFormats.size} image, ${thumbImages.size} from thumbnails")
                     if (formats.isNotEmpty()) {
+                        rememberClient(client)
                         return@withContext FetchResult(
                             formats, title, uploader, webpageUrl,
                             coverOnly = thumbImages.isNotEmpty() && generic,
@@ -976,7 +1087,7 @@ class YtDlpEngine(
         // YouTube and TikTok both benefit from retrying on 403/blocked-client failures.
         val needsResilientRetry = isYt || isTiktok
 
-        val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
+        val clients = clientsFor(url)
         // If the requested format is a split video+audio combo, add a plain
         // "best" progressive fallback at the end — YouTube 403s split streams
         // far more often than single progressive files right now. TikTok URLs
@@ -1027,6 +1138,7 @@ class YtDlpEngine(
                             )
                         )
                         succeeded = true
+                        rememberClient(client)
                     } else {
                         lastError = context.getString(R.string.error_output_not_found)
                     }
@@ -1062,7 +1174,8 @@ class YtDlpEngine(
         cookieFile: File? = null,
         language: String = "",
         formatId: String = "",
-        abr: Int = 0
+        abr: Int = 0,
+        song: SongTags = SongTags()
     ): Flow<DownloadState> = callbackFlow {
         val tag = outputPath
         cancelled.remove(tag)
@@ -1072,7 +1185,7 @@ class YtDlpEngine(
         val isTiktok = isTiktokUrl(url)
         val needsResilientRetry = isYt || isTiktok
 
-        val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
+        val clients = clientsFor(url)
         // yt-dlp replaces the extension with the extracted audio format's, so pass
         // the path without extension as the -o template base. Strip only the real
         // trailing extension (titles may contain dots, e.g. "Video 2.0").
@@ -1114,6 +1227,8 @@ class YtDlpEngine(
                 }?.maxByOrNull { it.lastModified() }
 
                 if (actualFile != null && actualFile.exists()) {
+                    rememberClient(client)
+                    tagSong(actualFile, song)
                     trySend(
                         DownloadState.Completed(
                             MediaItem(
@@ -1200,7 +1315,7 @@ class YtDlpEngine(
         val isTiktok = isTiktokUrl(url)
         val needsResilientRetry = isYt || isTiktok
 
-        val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
+        val clients = clientsFor(url)
         // Strip only the real trailing extension (titles may contain dots).
         val outBase = File(outputPath).let { f ->
             File(f.parentFile, f.nameWithoutExtension).absolutePath
@@ -1466,7 +1581,7 @@ class YtDlpEngine(
         val isYt = isYoutubeUrl(url)
         val isTiktok = isTiktokUrl(url)
         val needsResilientRetry = isYt || isTiktok
-        val clients = if (isYt) youtubeClientFallbackOrder else listOf<String?>(null)
+        val clients = clientsFor(url)
 
         for ((index, client) in clients.withIndex()) {
             if (tag in cancelled) return null
@@ -1477,6 +1592,7 @@ class YtDlpEngine(
                 request.addOption("-o", outputPath)
 
                 runTracked(tag, request, onProgress)
+                rememberClient(client)
 
                 val expectedFile = File(outputPath)
                 if (expectedFile.exists()) return expectedFile

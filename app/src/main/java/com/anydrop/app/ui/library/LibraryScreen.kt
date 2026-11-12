@@ -1,6 +1,8 @@
 package com.anydrop.app.ui.library
 
 import androidx.compose.foundation.shape.CircleShape
+import com.anydrop.app.ui.theme.NumberFont
+import com.anydrop.app.engine.sizeLabel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
@@ -698,6 +700,13 @@ private fun LibraryCard(
                     onRename = onRename
                 )
             }
+        }
+        val details = remember(item.quality, item.fileSize) {
+            listOfNotNull(item.quality.takeIf { it.isNotBlank() }, item.fileSize.takeIf { it > 0 }?.let(::sizeLabel))
+                .joinToString(" · ")
+        }
+        if (details.isNotBlank()) {
+            Text(details, color = TextFaint, fontSize = 12.sp, fontFamily = NumberFont, maxLines = 1)
         }
     }
 }
