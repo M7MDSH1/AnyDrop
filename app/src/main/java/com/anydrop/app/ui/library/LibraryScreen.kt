@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.library
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -283,12 +285,12 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = { selectedIds = emptySet() }) {
-                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = AppFont, fontSize = 12.sp)
                 }
                 Text(
                     stringResource(R.string.selected_count, selectedIds.size),
-                    color = Amber,
-                    fontFamily = FontFamily.Monospace,
+                    color = AccentText,
+                    fontFamily = AppFont,
                     fontSize = 13.sp,
                     modifier = Modifier.weight(1f)
                 )
@@ -319,7 +321,7 @@ fun LibraryScreen(
             Text(
                 text = stringResource(R.string.library_title),
                 style = MaterialTheme.typography.headlineMedium,
-                color = Amber,
+                color = AccentText,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -359,7 +361,7 @@ fun LibraryScreen(
                 },
                 color = White.copy(alpha = 0.4f),
                 fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 letterSpacing = tracked(2f)
             )
 
@@ -419,15 +421,15 @@ fun LibraryScreen(
                 Text(
                     text = stringResource(R.string.library_no_results, searchQuery.trim()),
                     color = White.copy(alpha = 0.5f),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
                 )
                 TextButton(onClick = { viewModel.setSearchQuery("") }) {
                     Text(
                         stringResource(R.string.library_clear_search),
-                        color = Amber,
-                        fontFamily = FontFamily.Monospace,
+                        color = AccentText,
+                        fontFamily = AppFont,
                         fontSize = 12.sp,
                         letterSpacing = tracked(1f)
                     )
@@ -447,7 +449,7 @@ fun LibraryScreen(
                         }
                     ),
                     color = White.copy(alpha = 0.3f),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
                 )
@@ -512,7 +514,7 @@ private fun LibrarySearchField(
         value = query,
         onValueChange = { onQueryChange(it.replace("\n", "")) },
         singleLine = true,
-        textStyle = TextStyle(color = White, fontFamily = FontFamily.Monospace, fontSize = 13.sp),
+        textStyle = TextStyle(color = White, fontFamily = AppFont, fontSize = 13.sp),
         cursorBrush = SolidColor(Amber),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
@@ -542,7 +544,7 @@ private fun LibrarySearchField(
                         Text(
                             stringResource(R.string.library_search_hint),
                             color = White.copy(alpha = 0.4f),
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppFont,
                             fontSize = 13.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -580,7 +582,7 @@ private fun SortButton(label: String, active: Boolean, onClick: () -> Unit) {
             text = label,
             color = if (active) Amber else White.copy(alpha = 0.4f),
             fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             letterSpacing = tracked(1f)
         )
     }
@@ -651,7 +653,7 @@ private fun LibraryCard(
                             text = formatDuration(item.durationMs),
                             color = White,
                             fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = AppFont
                         )
                     }
                 }
@@ -680,7 +682,7 @@ private fun LibraryCard(
                     text = item.title,
                     color = White,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     // Titles read in their own direction ("@name …" stays intact in Arabic).

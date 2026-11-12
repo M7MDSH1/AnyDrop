@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -30,7 +32,7 @@ fun DuplicatePromptDialog(
     AlertDialog(
         onDismissRequest = onCancel,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.duplicate_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.duplicate_title), color = AccentText, fontFamily = AppFont) },
         text = {
             Text(
                 text = if (copyCount > 1) {
@@ -39,13 +41,13 @@ fun DuplicatePromptDialog(
                     stringResource(R.string.duplicate_message_single, title)
                 },
                 color = White,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 13.sp
             )
         },
         confirmButton = {
             TextButton(onClick = onReplace) {
-                Text(stringResource(R.string.btn_replace), color = Amber, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_replace), color = AccentText, fontFamily = AppFont)
             }
         },
         dismissButton = {
@@ -54,7 +56,7 @@ fun DuplicatePromptDialog(
                     Text(
                         stringResource(R.string.btn_download_anyway),
                         color = White,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFont,
                         fontSize = 11.sp
                     )
                 }
@@ -62,7 +64,7 @@ fun DuplicatePromptDialog(
                     Text(
                         stringResource(R.string.btn_cancel),
                         color = White.copy(alpha = 0.6f),
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = AppFont
                     )
                 }
             }

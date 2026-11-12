@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.player
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.activity.ComponentActivity
 import android.app.Activity
 import android.content.BroadcastReceiver
@@ -410,10 +412,10 @@ private fun ImageViewerContent(
                         showPrevious -> stringResource(R.string.swipe_prev)
                         else -> ""
                     },
-                    color = Amber,
+                    color = AccentText,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     letterSpacing = tracked(2f),
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -1480,10 +1482,10 @@ private fun SwipeableContent(
                         showPrevious -> stringResource(R.string.swipe_prev)
                         else -> ""
                     },
-                    color = Amber,
+                    color = AccentText,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     letterSpacing = tracked(2f),
                     modifier = Modifier
                         .align(Alignment.Center)

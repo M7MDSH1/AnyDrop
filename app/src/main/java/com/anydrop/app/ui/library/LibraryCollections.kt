@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.library
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -204,7 +206,7 @@ fun AddToCollectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.add_to_collection_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.add_to_collection_title), color = AccentText, fontFamily = AppFont) },
         text = {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
                 items(collections, key = { it.id }) { collection ->
@@ -223,7 +225,7 @@ fun AddToCollectionDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )
@@ -239,7 +241,7 @@ private fun PickerRow(icon: ImageVector, label: String, onClick: () -> Unit, tra
             .padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = Amber, modifier = Modifier.size(20.dp))
+        Icon(icon, null, tint = AccentText, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(12.dp))
         Text(
             label,
@@ -270,7 +272,7 @@ fun CollectionNameDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(title, color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(title, color = AccentText, fontFamily = AppFont) },
         text = {
             Column {
                 OutlinedTextField(
@@ -295,12 +297,12 @@ fun CollectionNameDialog(
         },
         confirmButton = {
             TextButton(onClick = confirm, enabled = valid) {
-                Text(confirmLabel, color = if (valid) Amber else White.copy(alpha = 0.3f), fontFamily = FontFamily.Monospace)
+                Text(confirmLabel, color = if (valid) Amber else White.copy(alpha = 0.3f), fontFamily = AppFont)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )
@@ -311,16 +313,16 @@ fun DeleteCollectionDialog(name: String, onConfirm: () -> Unit, onDismiss: () ->
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.collection_delete_title), color = LedRed, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.collection_delete_title), color = LedRed, fontFamily = AppFont) },
         text = { Text(stringResource(R.string.collection_delete_message, name), color = White, fontSize = 13.sp) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.collection_delete), color = LedRed, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.collection_delete), color = LedRed, fontFamily = AppFont)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )

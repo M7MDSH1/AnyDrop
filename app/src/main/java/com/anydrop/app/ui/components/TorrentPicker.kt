@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,14 +86,14 @@ fun TorrentPicker(
                 Modifier.size(36.dp).clip(CircleShape).background(Amber.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.DeviceHub, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.DeviceHub, contentDescription = null, tint = AccentText, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     stringResource(R.string.torrent_title),
-                    color = Amber,
-                    fontFamily = FontFamily.Monospace,
+                    color = AccentText,
+                    fontFamily = AppFont,
                     fontSize = 11.sp,
                     letterSpacing = tracked(1.5f)
                 )
@@ -100,14 +102,14 @@ fun TorrentPicker(
                     stringResource(R.string.torrent_summary, files.size, ltr(sizeLabel(meta.totalSize))),
                     color = White.copy(alpha = 0.5f),
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = AppFont
                 )
             }
             if (shown.size > 1) {
                 Text(
                     stringResource(if (allSelected) R.string.clear_all else R.string.select_all),
-                    color = Amber,
-                    fontFamily = FontFamily.Monospace,
+                    color = AccentText,
+                    fontFamily = AppFont,
                     fontSize = 11.sp,
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
@@ -164,7 +166,7 @@ fun TorrentPicker(
                 if (chosen.isEmpty()) stringResource(R.string.share_record_count, 0)
                 else stringResource(R.string.torrent_record, chosen.size, ltr(sizeLabel(chosen.sumOf { it.size }))),
                 color = if (chosen.isEmpty()) White.copy(alpha = 0.4f) else OnAccent,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = tracked(2f)
@@ -196,7 +198,7 @@ private fun TorrentFileRow(file: TorrentFile, selected: Boolean, onToggle: () ->
                 else -> Icons.Filled.Movie
             },
             contentDescription = null,
-            tint = Amber,
+            tint = AccentText,
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(10.dp))
@@ -215,7 +217,7 @@ private fun TorrentFileRow(file: TorrentFile, selected: Boolean, onToggle: () ->
                 listOf(file.extension.uppercase(), sizeLabel(file.size)).filter { it.isNotEmpty() }.joinToString(" · "),
                 color = White.copy(alpha = 0.45f),
                 fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace
+                fontFamily = AppFont
             )
         }
         Spacer(Modifier.width(8.dp))

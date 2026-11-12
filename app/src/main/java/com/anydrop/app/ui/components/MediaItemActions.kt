@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
@@ -74,8 +76,8 @@ fun MediaItemDropdown(
     val context = LocalContext.current
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text(stringResource(R.string.menu_share), fontFamily = FontFamily.Monospace) },
-            leadingIcon = { Icon(Icons.Default.Share, null, tint = Amber) },
+            text = { Text(stringResource(R.string.menu_share), fontFamily = AppFont) },
+            leadingIcon = { Icon(Icons.Default.Share, null, tint = AccentText) },
             onClick = {
                 onDismiss()
                 shareMedia(context, item)
@@ -83,25 +85,25 @@ fun MediaItemDropdown(
         )
         onAddToCollection?.let { add ->
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.add_to_collection), fontFamily = FontFamily.Monospace) },
-                leadingIcon = { Icon(Icons.Default.CreateNewFolder, null, tint = Amber) },
+                text = { Text(stringResource(R.string.add_to_collection), fontFamily = AppFont) },
+                leadingIcon = { Icon(Icons.Default.CreateNewFolder, null, tint = AccentText) },
                 onClick = { onDismiss(); add() }
             )
         }
         onRename?.let { rename ->
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_rename), fontFamily = FontFamily.Monospace) },
-                leadingIcon = { Icon(Icons.Default.Edit, null, tint = Amber) },
+                text = { Text(stringResource(R.string.menu_rename), fontFamily = AppFont) },
+                leadingIcon = { Icon(Icons.Default.Edit, null, tint = AccentText) },
                 onClick = { onDismiss(); rename() }
             )
         }
         DropdownMenuItem(
-            text = { Text(stringResource(R.string.menu_delete), fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.menu_delete), fontFamily = AppFont) },
             leadingIcon = { Icon(Icons.Default.Delete, null, tint = LedRed) },
             onClick = { onDismiss(); onDelete() }
         )
         DropdownMenuItem(
-            text = { Text(stringResource(R.string.menu_info), fontFamily = FontFamily.Monospace) },
+            text = { Text(stringResource(R.string.menu_info), fontFamily = AppFont) },
             leadingIcon = { Icon(Icons.Default.Info, null, tint = White) },
             onClick = { onDismiss(); onInfo() }
         )
@@ -173,7 +175,7 @@ private fun RenameMediaDialog(item: MediaItem, onDismiss: () -> Unit, onConfirm:
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.rename_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.rename_title), color = AccentText, fontFamily = AppFont) },
         text = {
             OutlinedTextField(
                 value = field,
@@ -198,12 +200,12 @@ private fun RenameMediaDialog(item: MediaItem, onDismiss: () -> Unit, onConfirm:
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(field.text) }, enabled = valid) {
-                Text(stringResource(R.string.btn_save), color = if (valid) Amber else White.copy(alpha = 0.3f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_save), color = if (valid) Amber else White.copy(alpha = 0.3f), fontFamily = AppFont)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )
@@ -219,24 +221,24 @@ fun DeleteConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.delete_title), color = LedRed, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.delete_title), color = LedRed, fontFamily = AppFont) },
         text = {
             Text(
                 if (count > 1) stringResource(R.string.delete_confirm_multi, count)
                 else stringResource(R.string.delete_confirm_single),
                 color = White,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 13.sp
             )
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.delete_title), color = LedRed, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.delete_title), color = LedRed, fontFamily = AppFont)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )
@@ -252,7 +254,7 @@ fun MediaInfoDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.info_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.info_title), color = AccentText, fontFamily = AppFont) },
         text = {
             Column {
                 InfoRow(stringResource(R.string.info_title_label), item.title)
@@ -271,7 +273,7 @@ fun MediaInfoDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_close), color = Amber, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_close), color = AccentText, fontFamily = AppFont)
             }
         }
     )
@@ -280,8 +282,8 @@ fun MediaInfoDialog(
 @Composable
 private fun InfoRow(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(label.uppercase(), color = Amber.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-        Text(value, color = White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        Text(label.uppercase(), color = AccentText.copy(alpha = 0.7f), fontFamily = AppFont, fontSize = 9.sp)
+        Text(value, color = White, fontFamily = AppFont, fontSize = 12.sp)
         Spacer(Modifier.height(10.dp))
     }
 }
@@ -289,11 +291,11 @@ private fun InfoRow(label: String, value: String) {
 @Composable
 private fun InfoLinkRow(label: String, value: String, url: String, context: android.content.Context) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(label.uppercase(), color = Amber.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+        Text(label.uppercase(), color = AccentText.copy(alpha = 0.7f), fontFamily = AppFont, fontSize = 9.sp)
         Text(
             value,
-            color = Amber,
-            fontFamily = FontFamily.Monospace,
+            color = AccentText,
+            fontFamily = AppFont,
             fontSize = 12.sp,
             textDecoration = TextDecoration.Underline,
             modifier = Modifier.fillMaxWidth().clickableNoRipple {

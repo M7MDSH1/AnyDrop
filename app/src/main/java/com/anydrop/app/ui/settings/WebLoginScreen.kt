@@ -1,5 +1,6 @@
 package com.anydrop.app.ui.settings
 
+import com.anydrop.app.ui.theme.AppFont
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -51,12 +52,12 @@ fun WebLoginScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = AppFont, fontSize = 12.sp)
             }
             Text(
                 stringResource(R.string.web_login_hint),
                 color = White.copy(alpha = 0.6f),
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 12.dp)
             )
@@ -69,7 +70,7 @@ fun WebLoginScreen(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Amber, contentColor = Black)
             ) {
-                Text(stringResource(R.string.btn_done), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                Text(stringResource(R.string.btn_done), fontFamily = AppFont, fontSize = 12.sp)
             }
         }
 

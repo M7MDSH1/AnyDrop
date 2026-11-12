@@ -1,5 +1,7 @@
 package com.anydrop.app
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -247,8 +249,8 @@ private fun ShareSheet(
             // Header
             Text(
                 stringResource(R.string.brand_wordmark),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
+                color = AccentText,
+                fontFamily = AppFont,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = tracked(3f)
@@ -256,7 +258,7 @@ private fun ShareSheet(
             Text(
                 stringResource(R.string.share_select_what),
                 color = White.copy(alpha = 0.5f),
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 11.sp
             )
             if (!isTorrent && !LinkList.isList(sharedUrl)) {
@@ -269,7 +271,7 @@ private fun ShareSheet(
                     stringResource(R.string.found_on_page),
                     color = StatusGreen,
                     fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(StatusGreen.copy(alpha = 0.12f))
@@ -290,7 +292,7 @@ private fun ShareSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Amber, modifier = Modifier.size(40.dp))
+                            CircularProgressIndicator(color = AccentText, modifier = Modifier.size(40.dp))
                             Spacer(Modifier.height(14.dp))
                             Text(
                                 stringResource(
@@ -302,7 +304,7 @@ private fun ShareSheet(
                                     }
                                 ),
                                 color = White.copy(alpha = 0.6f),
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = AppFont,
                                 fontSize = 12.sp
                             )
                         }
@@ -314,7 +316,7 @@ private fun ShareSheet(
                     Text(
                         error.message,
                         color = StatusRed,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFont,
                         fontSize = 12.sp,
                         lineHeight = 17.sp
                     )
@@ -453,14 +455,14 @@ private fun ShareQualityList(
                     Text(
                         "$icon  ${fmt.resolution}",
                         color = if (isSel) Amber else White,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFont,
                         fontSize = 14.sp,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
                         fmt.extension.uppercase(),
-                        color = Amber.copy(alpha = 0.8f),
-                        fontFamily = FontFamily.Monospace,
+                        color = AccentText.copy(alpha = 0.8f),
+                        fontFamily = AppFont,
                         fontSize = 11.sp
                     )
                 }
@@ -480,7 +482,7 @@ private fun ShareQualityList(
             Text(
                 stringResource(R.string.share_record),
                 color = if (selected == null) White.copy(alpha = 0.4f) else Black,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = tracked(3f)

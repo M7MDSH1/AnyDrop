@@ -157,7 +157,7 @@ class AnyDropApp : Application() {
             val notification = NotificationCompat.Builder(this, Constants.DOWNLOAD_CHANNEL_ID)
                 .setContentTitle(title.ifBlank { getString(R.string.app_name) })
                 .setContentText(getString(R.string.notification_download_interrupted))
-                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setSmallIcon(R.drawable.ic_stat_anydrop)
                 .setAutoCancel(true)
                 .setContentIntent(DownloadService.openDownloadsIntent(this))
                 .build()

@@ -1,5 +1,17 @@
 package com.anydrop.app.ui.tape_deck.components
 
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import com.anydrop.app.ui.components.PillButton
+import com.anydrop.app.ui.components.PillStyle
+import com.anydrop.app.ui.theme.NumberFont
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
+
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -75,23 +87,21 @@ fun DownloadQueuePanel(
 ) {
     if (tasks.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 stringResource(R.string.queue_title),
-                color = White.copy(alpha = 0.55f),
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = tracked(2f),
+                color = White,
+                style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f)
             )
             // Several running: pause them together; several paused: resume them together.
-            if (tasks.count { it.isActive } > 1) HeaderAction(stringResource(R.string.queue_pause_all), onPauseAll)
-            if (tasks.count { it.status == TaskStatus.CANCELLED } > 1) HeaderAction(stringResource(R.string.queue_resume_all), onResumeAll)
-            if (tasks.any { !it.isActive }) HeaderAction(stringResource(R.string.queue_clear), onClearFinished)
+            if (tasks.count { it.isActive } > 1) PillButton(stringResource(R.string.queue_pause_all), onPauseAll, style = PillStyle.Tonal, small = true)
+            if (tasks.count { it.status == TaskStatus.CANCELLED } > 1) PillButton(stringResource(R.string.queue_resume_all), onResumeAll, style = PillStyle.Tonal, small = true)
+            if (tasks.any { !it.isActive }) PillButton(stringResource(R.string.queue_clear), onClearFinished, style = PillStyle.Ghost, small = true)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
         val ordered = tasks.sortedWith(compareBy<DownloadTask> { if (it.isActive) 0 else 1 }.thenByDescending { it.startedAt })
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             ordered.take(12).forEach { task ->
                 TaskCard(task, onStop, onRetry, onOpen, onDismiss, onUseMobileData)
             }
@@ -108,30 +118,27 @@ private fun TaskCard(
     onDismiss: (String) -> Unit,
     onUseMobileData: (String) -> Unit
 ) {
-    val statusColor = when (task.status) {
-        TaskStatus.RUNNING -> Amber
-        TaskStatus.DONE -> StatusGreen
-        TaskStatus.FAILED -> StatusRed
-        TaskStatus.CANCELLED -> White.copy(alpha = 0.45f)
+    val statusColor = when {
+        task.status == TaskStatus.DONE -> StatusGreen
+        task.status == TaskStatus.FAILED -> StatusRed
+        task.waitingForWifi -> AccentText
+        else -> TextMuted
     }
     val progress by animateFloatAsState((task.percent / 100f).coerceIn(0f, 1f), tween(400), label = "task-progress")
+    val shape = RoundedCornerShape(20.dp)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .background(Black)
-            .border(1.dp, if (task.isActive) Amber.copy(alpha = 0.35f) else Hairline, RoundedCornerShape(12.dp))
             .clickable(enabled = task.status == TaskStatus.DONE) { onOpen(task.tag) }
-            .padding(12.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
             .animateContentSize()
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(statusColor.copy(alpha = 0.14f)),
+                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(MediumGray),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -139,132 +146,125 @@ private fun TaskCard(
                         task.status == TaskStatus.DONE -> Icons.Filled.CheckCircle
                         task.kind == TaskKind.AUDIO -> Icons.Filled.MusicNote
                         task.kind == TaskKind.IMAGE -> Icons.Filled.Image
-                        else -> Icons.Filled.Videocam
+                        else -> Icons.Filled.Movie
                     },
                     contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
+                    tint = if (task.status == TaskStatus.DONE) StatusGreen else TextMuted,
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     task.title,
                     color = White,
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     // English titles read left-to-right even inside the Arabic UI, and vice versa.
                     style = TextStyle(textDirection = TextDirection.Content)
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
-                    listOf(task.quality.ltr(), statusLabel(task)).filter { it.isNotBlank() }.joinToString(" · "),
+                    listOf(task.quality.ltr(), statusLabel(task)).filter { it.isNotBlank() }.joinToString(", "),
                     color = statusColor,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.width(6.dp))
             when (task.status) {
-                TaskStatus.RUNNING -> ActionChip(stringResource(R.string.task_stop), StatusRed) { onStop(task.tag) }
-                TaskStatus.FAILED -> ActionChip(stringResource(R.string.btn_retry), Amber) { onRetry(task.tag) }
+                TaskStatus.RUNNING -> IconButton(onClick = { onStop(task.tag) }) {
+                    Icon(Icons.Filled.Pause, contentDescription = stringResource(R.string.task_stop), tint = White)
+                }
                 // Paused: RESUME carries on from the partial file.
-                TaskStatus.CANCELLED -> ActionChip(stringResource(R.string.task_resume), Amber) { onRetry(task.tag) }
-                TaskStatus.DONE -> ActionChip(stringResource(R.string.task_open), StatusGreen) { onOpen(task.tag) }
+                TaskStatus.CANCELLED -> PillButton(stringResource(R.string.task_resume), { onRetry(task.tag) }, style = PillStyle.Tonal, small = true)
+                TaskStatus.DONE -> PillButton(stringResource(R.string.task_open), { onOpen(task.tag) }, style = PillStyle.Tonal, small = true)
+                TaskStatus.FAILED -> Unit
             }
             if (!task.isActive) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.task_dismiss),
-                    tint = White.copy(alpha = 0.4f),
-                    modifier = Modifier
-                        .padding(start = 4.dp)
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .clickable { onDismiss(task.tag) }
-                        .padding(5.dp)
-                )
+                IconButton(onClick = { onDismiss(task.tag) }) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.task_dismiss), tint = TextMuted)
+                }
             }
         }
 
-        if (task.status == TaskStatus.RUNNING) {
-            Spacer(Modifier.height(10.dp))
-            if (task.queued) {
+        if (task.status == TaskStatus.RUNNING || task.status == TaskStatus.CANCELLED) {
+            Spacer(Modifier.height(12.dp))
+            val paused = task.status == TaskStatus.CANCELLED
+            val track = Hairline
+            val fill = if (paused) TextFaint else Amber
+            if (!paused && task.queued) {
                 // Waiting: an empty track, not the "busy" animation.
                 LinearProgressIndicator(
                     progress = { 0f },
-                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
-                    color = Amber,
-                    trackColor = MediumGray,
-                    strokeCap = StrokeCap.Round
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                    color = fill, trackColor = track, strokeCap = StrokeCap.Round
                 )
-            } else if (task.percent <= 0) {
+            } else if (!paused && task.percent <= 0) {
                 LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
-                    color = Amber,
-                    trackColor = MediumGray,
-                    strokeCap = StrokeCap.Round
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                    color = fill, trackColor = track, strokeCap = StrokeCap.Round
                 )
             } else {
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(CircleShape),
-                    color = Amber,
-                    trackColor = MediumGray,
-                    strokeCap = StrokeCap.Round
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                    color = fill, trackColor = track, strokeCap = StrokeCap.Round
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    listOf(task.sizeText.ltr(), task.speed.ltr(), task.eta.takeIf { it.isNotBlank() }?.let { "⏱ ${it.ltr()}" }.orEmpty())
-                        .filter { it.isNotBlank() }.joinToString("  ·  ")
-                        .ifBlank { task.phase },
-                    color = White.copy(alpha = 0.6f),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (task.percent > 0) {
+            if (!paused) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (task.percent > 0) {
+                        Text("${task.percent}%", color = White, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = NumberFont)
+                        Spacer(Modifier.width(12.dp))
+                    }
                     Text(
-                        "${task.percent}%",
-                        color = Amber,
+                        listOf(task.sizeText.ltr(), task.speed.ltr(), task.eta.takeIf { it.isNotBlank() }?.ltr().orEmpty())
+                            .filter { it.isNotBlank() }.joinToString("   ")
+                            .ifBlank { task.phase },
+                        color = TextMuted,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = NumberFont,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
             if (task.waitingForWifi) {
-                Spacer(Modifier.height(8.dp))
-                ActionChip(stringResource(R.string.task_use_mobile_data), Amber) { onUseMobileData(task.tag) }
+                Spacer(Modifier.height(10.dp))
+                PillButton(stringResource(R.string.task_use_mobile_data), { onUseMobileData(task.tag) }, style = PillStyle.Tonal, small = true)
             }
         }
 
-        if (task.status == TaskStatus.FAILED && task.error.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                task.error,
-                color = White.copy(alpha = 0.75f),
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(8.dp))
-            CopyErrorDetailsButton(
-                message = task.error,
-                detail = task.errorDetail,
-                link = task.request.webpageUrl.ifBlank { task.request.url },
-                color = StatusRed,
-                quality = task.quality
-            )
+        if (task.status == TaskStatus.FAILED) {
+            if (task.error.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    task.error,
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillButton(stringResource(R.string.btn_retry), { onRetry(task.tag) }, small = true)
+                if (task.error.isNotBlank()) {
+                    CopyErrorDetailsButton(
+                        message = task.error,
+                        detail = task.errorDetail,
+                        link = task.request.webpageUrl.ifBlank { task.request.url },
+                        color = StatusRed,
+                        quality = task.quality
+                    )
+                }
+            }
         }
     }
 }
@@ -273,40 +273,10 @@ private fun TaskCard(
 private fun statusLabel(task: DownloadTask): String = when (task.status) {
     // While running, say which step it's on ("Downloading audio…") once sizes are showing.
     TaskStatus.RUNNING -> if (task.sizeText.isNotBlank() || task.speed.isNotBlank()) task.phase else ""
-    TaskStatus.DONE -> listOf(stringResource(R.string.task_saved), task.sizeText.ltr()).filter { it.isNotBlank() }.joinToString(" · ")
+    TaskStatus.DONE -> listOf(stringResource(R.string.task_saved), task.sizeText.ltr()).filter { it.isNotBlank() }.joinToString(", ")
     TaskStatus.FAILED -> stringResource(R.string.task_failed)
     TaskStatus.CANCELLED -> stringResource(R.string.task_stopped)
 }
 
 /** Keeps "39.2 MB" / "1080p" in reading order inside Arabic text (Unicode LTR isolate). */
 private fun String.ltr(): String = if (isBlank()) this else "⁦$this⁩"
-
-@Composable
-private fun HeaderAction(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        color = Amber,
-        fontSize = 11.sp,
-        fontFamily = FontFamily.Monospace,
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    )
-}
-
-@Composable
-private fun ActionChip(label: String, color: Color, onClick: () -> Unit) {
-    Text(
-        label,
-        color = color,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace,
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    )
-}

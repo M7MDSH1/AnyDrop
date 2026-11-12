@@ -1,5 +1,25 @@
 package com.anydrop.app.ui.tape_deck
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.semantics.Role
+import com.anydrop.app.ui.components.AppMark
+import com.anydrop.app.ui.components.PillButton
+import com.anydrop.app.ui.components.PillStyle
+import com.anydrop.app.ui.components.SectionLabel
+import com.anydrop.app.ui.theme.AccentSoft
+import com.anydrop.app.ui.theme.NumberFont
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
+
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
@@ -64,11 +84,8 @@ import com.anydrop.app.ui.components.ErrorDetails
 import com.anydrop.app.ui.tape_deck.components.LinkField
 import com.anydrop.app.ui.tape_deck.components.RecordButton
 import com.anydrop.app.ui.tape_deck.components.DeckError
-import com.anydrop.app.ui.tape_deck.components.DeckPanel
 import com.anydrop.app.ui.tape_deck.components.DownloadQueuePanel
 import com.anydrop.app.ui.theme.StatusGreen
-import com.anydrop.app.ui.tape_deck.components.LEDIndicator
-import com.anydrop.app.ui.tape_deck.components.ReelAnimation
 import com.anydrop.app.util.Constants
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -186,10 +203,13 @@ fun TapeDeckScreen(
         )
     }
 
-    // The reels turn while anything is downloading; several downloads can run at once.
-    val isSpinning = tasks.any { it.isActive }
     val canDownload = selectedFormat != null && url.isNotBlank()
-    val level = tasks.filter { it.isActive }.maxOfOrNull { it.percent }?.div(100f) ?: 0f
+    // Whole-page lists, carousels and torrents have their own download button; a single video
+    // gets the one at the bottom of the screen.
+    val pageItems = remember(availableFormats) { if (availableFormats.isWholePage) availableFormats.pageItems() else emptyList() }
+    val postItems = remember(availableFormats) { if (availableFormats.isWholePage) emptyList() else availableFormats.postItems() }
+    val torrentFiles = remember(availableFormats) { availableFormats.torrentFileList() }
+    val multiItem = postItems.isNotEmpty() || pageItems.isNotEmpty() || torrentFiles.isNotEmpty()
 
     // A tapped download notification scrolls down to the downloads list.
     val scrollState = rememberScrollState()
@@ -202,57 +222,15 @@ fun TapeDeckScreen(
         showDownloadsRequest.value = false
     }
 
+    Column(Modifier.fillMaxSize().background(DarkGray)) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .background(DarkGray)
+            .weight(1f)
+            .fillMaxWidth()
             .verticalScroll(scrollState)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
-        Text(
-            text = stringResource(R.string.brand_wordmark),
-            style = MaterialTheme.typography.displayLarge,
-            color = Amber,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
-
-        Text(
-            text = stringResource(R.string.tape_deck_version),
-            color = White.copy(alpha = 0.5f),
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = tracked(4f)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        DeckPanel {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                LEDIndicator(label = stringResource(R.string.led_power), isOn = true, onColor = LedGreen)
-                LEDIndicator(label = stringResource(R.string.led_rec), isOn = isSpinning, onColor = LedRed, blink = isSpinning)
-                LEDIndicator(label = stringResource(R.string.led_signal), isOn = isCookieImported, onColor = LedBlue)
-                LEDIndicator(label = stringResource(R.string.led_link), isOn = url.isNotBlank(), onColor = Amber)
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ReelAnimation(size = 96.dp, isSpinning = isSpinning, reelColor = Amber, trackColor = MediumGray)
-                ReelAnimation(size = 96.dp, isSpinning = isSpinning, reelColor = Amber, trackColor = MediumGray)
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            VUMeter(level = level)
-        }
+        DeckHeader()
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -260,37 +238,38 @@ fun TapeDeckScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Black)
-                    .border(1.dp, LedGreen.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .border(1.dp, Hairline, RoundedCornerShape(16.dp))
+                    .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.link_detected),
                         color = StatusGreen,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = tracked(2f)
+                        fontSize = 12.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
                     )
                     Text(
                         text = link,
-                        color = White.copy(alpha = 0.8f),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
+                        color = TextMuted,
+                        fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                TextButton(onClick = {
-                    viewModel.onUrlChange(link)
-                    detectedLink = null
-                }) {
-                    Text(stringResource(R.string.load_link), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
-                }
-                TextButton(onClick = { detectedLink = null }) {
-                    Text("✕", color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
+                PillButton(
+                    text = stringResource(R.string.load_link),
+                    onClick = {
+                        viewModel.onUrlChange(link)
+                        detectedLink = null
+                    },
+                    style = PillStyle.Tonal,
+                    small = true
+                )
+                IconButton(onClick = { detectedLink = null }) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.btn_cancel), tint = TextMuted)
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -326,7 +305,7 @@ fun TapeDeckScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CircularProgressIndicator(
-                    color = Amber,
+                    color = AccentText,
                     strokeWidth = 2.dp,
                     modifier = Modifier.width(16.dp).height(16.dp)
                 )
@@ -342,7 +321,7 @@ fun TapeDeckScreen(
                     ),
                     color = White.copy(alpha = 0.6f),
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = AppFont
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -354,7 +333,7 @@ fun TapeDeckScreen(
                 text = stringResource(R.string.found_on_page),
                 color = StatusGreen,
                 fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 letterSpacing = tracked(1f),
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
@@ -371,10 +350,6 @@ fun TapeDeckScreen(
 
         // Whole page: everything on it, to pick from. Otherwise a post with several
         // photos/videos (a carousel) offers its slides, and a single video its qualities.
-        val pageItems = remember(availableFormats) { if (availableFormats.isWholePage) availableFormats.pageItems() else emptyList() }
-        val postItems = remember(availableFormats) { if (availableFormats.isWholePage) emptyList() else availableFormats.postItems() }
-        val torrentFiles = remember(availableFormats) { availableFormats.torrentFileList() }
-        val multiItem = postItems.isNotEmpty() || pageItems.isNotEmpty() || torrentFiles.isNotEmpty()
         if (torrentFiles.isNotEmpty()) {
             TorrentPicker(
                 name = pageTitle,
@@ -455,9 +430,9 @@ fun TapeDeckScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     stringResource(R.string.preview_label),
-                    color = Amber.copy(alpha = 0.7f),
+                    color = AccentText.copy(alpha = 0.7f),
                     fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     letterSpacing = tracked(3f)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -469,14 +444,11 @@ fun TapeDeckScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        if (!multiItem) {
-            RecordButton(
-                enabled = canDownload,
-                onRecord = { ensureNotificationPermission { viewModel.startDownload() } }
-            )
+        if (url.isBlank() && availableFormats.isEmpty() && !isLoadingFormats) {
+            DeckEmptyState()
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Box(Modifier.onGloballyPositioned { downloadsTop = it.positionInParent().y.roundToInt() }) {
             DownloadQueuePanel(
@@ -494,6 +466,49 @@ fun TapeDeckScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
     }
+
+    // The Download button stays in reach under the scrolling content.
+    if (!multiItem && url.isNotBlank()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(DarkGray)
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            val size = selectedFormat?.filesize?.let(::formatFileSize).orEmpty()
+            RecordButton(
+                enabled = canDownload,
+                label = if (size.isNotEmpty()) stringResource(R.string.btn_download_size, size) else stringResource(R.string.btn_record),
+                onRecord = { ensureNotificationPermission { viewModel.startDownload() } }
+            )
+        }
+    }
+    }
+}
+
+/** The app mark and name; the screen's only header. */
+@Composable
+private fun DeckHeader() {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(40.dp)) {
+        AppMark(28.dp)
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, color = White)
+    }
+}
+
+/** Nothing pasted yet: what to do, in one line. */
+@Composable
+private fun DeckEmptyState() {
+    Column(
+        Modifier.fillMaxWidth().padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        AppMark(72.dp)
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(R.string.deck_empty_title), style = MaterialTheme.typography.titleLarge, color = White)
+        Spacer(Modifier.height(4.dp))
+        Text(stringResource(R.string.deck_empty_hint), color = TextMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
+    }
 }
 
 @Composable
@@ -503,40 +518,31 @@ private fun FormatSelector(
     onSelect: (FormatInfo) -> Unit,
     showCovers: Boolean = false
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = stringResource(R.string.select_quality),
-            color = White.copy(alpha = 0.4f),
-            fontSize = 9.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = tracked(2f)
-        )
+    Column(Modifier.fillMaxWidth()) {
+        SectionLabel(stringResource(R.string.select_quality))
         Spacer(modifier = Modifier.height(8.dp))
         val grouped = formats
             .filter { it.resolution != "unknown" }
             .distinctBy { "${it.id}|${it.resolution}|${it.directUrl}|${it.imageUrl}" }
-        val rowHeight = if (showCovers) 56 else 40
+        val rowHeight = if (showCovers) 64 else 52
         // Tall enough for ~6 rows without an inner scroll; longer lists scroll inside.
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().height((grouped.size.coerceIn(1, 6) * (rowHeight + 4)).dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.fillMaxWidth().height((grouped.size.coerceIn(1, 6) * (rowHeight + 8)).dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(grouped) { format ->
                 // Page images have no format id, so the label is part of the identity.
                 val isSelected = selectedFormat?.id == format.id && selectedFormat.resolution == format.resolution
+                val shape = RoundedCornerShape(16.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(rowHeight.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Amber.copy(alpha = 0.16f) else Black)
-                        .border(1.dp, if (isSelected) Amber else Hairline, RoundedCornerShape(8.dp))
-                        .clickable { onSelect(format) }
-                        .padding(horizontal = if (showCovers) 6.dp else 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .clip(shape)
+                        .background(if (isSelected) AccentSoft else Black)
+                        .then(if (isSelected) Modifier.border(1.5.dp, Amber, shape) else Modifier)
+                        .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(format) })
+                        .padding(horizontal = if (showCovers) 8.dp else 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (showCovers && !format.isImage && !format.isAudioOnly) {
@@ -547,32 +553,32 @@ private fun FormatSelector(
                             modifier = Modifier.width(78.dp).aspectRatio(16f / 9f)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
+                    } else {
+                        Icon(
+                            if (isSelected) Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                            contentDescription = null,
+                            tint = if (isSelected) AccentText else TextFaint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
                     }
                     Text(
-                        text = when {
-                            format.isImage -> "▣ ${format.resolution}"
-                            format.isAudioOnly -> "♪ ${format.resolution}"
-                            else -> "● ${format.resolution}"
-                        },
-                        color = if (isSelected) Amber else White.copy(alpha = 0.85f),
-                        fontSize = 12.sp,
-                        fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.Bold else null,
-                        fontFamily = FontFamily.Monospace,
+                        text = format.resolution,
+                        color = White,
+                        fontSize = 16.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = format.extension.uppercase(),
-                            color = White.copy(alpha = 0.4f),
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = formatFileSize(format.filesize),
-                            color = White.copy(alpha = 0.4f),
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
+                    Text(
+                        text = format.extension.uppercase(),
+                        color = TextFaint,
+                        fontSize = 12.sp,
+                        fontFamily = NumberFont
+                    )
+                    val size = formatFileSize(format.filesize)
+                    if (size.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = size, color = TextMuted, fontSize = 13.sp, fontFamily = NumberFont)
                     }
                 }
             }
@@ -594,42 +600,4 @@ private fun String.isLinkLike(): Boolean {
     val c = lowercase()
     return c.startsWith("http://") || c.startsWith("https://") || Magnet.isMagnet(c) ||
         Constants.SUPPORTED_DOMAINS.any { c.contains(it) }
-}
-
-@Composable
-private fun VUMeter(modifier: Modifier = Modifier, level: Float = 0f) {
-    val clampedLevel = level.coerceIn(0f, 1f)
-    val segments = 12
-
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            for (i in 0 until segments) {
-                val threshold = (i + 1).toFloat() / segments
-                val color = when {
-                    i < segments * 0.6f -> VuGreen
-                    i < segments * 0.85f -> VuYellow
-                    else -> VuRed
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        .background(if (clampedLevel >= threshold) color else MediumGray)
-                )
-            }
-        }
-        Text(
-            text = stringResource(R.string.vu_meter),
-            color = White.copy(alpha = 0.3f),
-            fontSize = 8.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = tracked(2f)
-        )
-    }
 }

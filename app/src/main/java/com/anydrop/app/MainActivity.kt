@@ -1,5 +1,7 @@
 package com.anydrop.app
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -28,7 +30,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -76,6 +81,8 @@ import com.anydrop.app.ui.settings.AppearanceViewModel
 import com.anydrop.app.ui.update.UpdatePrompt
 import com.anydrop.app.ui.update.UpdateViewModel
 import com.anydrop.app.util.Constants
+import com.anydrop.app.ui.theme.AccentSoft
+import com.anydrop.app.ui.theme.TextMuted
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -219,7 +226,7 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
         Text(
             stringResource(R.string.brand_wordmark),
             style = MaterialTheme.typography.displayLarge,
-            color = Amber,
+            color = AccentText,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center
         )
@@ -227,7 +234,7 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
         Text(
             stringResource(R.string.permission_message),
             color = White.copy(alpha = 0.7f),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             fontSize = 14.sp,
             textAlign = TextAlign.Center
         )
@@ -240,14 +247,14 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
             },
             colors = ButtonDefaults.buttonColors(containerColor = Amber)
         ) {
-            Text(stringResource(R.string.open_settings), color = OnAccent, fontFamily = FontFamily.Monospace)
+            Text(stringResource(R.string.open_settings), color = OnAccent, fontFamily = AppFont)
         }
         Spacer(modifier = Modifier.height(16.dp))
         TextButton(onClick = onSkipped) {
             Text(
                 stringResource(R.string.skip_downloads_may_fail),
                 color = White.copy(alpha = 0.4f),
-                fontFamily = FontFamily.Monospace
+                fontFamily = AppFont
             )
         }
     }
@@ -256,10 +263,10 @@ private fun PermissionGate(onGranted: () -> Unit, onSkipped: () -> Unit) {
 private data class BottomNavItem(val route: String, @StringRes val labelRes: Int, val icon: ImageVector)
 
 private val bottomNavItems = listOf(
-    BottomNavItem(Routes.TAPE_DECK, R.string.nav_deck, Icons.Filled.Videocam),
+    BottomNavItem(Routes.TAPE_DECK, R.string.nav_deck, Icons.Filled.Download),
     BottomNavItem(Routes.BROWSER, R.string.nav_browser, Icons.Filled.Language),
-    BottomNavItem(Routes.LIBRARY, R.string.nav_library, Icons.Filled.LibraryMusic),
-    BottomNavItem(Routes.AUDIO, R.string.nav_audio, Icons.Filled.MusicNote),
+    BottomNavItem(Routes.LIBRARY, R.string.nav_library, Icons.Filled.VideoLibrary),
+    BottomNavItem(Routes.AUDIO, R.string.nav_audio, Icons.Filled.Headphones),
     BottomNavItem(Routes.SETTINGS, R.string.nav_settings, Icons.Filled.Settings)
 )
 
@@ -318,7 +325,7 @@ fun AnyDropMainScreen(
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar(containerColor = Black, contentColor = White) {
+                NavigationBar(containerColor = Black, contentColor = White, tonalElevation = 0.dp) {
                     bottomNavItems.forEach { item ->
                         val selected = currentDestination?.hierarchy?.any {
                             it.route == item.route
@@ -349,13 +356,19 @@ fun AnyDropMainScreen(
                                     Icon(imageVector = item.icon, contentDescription = stringResource(item.labelRes))
                                 }
                             },
-                            label = { Text(text = stringResource(item.labelRes), fontFamily = FontFamily.Monospace, fontSize = 9.sp) },
+                            label = {
+                                Text(
+                                    text = stringResource(item.labelRes),
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium
+                                )
+                            },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Amber,
-                                selectedTextColor = Amber,
-                                unselectedIconColor = White.copy(alpha = 0.4f),
-                                unselectedTextColor = White.copy(alpha = 0.4f),
-                                indicatorColor = MediumGray
+                                selectedIconColor = AccentText,
+                                selectedTextColor = White,
+                                unselectedIconColor = TextMuted,
+                                unselectedTextColor = TextMuted,
+                                indicatorColor = AccentSoft
                             )
                         )
                     }
