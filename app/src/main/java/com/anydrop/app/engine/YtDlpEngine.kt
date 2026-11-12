@@ -395,7 +395,7 @@ class YtDlpEngine(
             // yt-dlp reads. It's asked alongside the page, and its list wins when it has voices.
             val signedIn = isSignedIn(cookieFile, host)
             val found = coroutineScope {
-                val voiced = if (signedIn) async {
+                val voiced = if (signedIn && settingsRepository.audioLanguages) async {
                     try {
                         ytdlpFormats(url, cookieFile)
                     } catch (e: CancellationException) {
@@ -477,7 +477,8 @@ class YtDlpEngine(
         // Signed in, Instagram may add translated voices to the video's data, which only yt-dlp
         // reads: it's asked too, and its version of the post's video is used when it has voices.
         val signedIn = pageOnly && isSignedIn(cookieFile, host)
-        val main = async { if (pageOnly && !signedIn) null else ytdlpOrNull() }
+        val askVoices = signedIn && settingsRepository.audioLanguages
+        val main = async { if (pageOnly && !askVoices) null else ytdlpOrNull() }
         val page = async {
             try {
                 webExtractor.extract(url, usesDesktopPage(host), timeoutMs = 30_000, wholePage = true)
@@ -496,7 +497,7 @@ class YtDlpEngine(
         val ytdlp = when {
             !pageOnly -> asked
             asked != null && (pageEmpty || AudioVoice.of(asked.formats).isNotEmpty()) -> asked
-            pageEmpty && !signedIn -> ytdlpOrNull()
+            pageEmpty && !askVoices -> ytdlpOrNull()
             else -> null
         }
         // Just the page's picture from yt-dlp is no video; the page's own reading has the real ones.

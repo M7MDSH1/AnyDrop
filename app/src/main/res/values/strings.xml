@@ -161,6 +161,12 @@
     <string name="settings_auto_detect">AUTO-DETECT LINKS</string>
     <string name="auto_detect_on">Enabled — links copied to the clipboard are offered on the deck</string>
     <string name="auto_detect_off">Disabled</string>
+    <string name="settings_audio_languages">AUDIO LANGUAGES</string>
+    <string name="audio_languages_on">On — pick a dubbed or translated voice when a video has several</string>
+    <string name="audio_languages_off">Off — videos download in their usual voice</string>
+    <string name="settings_subtitles">SUBTITLES</string>
+    <string name="subtitles_setting_on">On — offer a video\'s subtitles to save with it</string>
+    <string name="subtitles_setting_off">Off</string>
     <string name="settings_download_path">DOWNLOAD LOCATION</string>
     <string name="settings_download_path_sub">Videos → Movies/AnyDrop · Images → Pictures/AnyDrop · Audio → Music/AnyDrop</string>
     <string name="settings_version">ANYDROP v%1$s</string>

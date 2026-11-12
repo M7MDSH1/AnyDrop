@@ -610,10 +610,10 @@ class TapeDeckViewModel @Inject constructor(
             }
             if (generation != fetchGeneration) return
             _pageTitle.value = result.title
-            _captions.value = result.captions
+            _captions.value = if (settingsRepository.subtitles) result.captions else emptyList()
             // The subtitles picked last time, when this video has them.
             _subtitleLanguage.value = settingsRepository.preferredSubtitleLanguage
-                .takeIf { wanted -> result.captions.any { it.language == wanted } }.orEmpty()
+                .takeIf { wanted -> _captions.value.any { it.language == wanted } }.orEmpty()
             fetchedUploader = result.uploader
             fetchedWebpageUrl = result.webpageUrl
             rawFormats = if (wholePage && !linkList) result.formats.withoutRepeatsOfMain() else result.formats
@@ -700,13 +700,17 @@ class TapeDeckViewModel @Inject constructor(
      * several voices, only the chosen voice's audio qualities. Also refreshes the voices offered.
      */
     private fun shown(formats: List<FormatInfo>): List<FormatInfo> {
-        val voices = AudioVoice.of(formats)
+        val all = AudioVoice.of(formats)
+        // Voice choice off (Settings): no picker, and the audio list shows the original voice.
+        val voices = if (settingsRepository.audioLanguages) all else emptyList()
         _audioVoices.value = voices
         if (voices.isNotEmpty() && voices.none { it.language == _audioLanguage.value }) {
             _audioLanguage.value = AudioVoice.pick(voices, settingsRepository.preferredAudioLanguage)
         }
-        val language = _audioLanguage.value
-        return capByMaxQuality(formats).filter { !it.isAudioOnly || it.language.isBlank() || it.language == language }
+        val language = if (voices.isNotEmpty()) _audioLanguage.value else all.firstOrNull()?.language.orEmpty()
+        return capByMaxQuality(formats).filter {
+            !it.isAudioOnly || language.isBlank() || it.language.isBlank() || it.language == language
+        }
     }
 
     /** Picks the voice to save with the video, for a video that has several. */

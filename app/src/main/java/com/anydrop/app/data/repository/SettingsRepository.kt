@@ -78,6 +78,16 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getInt(KEY_MAX_PARALLEL, DEFAULT_PARALLEL).coerceIn(1, MAX_PARALLEL)
         set(value) = prefs.edit().putInt(KEY_MAX_PARALLEL, value.coerceIn(1, MAX_PARALLEL)).apply()
 
+    /** Offer a video's other voices (dubbed / translated) to pick from. Off by default. */
+    var audioLanguages: Boolean
+        get() = prefs.getBoolean(KEY_AUDIO_LANGUAGES, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUDIO_LANGUAGES, value).apply()
+
+    /** Offer a video's subtitles to save with it. Off by default. */
+    var subtitles: Boolean
+        get() = prefs.getBoolean(KEY_SUBTITLES, false)
+        set(value) = prefs.edit().putBoolean(KEY_SUBTITLES, value).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -110,6 +120,8 @@ class SettingsRepository @Inject constructor(
     companion object {
         private const val KEY_MAX_QUALITY = "max_quality_height"
         private const val KEY_AUTO_DETECT = "auto_detect_links"
+        private const val KEY_AUDIO_LANGUAGES = "offer_audio_languages"
+        private const val KEY_SUBTITLES = "offer_subtitles"
         private const val KEY_WHOLE_PAGE = "fetch_whole_page"
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_MOVIE_MODE = "player_movie_mode"

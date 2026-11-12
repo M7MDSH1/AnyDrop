@@ -76,6 +76,8 @@ fun SettingsScreen(
     val darkMode by viewModel.darkMode.collectAsState()
     val language by viewModel.language.collectAsState()
     val wifiOnly by viewModel.wifiOnly.collectAsState()
+    val audioLanguages by viewModel.audioLanguages.collectAsState()
+    val subtitles by viewModel.subtitles.collectAsState()
     val maxParallel by viewModel.maxParallel.collectAsState()
 
     var showQualityDialog by remember { mutableStateOf(false) }
@@ -148,6 +150,18 @@ fun SettingsScreen(
             title = stringResource(R.string.settings_parallel),
             subtitle = stringResource(R.string.parallel_value, maxParallel),
             onClick = { showParallelDialog = true }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsCard(
+            title = stringResource(R.string.settings_audio_languages),
+            subtitle = stringResource(if (audioLanguages) R.string.audio_languages_on else R.string.audio_languages_off),
+            onClick = { viewModel.toggleAudioLanguages() }
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsCard(
+            title = stringResource(R.string.settings_subtitles),
+            subtitle = stringResource(if (subtitles) R.string.subtitles_setting_on else R.string.subtitles_setting_off),
+            onClick = { viewModel.toggleSubtitles() }
         )
         Spacer(modifier = Modifier.height(8.dp))
         SettingsCard(
