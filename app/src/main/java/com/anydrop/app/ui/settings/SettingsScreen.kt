@@ -1,5 +1,28 @@
 package com.anydrop.app.ui.settings
 
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.ContentPasteSearch
+import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.Box
+import com.anydrop.app.ui.components.AppSwitch
+import com.anydrop.app.ui.components.PillButton
+import com.anydrop.app.ui.components.PillStyle
+import com.anydrop.app.ui.components.SectionLabel
+import com.anydrop.app.ui.components.SegmentedControl
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
+import com.anydrop.app.ui.theme.MediumGray
+
 import com.anydrop.app.ui.theme.AccentText
 import com.anydrop.app.ui.theme.AppFont
 import android.app.Activity
@@ -92,127 +115,133 @@ fun SettingsScreen(
     val updateViewModel: UpdateViewModel = hiltViewModel(context.findActivity())
     val updateStatus by updateViewModel.status.collectAsState()
 
+    LaunchedEffect(Unit) { updateViewModel.refreshStatus() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkGray)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 20.dp, vertical = 20.dp)
     ) {
         Text(
             text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.headlineMedium,
-            color = AccentText,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            color = White,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Cards scroll on small screens; the version footer stays at the bottom.
+        // Groups scroll on small screens; the version footer stays at the bottom.
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-        SettingsCard(
-            title = stringResource(R.string.settings_session_signal),
-            subtitle = stringResource(R.string.settings_session_signal_sub),
-            onClick = onCookieImport
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_appearance),
-            subtitle = stringResource(
-                if (darkMode) R.string.settings_dark_sub else R.string.settings_light_sub
-            ),
-            onClick = { viewModel.toggleDarkMode() }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_language),
-            subtitle = stringResource(languageLabelRes(language)),
-            onClick = { showLanguageDialog = true }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_max_quality),
-            subtitle = stringResource(maxQualityLabelRes(maxQualityHeight)),
-            onClick = { showQualityDialog = true }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_download_over),
-            subtitle = stringResource(if (wifiOnly) R.string.download_over_wifi else R.string.download_over_any),
-            onClick = { viewModel.toggleWifiOnly() }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_parallel),
-            subtitle = stringResource(R.string.parallel_value, maxParallel),
-            onClick = { showParallelDialog = true }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_audio_languages),
-            subtitle = stringResource(if (audioLanguages) R.string.audio_languages_on else R.string.audio_languages_off),
-            onClick = { viewModel.toggleAudioLanguages() }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_subtitles),
-            subtitle = stringResource(if (subtitles) R.string.subtitles_setting_on else R.string.subtitles_setting_off),
-            onClick = { viewModel.toggleSubtitles() }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_auto_detect),
-            subtitle = stringResource(
-                if (autoDetectLinks) R.string.auto_detect_on else R.string.auto_detect_off
-            ),
-            onClick = { viewModel.toggleAutoDetectLinks() }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SettingsCard(
-            title = stringResource(R.string.settings_download_path),
-            subtitle = stringResource(R.string.settings_download_path_sub),
-            onClick = null
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        LaunchedEffect(Unit) { updateViewModel.refreshStatus() }
-        UpdateCard(
-            status = updateStatus,
-            onUpdate = updateViewModel::showUpdate,
-            onCheck = updateViewModel::checkNow
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+            SettingsGroup(stringResource(R.string.settings_group_downloads)) {
+                SettingsRow(
+                    icon = Icons.Filled.Wifi,
+                    title = stringResource(R.string.settings_download_over),
+                    subtitle = stringResource(if (wifiOnly) R.string.download_over_wifi else R.string.download_over_any),
+                    onClick = { viewModel.toggleWifiOnly() }
+                ) { AppSwitch(wifiOnly, { viewModel.toggleWifiOnly() }) }
+                SettingsRow(
+                    icon = Icons.Filled.Layers,
+                    title = stringResource(R.string.settings_parallel),
+                    subtitle = stringResource(R.string.parallel_value, maxParallel),
+                    onClick = { showParallelDialog = true }
+                ) { Chevron() }
+                SettingsRow(
+                    icon = Icons.Filled.HighQuality,
+                    title = stringResource(R.string.settings_max_quality),
+                    subtitle = stringResource(maxQualityLabelRes(maxQualityHeight)),
+                    onClick = { showQualityDialog = true }
+                ) { Chevron() }
+                SettingsRow(
+                    icon = Icons.Filled.FolderOpen,
+                    title = stringResource(R.string.settings_download_path),
+                    subtitle = stringResource(R.string.settings_download_path_sub),
+                    onClick = null
+                ) {}
+            }
+
+            SettingsGroup(stringResource(R.string.settings_group_media)) {
+                SettingsRow(
+                    icon = Icons.Filled.Translate,
+                    title = stringResource(R.string.settings_audio_languages),
+                    subtitle = stringResource(if (audioLanguages) R.string.audio_languages_on else R.string.audio_languages_off),
+                    onClick = { viewModel.toggleAudioLanguages() }
+                ) { AppSwitch(audioLanguages, { viewModel.toggleAudioLanguages() }) }
+                SettingsRow(
+                    icon = Icons.Filled.Subtitles,
+                    title = stringResource(R.string.settings_subtitles),
+                    subtitle = stringResource(if (subtitles) R.string.subtitles_setting_on else R.string.subtitles_setting_off),
+                    onClick = { viewModel.toggleSubtitles() }
+                ) { AppSwitch(subtitles, { viewModel.toggleSubtitles() }) }
+                SettingsRow(
+                    icon = Icons.Filled.ContentPasteSearch,
+                    title = stringResource(R.string.settings_auto_detect),
+                    subtitle = stringResource(if (autoDetectLinks) R.string.auto_detect_on else R.string.auto_detect_off),
+                    onClick = { viewModel.toggleAutoDetectLinks() }
+                ) { AppSwitch(autoDetectLinks, { viewModel.toggleAutoDetectLinks() }) }
+            }
+
+            SettingsGroup(stringResource(R.string.settings_group_app)) {
+                SettingsRow(
+                    icon = Icons.Filled.Contrast,
+                    title = stringResource(R.string.settings_appearance),
+                    subtitle = null,
+                    onClick = null
+                ) {
+                    SegmentedControl(
+                        labels = listOf(stringResource(R.string.appearance_light), stringResource(R.string.appearance_dark)),
+                        selectedIndex = if (darkMode) 1 else 0,
+                        onSelect = { if ((it == 1) != darkMode) viewModel.toggleDarkMode() },
+                        modifier = Modifier.width(176.dp),
+                        segmentHeight = 32.dp
+                    )
+                }
+                SettingsRow(
+                    icon = Icons.Filled.Language,
+                    title = stringResource(R.string.settings_language),
+                    subtitle = stringResource(languageLabelRes(language)),
+                    onClick = { showLanguageDialog = true }
+                ) { Chevron() }
+                SettingsRow(
+                    icon = Icons.Filled.Key,
+                    title = stringResource(R.string.settings_session_signal),
+                    subtitle = stringResource(R.string.settings_session_signal_sub),
+                    onClick = onCookieImport
+                ) { Chevron() }
+            }
+
+            UpdateCard(
+                status = updateStatus,
+                onUpdate = updateViewModel::showUpdate,
+                onCheck = updateViewModel::checkNow
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
-            color = White.copy(alpha = 0.3f),
-            fontFamily = AppFont,
-            fontSize = 10.sp,
-            letterSpacing = tracked(2f)
+            color = TextFaint,
+            fontSize = 12.sp
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.settings_tagline),
-            color = White.copy(alpha = 0.2f),
-            fontFamily = AppFont,
-            fontSize = 9.sp,
-            letterSpacing = tracked(1f)
+            color = TextFaint,
+            fontSize = 12.sp
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = stringResource(R.string.settings_creator),
-            color = AccentText.copy(alpha = 0.5f),
-            fontFamily = AppFont,
-            fontSize = 10.sp,
-            letterSpacing = tracked(1f)
+            color = AccentText,
+            fontSize = 12.sp
         )
     }
 
@@ -241,7 +270,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = stringResource(labelRes),
-                                color = if (maxQualityHeight == height) Amber else White,
+                                color = if (maxQualityHeight == height) AccentText else White,
                                 fontFamily = AppFont
                             )
                         }
@@ -285,7 +314,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = stringResource(R.string.parallel_option, count),
-                                color = if (maxParallel == count) Amber else White,
+                                color = if (maxParallel == count) AccentText else White,
                                 fontFamily = AppFont
                             )
                         }
@@ -333,7 +362,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = stringResource(languageLabelRes(option)),
-                                color = if (language == option) Amber else White,
+                                color = if (language == option) AccentText else White,
                                 fontFamily = AppFont
                             )
                         }
@@ -392,105 +421,96 @@ private tailrec fun android.content.Context.findActivity(): ComponentActivity = 
  */
 @Composable
 private fun UpdateCard(status: UpdateStatus, onUpdate: () -> Unit, onCheck: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(6.dp),
-        colors = CardDefaults.cardColors(containerColor = Black)
+    val available = status is UpdateStatus.Available
+    val checking = status == UpdateStatus.Checking
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Black)
+            .padding(16.dp)
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.settings_updates),
-                color = AccentText,
-                fontFamily = AppFont,
-                fontSize = 12.sp,
-                letterSpacing = tracked(2f)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = when (status) {
-                    UpdateStatus.Idle -> stringResource(R.string.update_status_idle, BuildConfig.VERSION_NAME)
-                    UpdateStatus.Checking -> stringResource(R.string.update_checking)
-                    UpdateStatus.UpToDate -> stringResource(R.string.update_up_to_date, BuildConfig.VERSION_NAME)
-                    is UpdateStatus.Available -> stringResource(R.string.update_status_available, status.update.version, BuildConfig.VERSION_NAME)
-                    UpdateStatus.Failed -> stringResource(R.string.update_status_failed)
-                },
-                color = White.copy(alpha = 0.6f),
-                fontFamily = AppFont,
-                fontSize = 11.sp,
-                lineHeight = 16.sp
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            val shape = RoundedCornerShape(8.dp)
-            val available = status is UpdateStatus.Available
-            val checking = status == UpdateStatus.Checking
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(shape)
-                    .background(if (available) Amber else Color.Transparent)
-                    .border(1.dp, Amber.copy(alpha = if (checking) 0.4f else 1f), shape)
-                    .clickable(enabled = !checking) { if (available) onUpdate() else onCheck() },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (checking) {
-                    CircularProgressIndicator(color = AccentText, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                } else {
-                    Icon(
-                        if (available) Icons.Filled.SystemUpdate else Icons.Filled.Refresh,
-                        contentDescription = null,
-                        tint = if (available) OnAccent else Amber,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = when {
-                        available -> stringResource(R.string.update_button_update, (status as UpdateStatus.Available).update.version)
-                        checking -> stringResource(R.string.update_button_checking)
-                        else -> stringResource(R.string.update_button_check)
-                    },
-                    color = if (available) OnAccent else Amber.copy(alpha = if (checking) 0.6f else 1f),
-                    fontFamily = AppFont,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    letterSpacing = tracked(1.5f)
-                )
-            }
+        Text(
+            text = stringResource(R.string.settings_updates),
+            color = White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = when (status) {
+                UpdateStatus.Idle -> stringResource(R.string.update_status_idle, BuildConfig.VERSION_NAME)
+                UpdateStatus.Checking -> stringResource(R.string.update_checking)
+                UpdateStatus.UpToDate -> stringResource(R.string.update_up_to_date, BuildConfig.VERSION_NAME)
+                is UpdateStatus.Available -> stringResource(R.string.update_status_available, status.update.version, BuildConfig.VERSION_NAME)
+                UpdateStatus.Failed -> stringResource(R.string.update_status_failed)
+            },
+            color = TextMuted,
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        PillButton(
+            text = when {
+                available -> stringResource(R.string.update_button_update, (status as UpdateStatus.Available).update.version)
+                checking -> stringResource(R.string.update_button_checking)
+                else -> stringResource(R.string.update_button_check)
+            },
+            onClick = { if (available) onUpdate() else onCheck() },
+            style = if (available) PillStyle.Primary else PillStyle.Tonal,
+            icon = if (available) Icons.Filled.SystemUpdate else Icons.Filled.Refresh,
+            enabled = !checking,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+/** A titled group of settings rows on one card. */
+@Composable
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionLabel(title, Modifier.padding(start = 4.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(Black),
+            content = content
+        )
+    }
+}
+
+/** One setting: icon tile, title and a short line under it, and its control on the right. */
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: (() -> Unit)?,
+    trailing: @Composable () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .heightIn(min = 40.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(MediumGray), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = TextMuted, modifier = Modifier.size(22.dp))
         }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            if (subtitle != null) Text(subtitle, color = TextMuted, fontSize = 13.sp, lineHeight = 17.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        trailing()
     }
 }
 
 @Composable
-private fun SettingsCard(title: String, subtitle: String, onClick: (() -> Unit)?) {
-    val base = Modifier.fillMaxWidth()
-    val modifier = if (onClick != null) base.clickable(onClick = onClick) else base
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
-        colors = CardDefaults.cardColors(containerColor = Black)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, color = AccentText, fontFamily = AppFont, fontSize = 12.sp, letterSpacing = tracked(2f))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = subtitle, color = White.copy(alpha = 0.5f), fontFamily = AppFont, fontSize = 10.sp)
-            }
-            if (onClick != null) {
-                Spacer(modifier = Modifier.padding(8.dp))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = AccentText.copy(alpha = 0.4f),
-                    modifier = Modifier.padding(0.dp)
-                )
-            }
-        }
-    }
+private fun Chevron() {
+    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextFaint)
 }

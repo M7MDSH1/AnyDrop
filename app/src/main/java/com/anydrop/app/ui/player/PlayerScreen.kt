@@ -303,7 +303,7 @@ fun PlayerScreen(
             onNext = { nextMediaId?.let(onNavigateToMedia) },
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
             onDeleteRequest = deleteRequest,
-            title = if (externalFile) currentMedia!!.title else null,
+            title = currentMedia!!.title,
             shareItem = currentMedia!!,
             favorite = favorite,
             onToggleFavorite = viewModel::toggleFavorite,
@@ -1094,8 +1094,8 @@ private fun VideoPlayerContent(
                 ) {
                     val fixed = listOf(favorite != null, shareItem != null, onDeleteRequest != null).count { it }
                     val slots = ((maxWidth - if (title != null) MIN_TITLE_WIDTH else 0.dp) / CHROME_BUTTON).toInt() - fixed
-                    val inline = if (slots >= more.size) more else more.take((slots - 1).coerceAtLeast(0))
-                    val overflow = more.drop(inline.size)
+                    val inline = emptyList<ChromeAction>()
+                    val overflow = more
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -1320,16 +1320,17 @@ private fun VideoPlayerContent(
                             )
                         }
                         Box {
-                            TextButton(
-                                onClick = { showSpeedMenu = true; resetHideTimer() }
-                            ) {
-                                Text(
-                                    text = if (playbackSpeed == 1f) stringResource(R.string.player_speed_1x) else "${playbackSpeed}\u00D7",
-                                    color = VideoAccent,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Text(
+                                text = if (playbackSpeed == 1f) stringResource(R.string.player_speed_1x) else "${playbackSpeed}\u00D7",
+                                color = OnVideo,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(Color.White.copy(alpha = 0.14f))
+                                    .clickable { showSpeedMenu = true; resetHideTimer() }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
 
                             DropdownMenu(
                                 expanded = showSpeedMenu,

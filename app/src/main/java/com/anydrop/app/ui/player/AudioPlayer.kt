@@ -79,9 +79,10 @@ import com.anydrop.app.R
 import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.service.PlaybackService
 import com.anydrop.app.service.SleepTimer
+import com.anydrop.app.ui.theme.AccentSoft
+import com.anydrop.app.ui.theme.OnAccent
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
-import com.anydrop.app.ui.theme.DarkPalette
 import com.anydrop.app.ui.theme.LedRed
 import com.anydrop.app.ui.theme.White
 import kotlinx.coroutines.delay
@@ -227,24 +228,28 @@ internal fun AudioPlayerContent(
         ) {
             Box(
                 modifier = Modifier
-                    .size(180.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Amber.copy(alpha = 0.15f)),
+                    .size(240.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(androidx.compose.ui.graphics.Color(0xFF2E5650), androidx.compose.ui.graphics.Color(0xFF0F1D1B))
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     if (videoAsAudio) Icons.Filled.Headphones else Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = AccentText,
-                    modifier = Modifier.size(72.dp)
+                    tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.88f),
+                    modifier = Modifier.size(88.dp)
                 )
             }
             Spacer(Modifier.height(24.dp))
             Text(
                 current.title,
                 color = White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 style = TextStyle(textDirection = TextDirection.Content)
@@ -254,14 +259,24 @@ internal fun AudioPlayerContent(
                 Text(stringResource(R.string.video_as_audio_hint), color = White.copy(alpha = 0.5f), fontSize = 12.sp, textAlign = TextAlign.Center)
             }
             if (timerEndsAt != null || timerEndOfTrack) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    if (timerEndOfTrack) stringResource(R.string.sleep_timer_end_of_track_on)
-                    else stringResource(R.string.sleep_timer_left, timerLeft.toTimeString()),
-                    color = AccentText,
-                    fontSize = 12.sp,
-                    fontFamily = AppFont
-                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    Modifier
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(AccentSoft)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Bedtime, contentDescription = null, tint = AccentText, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (timerEndOfTrack) stringResource(R.string.sleep_timer_end_of_track_on)
+                        else stringResource(R.string.sleep_timer_left, timerLeft.toTimeString()),
+                        color = AccentText,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
             Spacer(Modifier.height(24.dp))
 
@@ -319,14 +334,15 @@ internal fun AudioPlayerContent(
                             modifier = Modifier.size(40.dp)
                         )
                     }
-                    IconButton(onClick = {
-                        controller?.let { if (it.isPlaying) it.pause() else it.play() }
-                    }) {
+                    IconButton(
+                        onClick = { controller?.let { if (it.isPlaying) it.pause() else it.play() } },
+                        modifier = Modifier.size(76.dp).background(Amber, androidx.compose.foundation.shape.CircleShape)
+                    ) {
                         Icon(
                             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = stringResource(R.string.player_play_pause),
-                            tint = AccentText,
-                            modifier = Modifier.size(56.dp)
+                            tint = OnAccent,
+                            modifier = Modifier.size(42.dp)
                         )
                     }
                     IconButton(onClick = { controller?.seekToNextMediaItem() }, enabled = hasNext) {
@@ -388,7 +404,7 @@ internal fun AudioPlayerContent(
 private fun UpNextSheet(queue: List<MediaItem>, currentId: String, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
     val playing = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = playing)
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = DarkPalette.surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Black) {
         Text(
             stringResource(R.string.audio_up_next),
             color = AccentText,

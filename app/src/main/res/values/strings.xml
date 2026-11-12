@@ -150,6 +150,11 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="settings_group_downloads">Downloads</string>
+    <string name="settings_group_media">Media</string>
+    <string name="settings_group_app">App</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
     <string name="settings_session_signal">Session signal</string>
     <string name="settings_session_signal_sub">Optional — only for private content. Public posts need no login.</string>
     <string name="settings_appearance">Appearance</string>

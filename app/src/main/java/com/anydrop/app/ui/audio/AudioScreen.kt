@@ -1,5 +1,10 @@
 package com.anydrop.app.ui.audio
 
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
+
 import com.anydrop.app.ui.theme.AccentText
 import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
@@ -178,22 +183,18 @@ fun AudioScreen(
             Text(
                 text = stringResource(R.string.audio_title),
                 style = MaterialTheme.typography.headlineMedium,
-                color = AccentText,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                color = White,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         Text(
             text = stringResource(R.string.tracks_count, audioItems.size),
-            color = White.copy(alpha = 0.4f),
-            fontSize = 10.sp,
-            fontFamily = AppFont,
-            letterSpacing = tracked(2f),
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
+            color = TextFaint,
+            fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -250,9 +251,9 @@ private fun AudioRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (selected) Modifier.border(2.dp, Amber, RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (selected) Modifier.border(1.5.dp, Amber, RoundedCornerShape(20.dp)) else Modifier)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Black)
     ) {
         Row(
@@ -265,7 +266,7 @@ private fun AudioRow(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MediumGray),
                 contentAlignment = Alignment.Center
             ) {
@@ -280,19 +281,19 @@ private fun AudioRow(
             Text(
                 text = item.title,
                 color = White,
-                fontSize = 13.sp,
-                fontFamily = AppFont,
+                fontSize = 15.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
 
             if (selectionMode) {
-                Text(
-                    text = if (selected) "✓" else "○",
-                    color = if (selected) Amber else White.copy(alpha = 0.5f),
-                    fontSize = 16.sp,
-                    modifier = Modifier.size(32.dp).padding(6.dp)
+                Icon(
+                    if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (selected) Amber else TextFaint,
+                    modifier = Modifier.size(32.dp).padding(4.dp)
                 )
             } else {
                 IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
@@ -300,7 +301,7 @@ private fun AudioRow(
                 }
                 Box {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.menu_desc), tint = White.copy(alpha = 0.6f))
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.menu_desc), tint = TextMuted)
                     }
                     MediaItemDropdown(
                         item = item,
