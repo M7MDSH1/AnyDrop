@@ -31,6 +31,8 @@ data class MediaCollection(val id: String, val name: String, val items: List<Med
 /** Which part of the library is on screen. */
 sealed interface LibraryScope {
     data object All : LibraryScope
+    /** Only what AnyDrop downloaded. */
+    data object AnyDrop : LibraryScope
     data object Favorites : LibraryScope
     data class Collection(val id: String) : LibraryScope
 }
@@ -123,6 +125,7 @@ class CollectionsRepository @Inject constructor(
 
     fun filter(items: List<MediaItem>, scope: LibraryScope): List<MediaItem> = when (scope) {
         LibraryScope.All -> items
+        LibraryScope.AnyDrop -> items.filter { it.fromAnyDrop }
         LibraryScope.Favorites -> MediaRefIndex(_favorites.value).let { index -> items.filter { it in index } }
         is LibraryScope.Collection -> {
             val collection = _collections.value.firstOrNull { it.id == scope.id }

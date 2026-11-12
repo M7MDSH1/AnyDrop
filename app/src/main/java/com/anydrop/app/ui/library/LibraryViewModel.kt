@@ -62,6 +62,7 @@ class LibraryViewModel @Inject constructor(
     val scopeCounts: StateFlow<Map<String, Int>> =
         combine(_allItems, favorites, collections) { items, favs, cols ->
             buildMap {
+                put(ANYDROP_KEY, items.count { it.fromAnyDrop })
                 MediaRefIndex(favs).let { index -> put(FAVORITES_KEY, items.count { it in index }) }
                 cols.forEach { c -> MediaRefIndex(c.items).let { index -> put(c.id, items.count { it in index }) } }
             }
@@ -190,5 +191,6 @@ class LibraryViewModel @Inject constructor(
 
     companion object {
         const val FAVORITES_KEY = "favorites"
+        const val ANYDROP_KEY = "anydrop"
     }
 }

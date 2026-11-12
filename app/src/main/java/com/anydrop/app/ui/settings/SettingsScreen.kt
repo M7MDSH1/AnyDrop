@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.settings
 
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.ContentPasteSearch
 import androidx.compose.material.icons.filled.Contrast
@@ -103,6 +104,7 @@ fun SettingsScreen(
     val wifiOnly by viewModel.wifiOnly.collectAsState()
     val audioLanguages by viewModel.audioLanguages.collectAsState()
     val subtitles by viewModel.subtitles.collectAsState()
+    val blockAds by viewModel.blockAds.collectAsState()
     val maxParallel by viewModel.maxParallel.collectAsState()
 
     var showQualityDialog by remember { mutableStateOf(false) }
@@ -186,6 +188,15 @@ fun SettingsScreen(
                     subtitle = stringResource(if (autoDetectLinks) R.string.auto_detect_on else R.string.auto_detect_off),
                     onClick = { viewModel.toggleAutoDetectLinks() }
                 ) { AppSwitch(autoDetectLinks, { viewModel.toggleAutoDetectLinks() }) }
+            }
+
+            SettingsGroup(stringResource(R.string.settings_group_browser)) {
+                SettingsRow(
+                    icon = Icons.Filled.Shield,
+                    title = stringResource(R.string.settings_block_ads),
+                    subtitle = stringResource(if (blockAds) R.string.block_ads_on else R.string.block_ads_off),
+                    onClick = { viewModel.toggleBlockAds() }
+                ) { AppSwitch(blockAds, { viewModel.toggleBlockAds() }) }
             }
 
             SettingsGroup(stringResource(R.string.settings_group_app)) {

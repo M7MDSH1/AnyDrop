@@ -88,6 +88,11 @@ class SettingsRepository @Inject constructor(
         get() = prefs.getBoolean(KEY_SUBTITLES, false)
         set(value) = prefs.edit().putBoolean(KEY_SUBTITLES, value).apply()
 
+    /** Block ads and pop-ups in the in-app browser. On by default. */
+    var blockAds: Boolean
+        get() = prefs.getBoolean(KEY_BLOCK_ADS, true)
+        set(value) = prefs.edit().putBoolean(KEY_BLOCK_ADS, value).apply()
+
     /** Watch the clipboard while the deck is open and offer detected links. */
     var autoDetectLinks: Boolean
         get() = prefs.getBoolean(KEY_AUTO_DETECT, true)
@@ -122,6 +127,11 @@ class SettingsRepository @Inject constructor(
         private const val KEY_AUTO_DETECT = "auto_detect_links"
         private const val KEY_AUDIO_LANGUAGES = "offer_audio_languages"
         private const val KEY_SUBTITLES = "offer_subtitles"
+        private const val KEY_BLOCK_ADS = "block_ads"
+
+        /** [blockAds] for code built outside Hilt (the browser's state holder). */
+        fun blockAds(context: Context): Boolean =
+            context.getSharedPreferences("anydrop_settings", Context.MODE_PRIVATE).getBoolean(KEY_BLOCK_ADS, true)
         private const val KEY_WHOLE_PAGE = "fetch_whole_page"
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_MOVIE_MODE = "player_movie_mode"

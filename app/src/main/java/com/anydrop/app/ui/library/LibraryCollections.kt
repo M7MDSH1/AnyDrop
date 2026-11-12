@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.library
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.filled.Download
 import com.anydrop.app.ui.theme.AccentSoft
 import com.anydrop.app.ui.theme.TextMuted
 
@@ -101,6 +102,15 @@ fun ScopeChips(
                 label = stringResource(R.string.scope_all),
                 selected = scope == LibraryScope.All,
                 onClick = { onSelect(LibraryScope.All) }
+            )
+        }
+        item {
+            ScopeChip(
+                label = stringResource(R.string.scope_anydrop),
+                count = counts[LibraryViewModel.ANYDROP_KEY],
+                icon = Icons.Filled.Download,
+                selected = scope == LibraryScope.AnyDrop,
+                onClick = { onSelect(LibraryScope.AnyDrop) }
             )
         }
         item {
