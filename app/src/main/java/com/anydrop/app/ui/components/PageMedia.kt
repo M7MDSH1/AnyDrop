@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +62,9 @@ import com.anydrop.app.R
 import com.anydrop.app.engine.PageItem
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.clockText
+import com.anydrop.app.ui.theme.AccentSoft
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.Hairline
@@ -71,7 +76,7 @@ import com.anydrop.app.ui.theme.tracked
 /** A cover with the video's length on it; a plain sign stands in when there's no cover. */
 @Composable
 fun MediaThumb(cover: String, durationSec: Int, isVideo: Boolean, modifier: Modifier = Modifier) {
-    Box(modifier.clip(RoundedCornerShape(6.dp)).background(MediumGray)) {
+    Box(modifier.clip(RoundedCornerShape(12.dp)).background(MediumGray)) {
         if (cover.isNotBlank()) {
             AsyncImage(
                 model = cover,
@@ -100,7 +105,7 @@ fun DurationBadge(clock: String, modifier: Modifier = Modifier) {
         color = Color.White,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = AppFont,
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
             .background(Color.Black.copy(alpha = 0.72f))
@@ -111,30 +116,23 @@ fun DurationBadge(clock: String, modifier: Modifier = Modifier) {
 /** The fetched video at a glance: its cover, length and title, above its qualities. */
 @Composable
 fun MediaSummaryCard(cover: String, durationSec: Int, title: String, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(10.dp)
     Row(
-        modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(Black)
-            .border(1.dp, Hairline, shape)
-            .padding(8.dp),
+        modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MediaThumb(cover, durationSec, isVideo = true, modifier = Modifier.width(128.dp).aspectRatio(16f / 9f))
-        Spacer(Modifier.width(12.dp))
+        MediaThumb(cover, durationSec, isVideo = true, modifier = Modifier.width(112.dp).aspectRatio(16f / 9f))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             if (title.isNotBlank()) {
-                Text(title, color = White, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(title, color = White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, lineHeight = 21.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
             val clock = clockText(durationSec)
             if (clock.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     stringResource(R.string.media_length, clock),
-                    color = White.copy(alpha = 0.55f),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
+                    color = TextMuted,
+                    fontSize = 13.sp
                 )
             }
         }
@@ -144,17 +142,17 @@ fun MediaSummaryCard(cover: String, durationSec: Int, title: String, modifier: M
 /** Shown when the link is one video of a playlist: one tap lists the whole playlist. */
 @Composable
 fun PlaylistOffer(onShowPlaylist: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Amber.copy(alpha = 0.10f))
-            .border(1.dp, Amber.copy(alpha = 0.5f), shape)
+            .background(AccentSoft)
+            .border(1.dp, Amber.copy(alpha = 0.6f), shape)
             .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp))
+        Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, tint = AccentText, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Text(
             stringResource(R.string.playlist_offer),
@@ -165,10 +163,10 @@ fun PlaylistOffer(onShowPlaylist: () -> Unit, modifier: Modifier = Modifier) {
         )
         Text(
             stringResource(R.string.playlist_offer_button),
-            color = Amber,
+            color = AccentText,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
                 .clickable(onClick = onShowPlaylist)
@@ -180,54 +178,22 @@ fun PlaylistOffer(onShowPlaylist: () -> Unit, modifier: Modifier = Modifier) {
 /** What a link fetches: just its video, or everything on its page. */
 @Composable
 fun FetchModeToggle(wholePage: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(10.dp)
     Column(modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(38.dp)
-                .clip(shape)
-                .background(Black)
-                .border(1.dp, Hairline, shape)
-                .padding(3.dp)
-        ) {
-            ModeSegment(Icons.Filled.OndemandVideo, stringResource(R.string.fetch_this_video), !wholePage, { onChange(false) }, Modifier.weight(1f))
-            ModeSegment(Icons.Filled.Web, stringResource(R.string.fetch_whole_page), wholePage, { onChange(true) }, Modifier.weight(1f))
-        }
+        SegmentedControl(
+            labels = listOf(stringResource(R.string.fetch_this_video), stringResource(R.string.fetch_whole_page)),
+            icons = listOf(Icons.Filled.OndemandVideo, Icons.Filled.Web),
+            selectedIndex = if (wholePage) 1 else 0,
+            onSelect = { onChange(it == 1) }
+        )
         if (wholePage) {
             Text(
                 stringResource(R.string.fetch_whole_page_hint),
-                color = White.copy(alpha = 0.45f),
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-                modifier = Modifier.padding(top = 5.dp, start = 4.dp, end = 4.dp)
+                color = TextFaint,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                modifier = Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp)
             )
         }
-    }
-}
-
-@Composable
-private fun ModeSegment(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    Row(
-        modifier
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) Amber else Color.Transparent)
-            .clickable(onClick = onClick),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = if (selected) OnAccent else White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            label,
-            color = if (selected) OnAccent else White.copy(alpha = 0.7f),
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = if (selected) FontWeight.Bold else null,
-            letterSpacing = tracked(1f),
-            maxLines = 1
-        )
     }
 }
 
@@ -284,8 +250,8 @@ fun PageMediaPicker(
                         playlist -> stringResource(R.string.playlist_count, items.size)
                         else -> stringResource(R.string.page_items_count, items.size)
                     },
-                    color = Amber,
-                    fontFamily = FontFamily.Monospace,
+                    color = AccentText,
+                    fontFamily = AppFont,
                     fontSize = 12.sp,
                     letterSpacing = tracked(1f)
                 )
@@ -303,8 +269,8 @@ fun PageMediaPicker(
             }
             Text(
                 stringResource(if (allSelected) R.string.clear_all else R.string.select_all),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
+                color = AccentText,
+                fontFamily = AppFont,
                 fontSize = 11.sp,
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -315,19 +281,12 @@ fun PageMediaPicker(
         Spacer(Modifier.height(10.dp))
         if (playlist) {
             // Music mixes are often wanted as songs: save every pick as sound only.
-            val shape = RoundedCornerShape(10.dp)
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(36.dp)
-                    .clip(shape)
-                    .background(Black)
-                    .border(1.dp, Hairline, shape)
-                    .padding(3.dp)
-            ) {
-                ModeSegment(Icons.Filled.OndemandVideo, stringResource(R.string.playlist_as_video), !audioOnly, { audioOnly = false }, Modifier.weight(1f))
-                ModeSegment(Icons.Filled.MusicNote, stringResource(R.string.playlist_as_audio), audioOnly, { audioOnly = true }, Modifier.weight(1f))
-            }
+            SegmentedControl(
+                labels = listOf(stringResource(R.string.playlist_as_video), stringResource(R.string.playlist_as_audio)),
+                icons = listOf(Icons.Filled.OndemandVideo, Icons.Filled.MusicNote),
+                selectedIndex = if (audioOnly) 1 else 0,
+                onSelect = { audioOnly = it == 1 }
+            )
             Spacer(Modifier.height(10.dp))
         }
 
@@ -375,7 +334,7 @@ fun PageMediaPicker(
             Text(
                 stringResource(R.string.share_record_count, selected.size),
                 color = if (selected.isEmpty()) White.copy(alpha = 0.4f) else OnAccent,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = tracked(2f)
@@ -414,9 +373,9 @@ private fun PageItemRow(
             if (item.isMain) {
                 Text(
                     stringResource(R.string.page_item_main),
-                    color = Amber,
+                    color = AccentText,
                     fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = tracked(1.5f)
                 )
@@ -438,7 +397,7 @@ private fun PageItemRow(
                         "M4A",
                         color = White.copy(alpha = 0.8f),
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFont,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .border(1.dp, Hairline, RoundedCornerShape(6.dp))
@@ -459,7 +418,7 @@ private fun PageItemRow(
                         details,
                         color = White.copy(alpha = 0.45f),
                         fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFont,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -509,13 +468,13 @@ private fun QualityChip(
                 .padding(start = 7.dp, end = if (choosable) 2.dp else 7.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, color = if (choosable) Amber else White.copy(alpha = 0.8f), fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+            Text(label, color = if (choosable) Amber else White.copy(alpha = 0.8f), fontSize = 11.sp, fontFamily = AppFont, maxLines = 1)
             if (resolving) {
                 Spacer(Modifier.width(6.dp))
-                CircularProgressIndicator(color = Amber, strokeWidth = 1.5.dp, modifier = Modifier.size(12.dp))
+                CircularProgressIndicator(color = AccentText, strokeWidth = 1.5.dp, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(5.dp))
             } else if (choosable) {
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = stringResource(R.string.page_item_choose_quality), tint = Amber, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = stringResource(R.string.page_item_choose_quality), tint = AccentText, modifier = Modifier.size(18.dp))
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -524,12 +483,12 @@ private fun QualityChip(
                     text = {
                         Text(
                             listOfNotNull(f.resolution, f.extension.uppercase(), sizeText(f.filesize)).joinToString("  ·  "),
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppFont,
                             fontSize = 12.sp
                         )
                     },
                     trailingIcon = if (f.choiceKey() == format.choiceKey()) {
-                        { Icon(Icons.Filled.Check, contentDescription = null, tint = Amber) }
+                        { Icon(Icons.Filled.Check, contentDescription = null, tint = AccentText) }
                     } else null,
                     onClick = { menu = false; onPick(f) }
                 )

@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.settings
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -140,19 +142,19 @@ fun CookieImportScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.back_desc),
-                    tint = Amber
+                    tint = AccentText
                 )
             }
         }
         Text(
             text = stringResource(R.string.settings_session_signal),
             style = MaterialTheme.typography.headlineMedium,
-            color = Amber
+            color = AccentText
         )
         Text(
             text = stringResource(R.string.session_signal_subtitle),
             color = White.copy(alpha = 0.5f),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             fontSize = 11.sp,
             textAlign = TextAlign.Center
         )
@@ -189,7 +191,7 @@ fun CookieImportScreen(
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Amber),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(stringResource(R.string.add_platform_btn), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    Text(stringResource(R.string.add_platform_btn), fontFamily = AppFont, fontSize = 12.sp)
                 }
             }
         }
@@ -200,7 +202,7 @@ fun CookieImportScreen(
             Text(
                 text = it.text,
                 color = if (it.isError) StatusRed else StatusGreen,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center
             )
@@ -212,7 +214,7 @@ fun CookieImportScreen(
         Text(
             text = stringResource(R.string.cookies_or_import),
             color = White.copy(alpha = 0.35f),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             fontSize = 10.sp
         )
         Spacer(modifier = Modifier.height(6.dp))
@@ -222,7 +224,7 @@ fun CookieImportScreen(
             colors = ButtonDefaults.outlinedButtonColors(contentColor = White.copy(alpha = 0.6f)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(stringResource(R.string.btn_select_cookies), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            Text(stringResource(R.string.btn_select_cookies), fontFamily = AppFont, fontSize = 11.sp)
         }
     }
 }
@@ -252,18 +254,18 @@ private fun PlatformRow(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(platform.name, color = White, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                    Text(platform.name, color = White, fontFamily = AppFont, fontSize = 14.sp)
                     Text(
                         platform.domain,
                         color = White.copy(alpha = 0.4f),
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFont,
                         fontSize = 10.sp
                     )
                 }
                 if (loggedIn) {
-                    Text(stringResource(R.string.logged_in), color = StatusGreen, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    Text(stringResource(R.string.logged_in), color = StatusGreen, fontFamily = AppFont, fontSize = 11.sp)
                 } else {
-                    Text(stringResource(R.string.log_in), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    Text(stringResource(R.string.log_in), color = AccentText, fontFamily = AppFont, fontSize = 11.sp)
                 }
             }
             if (onDisconnect != null || onDelete != null) {
@@ -276,7 +278,7 @@ private fun PlatformRow(
                         SessionButton(
                             icon = Icons.AutoMirrored.Filled.Logout,
                             label = stringResource(R.string.session_disconnect),
-                            color = Amber,
+                            color = AccentText,
                             onClick = it
                         )
                     }
@@ -307,7 +309,7 @@ private fun SessionButton(icon: ImageVector, label: String, color: Color, onClic
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text(label, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+        Text(label, fontFamily = AppFont, fontSize = 11.sp)
     }
 }
 
@@ -334,7 +336,7 @@ private fun ConfirmSessionDialog(
             Text(
                 stringResource(if (isDelete) R.string.delete_platform_title else R.string.disconnect_confirm_title, platformName),
                 color = White,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 16.sp
             )
         },
@@ -358,13 +360,13 @@ private fun ConfirmSessionDialog(
                 Text(
                     stringResource(if (isDelete) R.string.session_delete else R.string.session_disconnect),
                     color = accent,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = AppFont
                 )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )
@@ -380,7 +382,7 @@ private fun AddPlatformDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.add_platform_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.add_platform_title), color = AccentText, fontFamily = AppFont) },
         text = {
             Column {
                 OutlinedTextField(
@@ -403,7 +405,7 @@ private fun AddPlatformDialog(
                 Text(
                     stringResource(R.string.add_platform_auto_domain),
                     color = White.copy(alpha = 0.4f),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     fontSize = 9.sp
                 )
             }
@@ -413,12 +415,12 @@ private fun AddPlatformDialog(
                 onClick = { if (name.isNotBlank() && url.isNotBlank()) onAdd(name, url) },
                 enabled = name.isNotBlank() && url.isNotBlank()
             ) {
-                Text(stringResource(R.string.btn_add), color = Amber, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_add), color = AccentText, fontFamily = AppFont)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )

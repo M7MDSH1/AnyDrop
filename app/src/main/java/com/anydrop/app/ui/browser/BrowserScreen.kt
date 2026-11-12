@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.browser
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
@@ -590,7 +592,7 @@ fun BrowserScreen(
                 LinearProgressIndicator(
                     progress = { state.progress / 100f },
                     modifier = Modifier.fillMaxSize(),
-                    color = Amber,
+                    color = AccentText,
                     trackColor = Color.Transparent
                 )
             }
@@ -679,16 +681,16 @@ fun BrowserScreen(
         AlertDialog(
             onDismissRequest = { siteToRemove = null },
             containerColor = MediumGray,
-            title = { Text(stringResource(R.string.browser_remove_site_title), color = LedRed, fontFamily = FontFamily.Monospace) },
+            title = { Text(stringResource(R.string.browser_remove_site_title), color = LedRed, fontFamily = AppFont) },
             text = { Text(stringResource(R.string.browser_remove_site_message, site.name), color = White, fontSize = 13.sp) },
             confirmButton = {
                 TextButton(onClick = { viewModel.removeSite(site); siteToRemove = null }) {
-                    Text(stringResource(R.string.browser_remove), color = LedRed, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.browser_remove), color = LedRed, fontFamily = AppFont)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { siteToRemove = null }) {
-                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
                 }
             }
         )
@@ -775,7 +777,7 @@ private fun BrowserBar(state: BrowserState, address: AddressBarState, onHistory:
                         }
                     },
                     singleLine = true,
-                    textStyle = TextStyle(color = White, fontSize = 13.sp, fontFamily = FontFamily.Monospace, textDirection = TextDirection.Ltr),
+                    textStyle = TextStyle(color = White, fontSize = 13.sp, fontFamily = AppFont, textDirection = TextDirection.Ltr),
                     cursorBrush = SolidColor(Amber),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = {
@@ -795,7 +797,7 @@ private fun BrowserBar(state: BrowserState, address: AddressBarState, onHistory:
                     }
                 )
                 if (!editing && display.isEmpty()) {
-                    Text(stringResource(R.string.browser_search_hint), color = White.copy(alpha = 0.4f), fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.browser_search_hint), color = White.copy(alpha = 0.4f), fontSize = 13.sp, fontFamily = AppFont)
                 }
             }
             if (editing && field.text.isNotEmpty()) {
@@ -896,7 +898,7 @@ private fun StartPage(
         Text(
             stringResource(R.string.brand_wordmark),
             style = MaterialTheme.typography.displayLarge,
-            color = Amber
+            color = AccentText
         )
         Spacer(Modifier.height(6.dp))
         Text(
@@ -904,7 +906,7 @@ private fun StartPage(
             color = White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             letterSpacing = tracked(2f)
         )
         Spacer(Modifier.height(8.dp))
@@ -957,9 +959,9 @@ private fun StartPage(
         if (showRestore) {
             Spacer(Modifier.height(4.dp))
             TextButton(onClick = onRestore) {
-                Icon(Icons.Filled.RestartAlt, null, tint = Amber, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.RestartAlt, null, tint = AccentText, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.browser_restore_sites), color = Amber, fontSize = 12.sp)
+                Text(stringResource(R.string.browser_restore_sites), color = AccentText, fontSize = 12.sp)
             }
         }
         if (recent.isNotEmpty()) {
@@ -969,15 +971,15 @@ private fun StartPage(
                     stringResource(R.string.browser_recent),
                     color = White.copy(alpha = 0.6f),
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     letterSpacing = tracked(2f),
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     stringResource(R.string.browser_see_all),
-                    color = Amber,
+                    color = AccentText,
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenHistory).padding(horizontal = 8.dp, vertical = 6.dp)
                 )
             }
@@ -1033,7 +1035,7 @@ private fun SiteTile(
                     .border(1.dp, color.copy(alpha = 0.5f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text(site.initial(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text(site.initial(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = AppFont)
             }
             Spacer(Modifier.height(6.dp))
             Text(
@@ -1083,10 +1085,10 @@ private fun AddSiteTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 .border(1.dp, LightGray, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Add, null, tint = Amber)
+            Icon(Icons.Filled.Add, null, tint = AccentText)
         }
         Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.browser_add_site), color = Amber, fontSize = 11.sp, maxLines = 1)
+        Text(stringResource(R.string.browser_add_site), color = AccentText, fontSize = 11.sp, maxLines = 1)
     }
 }
 
@@ -1141,8 +1143,8 @@ private fun SiteDialog(
         title = {
             Text(
                 stringResource(if (editor.original == null) R.string.browser_add_site else R.string.browser_edit_site),
-                color = Amber,
-                fontFamily = FontFamily.Monospace
+                color = AccentText,
+                fontFamily = AppFont
             )
         },
         text = {
@@ -1158,7 +1160,7 @@ private fun SiteDialog(
                         { Text(stringResource(R.string.browser_site_url_invalid)) }
                     } else null,
                     // Web addresses always read left to right, even in the Arabic UI.
-                    textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, textDirection = TextDirection.Ltr),
+                    textStyle = TextStyle(fontFamily = AppFont, fontSize = 13.sp, textDirection = TextDirection.Ltr),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                     colors = fieldColors,
                     modifier = Modifier.fillMaxWidth().focusRequester(urlFocus)
@@ -1183,13 +1185,13 @@ private fun SiteDialog(
                 Text(
                     stringResource(if (editor.original == null) R.string.btn_add else R.string.btn_save),
                     color = if (normalized != null) Amber else White.copy(alpha = 0.3f),
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = AppFont
                 )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
             }
         }
     )
@@ -1222,7 +1224,7 @@ private fun DownloadFab(count: Int, onClick: () -> Unit, modifier: Modifier = Mo
             color = if (found) OnAccent else White,
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             letterSpacing = tracked(1f)
         )
     }
@@ -1238,10 +1240,10 @@ private fun MediaSheet(
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 20.dp)) {
         Text(
             stringResource(R.string.browser_sheet_title),
-            color = Amber,
+            color = AccentText,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             letterSpacing = tracked(2f)
         )
         if (title.isNotBlank()) {
@@ -1284,15 +1286,15 @@ private fun MediaSheet(
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(f.resolution, color = White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                            Text(f.extension.uppercase(), color = White.copy(alpha = 0.5f), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            Text(f.resolution, color = White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = AppFont)
+                            Text(f.extension.uppercase(), color = White.copy(alpha = 0.5f), fontSize = 11.sp, fontFamily = AppFont)
                         }
                         Text(
                             stringResource(R.string.browser_save),
                             color = OnAccent,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = AppFont,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Amber)
@@ -1314,7 +1316,7 @@ private fun KindIcon(icon: ImageVector) {
         Modifier.size(34.dp).clip(CircleShape).background(Amber.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null, tint = Amber, modifier = Modifier.size(18.dp))
+        Icon(icon, null, tint = AccentText, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -1335,7 +1337,7 @@ private fun SheetButton(label: String, filled: Boolean, onClick: () -> Unit) {
             color = if (filled) OnAccent else Amber,
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             letterSpacing = tracked(1f)
         )
     }
@@ -1396,9 +1398,9 @@ private fun AddressSuggestions(
         }
         if (history.isNotEmpty()) {
             TextButton(onClick = onSeeAll, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Icon(Icons.Filled.History, null, tint = Amber, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.History, null, tint = AccentText, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.browser_see_all_history), color = Amber, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.browser_see_all_history), color = AccentText, fontSize = 12.sp, fontFamily = AppFont)
             }
         } else if (clip == null) {
             Text(
@@ -1418,7 +1420,7 @@ private fun SuggestionLabel(text: String) {
         text,
         color = White.copy(alpha = 0.5f),
         fontSize = 10.sp,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = AppFont,
         letterSpacing = tracked(2f),
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp)
     )
@@ -1433,7 +1435,7 @@ private fun SuggestionRow(icon: ImageVector, title: String, subtitle: String, on
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = Amber, modifier = Modifier.size(20.dp))
+        Icon(icon, null, tint = AccentText, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1486,16 +1488,16 @@ private fun HistorySheet(
             ) {
                 Text(
                     stringResource(R.string.browser_history_title),
-                    color = Amber,
+                    color = AccentText,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     letterSpacing = tracked(2f),
                     modifier = Modifier.weight(1f)
                 )
                 if (entries.isNotEmpty()) {
                     TextButton(onClick = { confirmClear = true }) {
-                        Text(stringResource(R.string.browser_history_clear), color = LedRed, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        Text(stringResource(R.string.browser_history_clear), color = LedRed, fontSize = 12.sp, fontFamily = AppFont)
                     }
                 }
             }
@@ -1523,16 +1525,16 @@ private fun HistorySheet(
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             containerColor = MediumGray,
-            title = { Text(stringResource(R.string.browser_history_clear_title), color = LedRed, fontFamily = FontFamily.Monospace) },
+            title = { Text(stringResource(R.string.browser_history_clear_title), color = LedRed, fontFamily = AppFont) },
             text = { Text(stringResource(R.string.browser_history_clear_message), color = White, fontSize = 13.sp) },
             confirmButton = {
                 TextButton(onClick = { onClear(); confirmClear = false }) {
-                    Text(stringResource(R.string.browser_history_clear), color = LedRed, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.browser_history_clear), color = LedRed, fontFamily = AppFont)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { confirmClear = false }) {
-                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.6f), fontFamily = AppFont)
                 }
             }
         )
@@ -1565,7 +1567,7 @@ private fun HistoryRow(
             contentAlignment = Alignment.Center
         ) {
             val letter = host.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-            Text(letter, color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Text(letter, color = color, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = AppFont)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

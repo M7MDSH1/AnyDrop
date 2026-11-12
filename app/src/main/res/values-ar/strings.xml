@@ -33,8 +33,8 @@
     <!-- Share sheet -->
     <string name="share_select_what">اختر ما تريد تنزيله</string>
     <string name="share_fetching">جارٍ الجلب…</string>
-    <string name="share_record">●  تسجيل</string>
-    <string name="share_record_count">●  تسجيل (%1$d)</string>
+    <string name="share_record">تنزيل</string>
+    <string name="share_record_count">تنزيل (%1$d)</string>
     <string name="post_items_count">%1$d عناصر</string>
     <string name="post_items_mix">%1$d فيديو · %2$d صورة</string>
     <string name="post_item_video">فيديو</string>
@@ -79,7 +79,10 @@
     <string name="downloading_status">جارٍ التنزيل</string>
     <string name="eta_format">الوقت المتبقي %1$s</string>
     <string name="btn_stop">■ إيقاف</string>
-    <string name="btn_record">●  تسجيل</string>
+    <string name="btn_record">تنزيل</string>
+    <string name="btn_download_size">تنزيل %1$s</string>
+    <string name="deck_empty_title">الصق رابطًا</string>
+    <string name="deck_empty_hint">أو شارك رابطًا مع AnyDrop من أي تطبيق</string>
     <string name="download_complete">اكتمل التنزيل</string>
 
     <!-- Library -->
@@ -390,7 +393,7 @@
     <string name="torrent_summary">الملفات: %1$d · %2$s</string>
     <string name="torrent_no_media">لا يحتوي هذا التورنت على فيديوهات أو موسيقى أو صور للتنزيل.</string>
     <string name="torrent_note">يُنزَّل مباشرة من أجهزة الآخرين. أثناء التنزيل يشارك AnyDrop الأجزاء التي لديه كأي تطبيق تورنت، ويتوقف عند الانتهاء. نزّل فقط ما يحق لك تنزيله.</string>
-    <string name="torrent_record">●  تسجيل (%1$d) · %2$s</string>
+    <string name="torrent_record">تنزيل (%1$d) · %2$s</string>
     <string name="torrent_bad_link">هذا ليس رابطًا مغناطيسيًا صالحًا.</string>
     <string name="torrent_bad_file">تعذّرت قراءة ملف التورنت هذا.</string>
     <string name="torrent_no_peers">لم يُعثر على أحد يشارك هذا التورنت. حاول لاحقًا.</string>

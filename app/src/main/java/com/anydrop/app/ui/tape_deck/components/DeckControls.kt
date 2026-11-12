@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.tape_deck.components
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +19,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
+import com.anydrop.app.ui.components.PillButton
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
@@ -62,37 +70,37 @@ fun LinkField(
     OutlinedTextField(
         value = url,
         onValueChange = { onUrlChange(it.replace("\n", "")) },
-        placeholder = { Text(stringResource(R.string.paste_url_hint), fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
-        leadingIcon = { Icon(Icons.Filled.Link, null, tint = if (url.isBlank()) White.copy(alpha = 0.4f) else Amber) },
+        placeholder = { Text(stringResource(R.string.paste_url_hint), fontFamily = AppFont, fontSize = 15.sp) },
+        leadingIcon = { Icon(Icons.Filled.Link, null, tint = if (url.isBlank()) TextFaint else AccentText) },
         trailingIcon = {
             if (url.isBlank()) {
                 IconButton(onClick = onPaste) {
-                    Icon(Icons.Filled.ContentPaste, contentDescription = stringResource(R.string.paste_btn), tint = Amber)
+                    Icon(Icons.Filled.ContentPaste, contentDescription = stringResource(R.string.paste_btn), tint = AccentText)
                 }
             } else {
                 IconButton(onClick = { onUrlChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.btn_cancel), tint = White.copy(alpha = 0.6f))
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.btn_cancel), tint = TextMuted)
                 }
             }
         },
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = CircleShape,
         // URLs are always left-to-right, even in the Arabic UI (otherwise the trailing "/" jumps to the front).
         textStyle = androidx.compose.ui.text.TextStyle(
-            fontFamily = FontFamily.Monospace,
-            fontSize = 13.sp,
+            fontFamily = AppFont,
+            fontSize = 15.sp,
             textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
         ),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = Amber,
-            unfocusedBorderColor = LightGray,
-            focusedContainerColor = Black,
-            unfocusedContainerColor = Black,
+            unfocusedBorderColor = Color.Transparent,
+            focusedContainerColor = MediumGray,
+            unfocusedContainerColor = MediumGray,
             cursorColor = Amber,
             focusedTextColor = White,
             unfocusedTextColor = White,
-            focusedPlaceholderColor = White.copy(alpha = 0.4f),
-            unfocusedPlaceholderColor = White.copy(alpha = 0.4f)
+            focusedPlaceholderColor = TextFaint,
+            unfocusedPlaceholderColor = TextFaint
         ),
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
@@ -100,33 +108,21 @@ fun LinkField(
     )
 }
 
-/** RECORD. Several downloads can run at once; progress lives in the downloads list below. */
+/** Download, with the size when it is known. Several downloads run at once; progress is in the list below. */
 @Composable
 fun RecordButton(
     enabled: Boolean,
     onRecord: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    label: String = stringResource(R.string.btn_record)
 ) {
-    Button(
+    PillButton(
+        text = label,
         onClick = onRecord,
         enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Amber,
-            contentColor = OnAccent,
-            disabledContainerColor = MediumGray,
-            disabledContentColor = White.copy(alpha = 0.38f)
-        ),
-        shape = RoundedCornerShape(10.dp),
-        modifier = modifier.fillMaxWidth().height(52.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.btn_record),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = tracked(2f)
-        )
-    }
+        icon = Icons.Filled.Download,
+        modifier = modifier.fillMaxWidth().height(56.dp)
+    )
 }
 
 /**
@@ -138,9 +134,9 @@ fun DeckError(message: String, modifier: Modifier = Modifier, detail: String = "
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(StatusRed.copy(alpha = 0.10f))
-            .border(BorderStroke(1.dp, StatusRed.copy(alpha = 0.35f)), RoundedCornerShape(10.dp))
+            .border(BorderStroke(1.dp, StatusRed.copy(alpha = 0.35f)), RoundedCornerShape(16.dp))
             .padding(12.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.Start
@@ -153,7 +149,7 @@ fun DeckError(message: String, modifier: Modifier = Modifier, detail: String = "
                 color = White.copy(alpha = 0.9f),
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
-                fontFamily = FontFamily.Monospace
+                fontFamily = AppFont
             )
             if (detail.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
@@ -163,18 +159,4 @@ fun DeckError(message: String, modifier: Modifier = Modifier, detail: String = "
     }
 }
 
-/** A tape-deck style panel: recessed surface with a hairline edge. */
-@Composable
-fun DeckPanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Black)
-            .border(1.dp, Hairline, RoundedCornerShape(14.dp))
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        content()
-    }
-}
+

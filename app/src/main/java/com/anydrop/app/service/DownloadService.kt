@@ -105,7 +105,7 @@ class DownloadService : Service() {
                 val notification = NotificationCompat.Builder(this, Constants.DOWNLOAD_CHANNEL_ID)
                     .setContentTitle(titles[tag] ?: getString(R.string.app_name))
                     .setContentText(getString(R.string.download_progress, pct))
-                    .setSmallIcon(android.R.drawable.stat_sys_download)
+                    .setSmallIcon(R.drawable.ic_stat_anydrop)
                     .setOngoing(true)
                     .setProgress(100, pct, false)
                     .setSilent(true)
@@ -117,9 +117,9 @@ class DownloadService : Service() {
                 if (children.add(tag)) refreshSummary()
             }
             Constants.ACTION_DOWNLOAD_COMPLETE ->
-                finishWith(intent, getString(R.string.notification_complete), android.R.drawable.stat_sys_download_done)
+                finishWith(intent, getString(R.string.notification_complete), R.drawable.ic_stat_anydrop)
             Constants.ACTION_DOWNLOAD_FAILED ->
-                finishWith(intent, getString(R.string.notification_failed), android.R.drawable.stat_notify_error)
+                finishWith(intent, getString(R.string.notification_failed), R.drawable.ic_stat_anydrop)
             Constants.ACTION_DOWNLOAD_CANCEL -> {
                 // Paused in the app: its progress notification just goes away.
                 val tag = intent.getStringExtra("tag") ?: return START_NOT_STICKY
@@ -167,7 +167,7 @@ class DownloadService : Service() {
                 NotificationManagerCompat.from(this).notify(
                     Constants.FOREGROUND_SERVICE_NOTIFICATION_ID,
                     summaryBuilder(getString(R.string.notification_downloads_finished))
-                        .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                        .setSmallIcon(R.drawable.ic_stat_anydrop)
                         .setAutoCancel(true)
                         .build()
                 )
@@ -208,7 +208,7 @@ class DownloadService : Service() {
 
     private fun buildSummary(text: String) =
         summaryBuilder(text, asSummary = children.isNotEmpty())
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_stat_anydrop)
             // Indeterminate while downloading (per-file % lives in tagged notifications); none
             // while everything waits for Wi-Fi, so the text saying so shows.
             .setProgress(0, 0, !allWaitingForWifi())

@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,8 +80,8 @@ fun PostItemsPicker(
             Column {
                 Text(
                     stringResource(R.string.post_items_count, items.size),
-                    color = Amber,
-                    fontFamily = FontFamily.Monospace,
+                    color = AccentText,
+                    fontFamily = AppFont,
                     fontSize = 12.sp,
                     letterSpacing = tracked(1f)
                 )
@@ -91,8 +93,8 @@ fun PostItemsPicker(
             }
             Text(
                 stringResource(if (allSelected) R.string.clear_all else R.string.select_all),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
+                color = AccentText,
+                fontFamily = AppFont,
                 fontSize = 11.sp,
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -145,7 +147,7 @@ fun PostItemsPicker(
             Text(
                 stringResource(R.string.share_record_count, selected.size),
                 color = if (selected.isEmpty()) White.copy(alpha = 0.4f) else OnAccent,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = tracked(2f)

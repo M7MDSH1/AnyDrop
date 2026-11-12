@@ -1,5 +1,6 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AppFont
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -97,33 +98,14 @@ private fun ChoiceRow(
     modifier: Modifier
 ) {
     Column(modifier.fillMaxWidth()) {
-        Text(
-            title,
-            color = White.copy(alpha = 0.4f),
-            fontSize = 9.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = tracked(2f)
-        )
-        Spacer(Modifier.height(6.dp))
+        SectionLabel(title)
+        Spacer(Modifier.height(8.dp))
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             choices.forEach { (key, label) ->
-                val isSelected = key == selected
-                val shape = RoundedCornerShape(16.dp)
-                Text(
-                    label,
-                    color = if (isSelected) Amber else White.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier
-                        .clip(shape)
-                        .background(if (isSelected) Amber.copy(alpha = 0.16f) else Black)
-                        .border(1.dp, if (isSelected) Amber else Hairline, shape)
-                        .clickable { onSelect(key) }
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
-                )
+                AppChip(label = label, selected = key == selected, onClick = { onSelect(key) })
             }
         }
     }

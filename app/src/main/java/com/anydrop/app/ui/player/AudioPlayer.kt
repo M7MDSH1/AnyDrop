@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.player
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.net.Uri
 import android.os.SystemClock
 import androidx.compose.foundation.background
@@ -233,7 +235,7 @@ internal fun AudioPlayerContent(
                 Icon(
                     if (videoAsAudio) Icons.Filled.Headphones else Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = Amber,
+                    tint = AccentText,
                     modifier = Modifier.size(72.dp)
                 )
             }
@@ -256,9 +258,9 @@ internal fun AudioPlayerContent(
                 Text(
                     if (timerEndOfTrack) stringResource(R.string.sleep_timer_end_of_track_on)
                     else stringResource(R.string.sleep_timer_left, timerLeft.toTimeString()),
-                    color = Amber,
+                    color = AccentText,
                     fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = AppFont
                 )
             }
             Spacer(Modifier.height(24.dp))
@@ -323,7 +325,7 @@ internal fun AudioPlayerContent(
                         Icon(
                             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = stringResource(R.string.player_play_pause),
-                            tint = Amber,
+                            tint = AccentText,
                             modifier = Modifier.size(56.dp)
                         )
                     }
@@ -389,8 +391,8 @@ private fun UpNextSheet(queue: List<MediaItem>, currentId: String, onPick: (Int)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = DarkPalette.surface) {
         Text(
             stringResource(R.string.audio_up_next),
-            color = Amber,
-            fontFamily = FontFamily.Monospace,
+            color = AccentText,
+            fontFamily = AppFont,
             fontSize = 13.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
         )
@@ -422,7 +424,7 @@ private fun UpNextSheet(queue: List<MediaItem>, currentId: String, onPick: (Int)
                     )
                     if (item.durationMs > 0) {
                         Spacer(Modifier.width(8.dp))
-                        Text(item.durationMs.toTimeString(), color = White.copy(alpha = 0.5f), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        Text(item.durationMs.toTimeString(), color = White.copy(alpha = 0.5f), fontSize = 12.sp, fontFamily = AppFont)
                     }
                 }
             }
@@ -437,27 +439,27 @@ private fun SleepTimerDialog(isSet: Boolean, onPick: (Int?) -> Unit, onDismiss: 
     AlertDialog(
         containerColor = Black,
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.sleep_timer), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.sleep_timer), color = AccentText, fontFamily = AppFont) },
         text = {
             Column(Modifier.fillMaxWidth()) {
                 listOf(15, 30, 45, 60).forEach { minutes ->
                     TextButton(onClick = { onPick(minutes) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.sleep_timer_minutes, minutes), color = White, fontFamily = FontFamily.Monospace)
+                        Text(stringResource(R.string.sleep_timer_minutes, minutes), color = White, fontFamily = AppFont)
                     }
                 }
                 TextButton(onClick = { onPick(0) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.sleep_timer_end_of_track), color = White, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.sleep_timer_end_of_track), color = White, fontFamily = AppFont)
                 }
                 if (isSet) {
                     TextButton(onClick = { onPick(null) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.sleep_timer_off), color = LedRed, fontFamily = FontFamily.Monospace)
+                        Text(stringResource(R.string.sleep_timer_off), color = LedRed, fontFamily = AppFont)
                     }
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace)
+                Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.5f), fontFamily = AppFont)
             }
         }
     )

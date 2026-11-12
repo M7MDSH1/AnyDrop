@@ -1,5 +1,6 @@
 package com.anydrop.app.ui.components
 
+import com.anydrop.app.ui.theme.AppFont
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -57,27 +58,22 @@ object ErrorDetails {
     }
 }
 
-/** A small "COPY ERROR DETAILS" button for an error box. */
+/** A small "Copy error details" button for an error box. */
 @Composable
 fun CopyErrorDetailsButton(
     message: String,
     detail: String,
     link: String,
-    color: Color,
+    @Suppress("UNUSED_PARAMETER") color: Color,
     modifier: Modifier = Modifier,
     quality: String = ""
 ) {
     val context = LocalContext.current
-    Text(
-        stringResource(R.string.error_copy_details),
-        color = color,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        fontFamily = FontFamily.Monospace,
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-            .clickable { ErrorDetails.copy(context, ErrorDetails.report(message, detail, link, quality)) }
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+    PillButton(
+        text = stringResource(R.string.error_copy_details),
+        onClick = { ErrorDetails.copy(context, ErrorDetails.report(message, detail, link, quality)) },
+        modifier = modifier,
+        style = PillStyle.Ghost,
+        small = true
     )
 }

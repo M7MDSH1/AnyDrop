@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.update
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.content.Intent
 import android.net.Uri
 import android.text.format.Formatter
@@ -222,7 +224,7 @@ private fun UpdateDialog(
     AlertDialog(
         onDismissRequest = { if (download !is UpdateDownload.Downloading) onLater() },
         containerColor = MediumGray,
-        title = { Text(stringResource(R.string.update_title), color = Amber, fontFamily = FontFamily.Monospace) },
+        title = { Text(stringResource(R.string.update_title), color = AccentText, fontFamily = AppFont) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.update_message, update.version, currentVersion), color = White, fontSize = 14.sp)
@@ -250,7 +252,7 @@ private fun UpdateDialog(
                         LinearProgressIndicator(
                             progress = { download.percent / 100f },
                             modifier = Modifier.fillMaxWidth(),
-                            color = Amber,
+                            color = AccentText,
                             trackColor = White.copy(alpha = 0.15f),
                             strokeCap = StrokeCap.Round
                         )
@@ -303,7 +305,7 @@ private fun UpdateDialog(
 @Composable
 private fun DialogButton(label: String, color: Color, onClick: () -> Unit) {
     TextButton(onClick = onClick) {
-        Text(label, color = color, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+        Text(label, color = color, fontFamily = AppFont, fontSize = 13.sp)
     }
 }
 

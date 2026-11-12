@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.settings
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
@@ -100,7 +102,7 @@ fun SettingsScreen(
         Text(
             text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.headlineMedium,
-            color = Amber,
+            color = AccentText,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
@@ -192,7 +194,7 @@ fun SettingsScreen(
         Text(
             text = stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
             color = White.copy(alpha = 0.3f),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             fontSize = 10.sp,
             letterSpacing = tracked(2f)
         )
@@ -200,15 +202,15 @@ fun SettingsScreen(
         Text(
             text = stringResource(R.string.settings_tagline),
             color = White.copy(alpha = 0.2f),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             fontSize = 9.sp,
             letterSpacing = tracked(1f)
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = stringResource(R.string.settings_creator),
-            color = Amber.copy(alpha = 0.5f),
-            fontFamily = FontFamily.Monospace,
+            color = AccentText.copy(alpha = 0.5f),
+            fontFamily = AppFont,
             fontSize = 10.sp,
             letterSpacing = tracked(1f)
         )
@@ -223,8 +225,8 @@ fun SettingsScreen(
             title = {
                 Text(
                     stringResource(R.string.settings_max_quality),
-                    fontFamily = FontFamily.Monospace,
-                    color = Amber
+                    fontFamily = AppFont,
+                    color = AccentText
                 )
             },
             text = {
@@ -240,7 +242,7 @@ fun SettingsScreen(
                             Text(
                                 text = stringResource(labelRes),
                                 color = if (maxQualityHeight == height) Amber else White,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = AppFont
                             )
                         }
                     }
@@ -251,7 +253,7 @@ fun SettingsScreen(
                     Text(
                         stringResource(R.string.btn_cancel),
                         color = White.copy(alpha = 0.5f),
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = AppFont
                     )
                 }
             }
@@ -267,8 +269,8 @@ fun SettingsScreen(
             title = {
                 Text(
                     stringResource(R.string.settings_parallel),
-                    fontFamily = FontFamily.Monospace,
-                    color = Amber
+                    fontFamily = AppFont,
+                    color = AccentText
                 )
             },
             text = {
@@ -284,7 +286,7 @@ fun SettingsScreen(
                             Text(
                                 text = stringResource(R.string.parallel_option, count),
                                 color = if (maxParallel == count) Amber else White,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = AppFont
                             )
                         }
                     }
@@ -295,7 +297,7 @@ fun SettingsScreen(
                     Text(
                         stringResource(R.string.btn_cancel),
                         color = White.copy(alpha = 0.5f),
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = AppFont
                     )
                 }
             }
@@ -311,8 +313,8 @@ fun SettingsScreen(
             title = {
                 Text(
                     stringResource(R.string.settings_language),
-                    fontFamily = FontFamily.Monospace,
-                    color = Amber
+                    fontFamily = AppFont,
+                    color = AccentText
                 )
             },
             text = {
@@ -332,7 +334,7 @@ fun SettingsScreen(
                             Text(
                                 text = stringResource(languageLabelRes(option)),
                                 color = if (language == option) Amber else White,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = AppFont
                             )
                         }
                     }
@@ -343,7 +345,7 @@ fun SettingsScreen(
                     Text(
                         stringResource(R.string.btn_cancel),
                         color = White.copy(alpha = 0.5f),
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = AppFont
                     )
                 }
             }
@@ -398,8 +400,8 @@ private fun UpdateCard(status: UpdateStatus, onUpdate: () -> Unit, onCheck: () -
         Column(Modifier.padding(16.dp)) {
             Text(
                 text = stringResource(R.string.settings_updates),
-                color = Amber,
-                fontFamily = FontFamily.Monospace,
+                color = AccentText,
+                fontFamily = AppFont,
                 fontSize = 12.sp,
                 letterSpacing = tracked(2f)
             )
@@ -413,7 +415,7 @@ private fun UpdateCard(status: UpdateStatus, onUpdate: () -> Unit, onCheck: () -
                     UpdateStatus.Failed -> stringResource(R.string.update_status_failed)
                 },
                 color = White.copy(alpha = 0.6f),
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 fontSize = 11.sp,
                 lineHeight = 16.sp
             )
@@ -433,7 +435,7 @@ private fun UpdateCard(status: UpdateStatus, onUpdate: () -> Unit, onCheck: () -
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (checking) {
-                    CircularProgressIndicator(color = Amber, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    CircularProgressIndicator(color = AccentText, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                 } else {
                     Icon(
@@ -451,7 +453,7 @@ private fun UpdateCard(status: UpdateStatus, onUpdate: () -> Unit, onCheck: () -
                         else -> stringResource(R.string.update_button_check)
                     },
                     color = if (available) OnAccent else Amber.copy(alpha = if (checking) 0.6f else 1f),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
                     letterSpacing = tracked(1.5f)
@@ -476,16 +478,16 @@ private fun SettingsCard(title: String, subtitle: String, onClick: (() -> Unit)?
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, color = Amber, fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = tracked(2f))
+                Text(text = title, color = AccentText, fontFamily = AppFont, fontSize = 12.sp, letterSpacing = tracked(2f))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = subtitle, color = White.copy(alpha = 0.5f), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                Text(text = subtitle, color = White.copy(alpha = 0.5f), fontFamily = AppFont, fontSize = 10.sp)
             }
             if (onClick != null) {
                 Spacer(modifier = Modifier.padding(8.dp))
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = Amber.copy(alpha = 0.4f),
+                    tint = AccentText.copy(alpha = 0.4f),
                     modifier = Modifier.padding(0.dp)
                 )
             }

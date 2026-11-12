@@ -1,5 +1,7 @@
 package com.anydrop.app.ui.audio
 
+import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -165,9 +167,9 @@ fun AudioScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = { selectedIds = emptySet() }) {
-                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    Text(stringResource(R.string.btn_cancel), color = White.copy(alpha = 0.7f), fontFamily = AppFont, fontSize = 12.sp)
                 }
-                Text(stringResource(R.string.selected_count, selectedIds.size), color = Amber, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                Text(stringResource(R.string.selected_count, selectedIds.size), color = AccentText, fontFamily = AppFont, fontSize = 13.sp)
                 IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_desc), tint = LedRed)
                 }
@@ -176,7 +178,7 @@ fun AudioScreen(
             Text(
                 text = stringResource(R.string.audio_title),
                 style = MaterialTheme.typography.headlineMedium,
-                color = Amber,
+                color = AccentText,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -188,7 +190,7 @@ fun AudioScreen(
             text = stringResource(R.string.tracks_count, audioItems.size),
             color = White.copy(alpha = 0.4f),
             fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = AppFont,
             letterSpacing = tracked(2f),
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center
@@ -204,7 +206,7 @@ fun AudioScreen(
                 Text(
                     text = stringResource(R.string.audio_empty),
                     color = White.copy(alpha = 0.3f),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFont,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
                 )
@@ -270,7 +272,7 @@ private fun AudioRow(
                 Icon(
                     Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = Amber,
+                    tint = AccentText,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -279,7 +281,7 @@ private fun AudioRow(
                 text = item.title,
                 color = White,
                 fontSize = 13.sp,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFont,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -294,7 +296,7 @@ private fun AudioRow(
                 )
             } else {
                 IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.play_desc), tint = Amber)
+                    Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.play_desc), tint = AccentText)
                 }
                 Box {
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(32.dp)) {
