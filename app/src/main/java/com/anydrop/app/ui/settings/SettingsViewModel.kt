@@ -64,6 +64,14 @@ class SettingsViewModel @Inject constructor(
     private val _subtitles = MutableStateFlow(settingsRepository.subtitles)
     val subtitles: StateFlow<Boolean> = _subtitles.asStateFlow()
 
+    private val _blockAds = MutableStateFlow(settingsRepository.blockAds)
+    val blockAds: StateFlow<Boolean> = _blockAds.asStateFlow()
+
+    fun toggleBlockAds() {
+        settingsRepository.blockAds = !settingsRepository.blockAds
+        _blockAds.value = settingsRepository.blockAds
+    }
+
     fun toggleAudioLanguages() {
         settingsRepository.audioLanguages = !settingsRepository.audioLanguages
         _audioLanguages.value = settingsRepository.audioLanguages

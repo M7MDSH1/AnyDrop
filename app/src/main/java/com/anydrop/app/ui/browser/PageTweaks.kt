@@ -28,7 +28,8 @@ object PageTweaks {
     val JS = """
 (() => {
   if (window.__anydropTweaks) return;
-  window.__anydropTweaks = true;
+  // Not enumerable, so pages listing the window's keys don't see it.
+  Object.defineProperty(window, '__anydropTweaks', { value: true });
 
   const NAGS = [
     {

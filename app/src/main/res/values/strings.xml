@@ -436,4 +436,13 @@
     <string name="update_button_update">Update to %1$s</string>
     <string name="update_button_check">Check for updates</string>
     <string name="update_button_checking">Checking…</string>
+    <string name="scope_anydrop">AnyDrop only</string>
+    <string name="settings_group_browser">Browser</string>
+    <string name="settings_block_ads">Block ads</string>
+    <string name="block_ads_on">Ads and pop-ups are blocked in the browser. You can allow them per site from the browser menu.</string>
+    <string name="block_ads_off">Pages load with their ads and pop-ups</string>
+    <string name="browser_block_ads">Block ads here</string>
+    <string name="browser_block_ads_count">Block ads here (%1$d)</string>
+    <string name="browser_popup_blocked">Pop-up blocked</string>
+    <string name="browser_popup_open">Open</string>
 </resources>

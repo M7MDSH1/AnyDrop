@@ -17,7 +17,9 @@ data class MediaItem(
     val isAudio: Boolean = false,
     val isImage: Boolean = false,
     val creator: String = "",
-    val creatorUrl: String = ""
+    val creatorUrl: String = "",
+    /** Downloaded with AnyDrop (its own folder or its gallery album), not just found on the device. */
+    val fromAnyDrop: Boolean = false
 )
 
 enum class MediaSource(val displayName: String) {

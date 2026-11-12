@@ -1,6 +1,13 @@
 package com.anydrop.app.ui.browser
 
 import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.components.PillStyle
+import com.anydrop.app.ui.components.PillButton
+import com.anydrop.app.data.repository.SettingsRepository
+import androidx.compose.material.icons.filled.Shield
+import com.anydrop.app.engine.AdBlocker
+import java.util.concurrent.atomic.AtomicInteger
+import android.os.Message
 import com.anydrop.app.ui.theme.AppFont
 import android.content.Context
 import android.graphics.Bitmap
@@ -208,6 +215,33 @@ class BrowserState(private val appContext: Context) {
     var scan by mutableStateOf<PageScan?>(null)
         private set
 
+    // Ad blocker: the Settings switch, minus the sites the user allowed ads on.
+    private val adsAllowedPrefs = appContext.getSharedPreferences("anydrop_browser_ads_allowed", Context.MODE_PRIVATE)
+    private var adPrefsVersion by mutableIntStateOf(0)
+
+    // Read on the network thread for every request, so plain fields, not Compose state.
+    @Volatile private var pageHost: String? = null
+    @Volatile private var blockingAds = false
+
+    /** Requests answered by the ad blocker on this page. */
+    val adsBlocked = AtomicInteger()
+
+    /** The ad blocker is switched on in Settings. */
+    val adBlockAvailable: Boolean get() = SettingsRepository.blockAds(appContext)
+
+    /** Whether ads are blocked on the site on screen. */
+    val adBlockOn: Boolean
+        get() {
+            adPrefsVersion
+            return blocksAds(currentUrl)
+        }
+
+    /** A pop-up or ad page that was just refused; the screen offers to open it anyway. */
+    var blockedPage by mutableStateOf<String?>(null)
+
+    // Set by "Open" on a refused page: its redirects may pass through ad servers once.
+    private var adPassOnce = false
+
     /** Called when a page starts a file download itself (e.g. a "download video" link). */
     var onPageDownload: ((url: String, mime: String?, contentDisposition: String?) -> Unit)? = null
 
@@ -237,10 +271,19 @@ class BrowserState(private val appContext: Context) {
         if (MediaSniffer.documentStartSupported) {
             WebViewCompat.addDocumentStartJavaScript(wv, PageTweaks.JS, setOf("*"))
         }
+        // New windows come to onCreateWindow, where pop-ups are told apart from links.
+        wv.settings.setSupportMultipleWindows(true)
         applyUserAgent(wv, pendingUrl)
         wv.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                MediaSniffer.classifyNetworkUrl(request.url.toString())?.let { network.add(it) }
+                val uri = request.url
+                if (request.isForMainFrame) {
+                    trackPage(uri.toString())
+                } else if (blockingAds && AdBlocker.isAd(uri.host, pageHost)) {
+                    adsBlocked.incrementAndGet()
+                    return AdBlocker.blockedResponse(request)
+                }
+                MediaSniffer.classifyNetworkUrl(uri.toString())?.let { network.add(it) }
                 return null
             }
 
@@ -249,6 +292,12 @@ class BrowserState(private val appContext: Context) {
                 return when (uri.scheme) {
                     "http", "https" -> when {
                         PageTweaks.isAppInstallRedirect(uri) -> true
+                        // A tap or a redirect that leads to an ad server: stay on the page.
+                        request.isForMainFrame && blockingAds && !adPassOnce && AdBlocker.isAd(uri.host, pageHost) -> {
+                            adsBlocked.incrementAndGet()
+                            if (request.hasGesture()) blockedPage = uri.toString()
+                            true
+                        }
                         // Moving to a site shown the other way (desktop/mobile): reload it with
                         // the matching browser identity.
                         request.isForMainFrame && applyUserAgent(view, uri.toString()) -> {
@@ -292,6 +341,7 @@ class BrowserState(private val appContext: Context) {
 
             override fun onPageFinished(view: WebView, url: String?) {
                 isLoading = false
+                adPassOnce = false
                 if (url == "about:blank" && clearHistoryOnBlank) {
                     clearHistoryOnBlank = false
                     view.clearHistory()
@@ -313,6 +363,34 @@ class BrowserState(private val appContext: Context) {
             override fun onReceivedTitle(view: WebView, title: String?) {
                 pageTitle = title.orEmpty()
             }
+
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
+                // The link under the finger, if any: a "new tab" link is followed, while a
+                // window the page opens by itself on that tap is a pop-up.
+                val hit = view.hitTestResult
+                val tappedLink = hit.extra.takeIf { hit.type == WebView.HitTestResult.SRC_ANCHOR_TYPE }
+                // The window's address only shows up once it starts loading: catch it in a
+                // throwaway view, which also lets the page believe its window opened.
+                val probe = WebView(view.context)
+                var done = false
+                val finish = {
+                    if (!done) {
+                        done = true
+                        probe.destroy()
+                    }
+                }
+                probe.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(popup: WebView, request: WebResourceRequest): Boolean {
+                        openedWindow(view, request.url, tappedLink)
+                        popup.post(finish)
+                        return true
+                    }
+                }
+                (resultMsg.obj as WebView.WebViewTransport).webView = probe
+                resultMsg.sendToTarget()
+                view.postDelayed(finish, 10_000)
+                return true
+            }
         }
         wv.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
             onPageDownload?.invoke(url, mimeType, contentDisposition)
@@ -328,6 +406,54 @@ class BrowserState(private val appContext: Context) {
     private fun resetFindings() {
         network.clear()
         scan = null
+    }
+
+    private fun blocksAds(url: String?): Boolean =
+        adBlockAvailable && siteKey(url)?.let { !adsAllowedPrefs.getBoolean(it, false) } != false
+
+    /** A new page is loading in the main frame: decide once whether its ads are blocked. */
+    private fun trackPage(url: String) {
+        pageHost = runCatching { Uri.parse(url).host }.getOrNull()?.lowercase()
+        blockingAds = blocksAds(url)
+        adsBlocked.set(0)
+    }
+
+    /** Turns the ad blocker off (or back on) for the site on screen, and remembers it. */
+    fun toggleAdBlock() {
+        val url = currentUrl ?: return
+        val key = siteKey(url) ?: return
+        adsAllowedPrefs.edit().putBoolean(key, blocksAds(url)).apply()
+        adPrefsVersion++
+        webView?.reload()
+    }
+
+    /** Opens the page the ad blocker just refused. */
+    fun openBlockedPage() {
+        val url = blockedPage ?: return
+        blockedPage = null
+        adPassOnce = true
+        webView?.let {
+            applyUserAgent(it, url)
+            it.loadUrl(url)
+        }
+    }
+
+    /** The page opened a window to [uri]. The browser has one tab, so it either loads here or is refused. */
+    private fun openedWindow(view: WebView, uri: Uri, tappedLink: String?) {
+        val url = uri.toString()
+        if (uri.scheme != "http" && uri.scheme != "https") return
+        val host = uri.host?.lowercase().orEmpty()
+        val page = pageHost
+        val wanted = !blockingAds ||
+            (!AdBlocker.isAd(host, page) &&
+                (tappedLink == url || (page != null && AdBlocker.siteOf(host) == AdBlocker.siteOf(page))))
+        if (wanted) {
+            applyUserAgent(view, url)
+            view.loadUrl(url)
+        } else {
+            adsBlocked.incrementAndGet()
+            blockedPage = url
+        }
     }
 
     private fun updateNav(view: WebView) {
@@ -626,6 +752,33 @@ fun BrowserScreen(
                     onRestore = viewModel::restoreDefaultSites
                 )
             } else {
+                state.blockedPage?.let { blocked ->
+                    // Gone by itself after a few seconds; "Open" is for the rare wanted one.
+                    LaunchedEffect(blocked) {
+                        delay(6000)
+                        if (state.blockedPage == blocked) state.blockedPage = null
+                    }
+                    Row(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(12.dp)
+                            .clip(CircleShape)
+                            .background(MediumGray)
+                            .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.Shield, null, tint = AccentText, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.browser_popup_blocked), color = White, fontSize = 14.sp)
+                        Spacer(Modifier.width(10.dp))
+                        PillButton(
+                            text = stringResource(R.string.browser_popup_open),
+                            onClick = { state.openBlockedPage() },
+                            style = PillStyle.Ghost,
+                            small = true
+                        )
+                    }
+                }
                 DownloadFab(
                     count = state.foundCount,
                     onClick = {
@@ -847,6 +1000,26 @@ private fun BrowserBar(state: BrowserState, address: AddressBarState, onHistory:
                     enabled = !state.showingStart,
                     onClick = { menu = false; state.toggleDesktop() }
                 )
+                if (state.adBlockAvailable) {
+                    val blocked = state.adsBlocked.get()
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (state.adBlockOn && blocked > 0) stringResource(R.string.browser_block_ads_count, blocked)
+                                else stringResource(R.string.browser_block_ads)
+                            )
+                        },
+                        leadingIcon = { Icon(Icons.Filled.Shield, null) },
+                        trailingIcon = {
+                            Checkbox(
+                                checked = state.adBlockOn, onCheckedChange = null,
+                                colors = CheckboxDefaults.colors(checkedColor = Amber, checkmarkColor = OnAccent)
+                            )
+                        },
+                        enabled = !state.showingStart,
+                        onClick = { menu = false; state.toggleAdBlock() }
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.browser_add_to_start)) },
                     leadingIcon = { Icon(Icons.Filled.BookmarkAdd, null) },

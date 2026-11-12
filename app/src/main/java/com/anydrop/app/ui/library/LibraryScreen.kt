@@ -437,7 +437,7 @@ fun LibraryScreen(
                 Text(
                     text = stringResource(
                         when (scope) {
-                            LibraryScope.All -> R.string.library_empty
+                            LibraryScope.All, LibraryScope.AnyDrop -> R.string.library_empty
                             LibraryScope.Favorites -> R.string.favorites_empty
                             is LibraryScope.Collection -> R.string.collection_empty
                         }

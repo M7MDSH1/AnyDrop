@@ -96,12 +96,19 @@ class LibraryRepository(private val context: Context) {
 
     // Which part of the library is shown: everything, favorites or one collection.
     // In memory like the search, and shared so the player swipes through the same set.
-    private val _scope = MutableStateFlow<LibraryScope>(LibraryScope.All)
+    private val _scope = MutableStateFlow<LibraryScope>(
+        if (prefs.getBoolean("anydrop_only", false)) LibraryScope.AnyDrop else LibraryScope.All
+    )
     val scope: StateFlow<LibraryScope> = _scope.asStateFlow()
 
     fun setScope(scope: LibraryScope) {
         _scope.value = scope
+        // "AnyDrop only" is a preference, so it is still on next time; the others are a visit.
+        prefs.edit().putBoolean("anydrop_only", scope == LibraryScope.AnyDrop).apply()
     }
+
+    /** AnyDrop saves to ".../AnyDrop/..." both in its own folder and in the gallery. */
+    private fun isAnyDropPath(path: String) = path.contains("/AnyDrop/")
 
     /**
      * Show the previously cached index immediately (no MediaStore scan) so the
@@ -250,6 +257,8 @@ class LibraryRepository(private val context: Context) {
                 }
 
                 val dateAdded = it.getLong(it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED))
+                @Suppress("DEPRECATION")
+                val storedAt = it.getString(it.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)).orEmpty()
                 items.add(MediaItem(
                     id = "vid_$id",
                     title = name,
@@ -258,7 +267,8 @@ class LibraryRepository(private val context: Context) {
                     durationMs = duration,
                     fileSize = fileSize,
                     downloadedAt = dateAdded * 1000, // DATE_ADDED is in seconds
-                    source = MediaSource.UNKNOWN
+                    source = MediaSource.UNKNOWN,
+                    fromAnyDrop = isAnyDropPath(storedAt)
                 ))
             }
         }
@@ -271,7 +281,7 @@ class LibraryRepository(private val context: Context) {
             val match = privateVideos.firstOrNull { it.name == storeItem.title || it.nameWithoutExtension == storeItem.title }
                 ?: privateVideos.firstOrNull { it.nameWithoutExtension == File(storeItem.title).nameWithoutExtension }
             if (match != null) {
-                items[i] = storeItem.copy(localFilePath = storeItem.localFilePath).let { base ->
+                items[i] = storeItem.copy(fromAnyDrop = true).let { base ->
                     // read sidecar keyed by the private file path
                     val meta = readMetadata(match.absolutePath)
                     if (meta != null) base.copy(
@@ -298,7 +308,8 @@ class LibraryRepository(private val context: Context) {
                     fileSize = file.length(),
                     durationMs = readVideoDuration(file),
                     downloadedAt = file.lastModified(),
-                    source = MediaSource.UNKNOWN
+                    source = MediaSource.UNKNOWN,
+                    fromAnyDrop = true
                 ).withMetadata()
             }
         items.addAll(anyDropFiles)
@@ -327,6 +338,8 @@ class LibraryRepository(private val context: Context) {
                     val size = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE))
                     val dateAdded = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED))
                     val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                    @Suppress("DEPRECATION")
+                    val storedAt = it.getString(it.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)).orEmpty()
                     imageItems.add(
                         MediaItem(
                             id = "img_$id",
@@ -336,7 +349,8 @@ class LibraryRepository(private val context: Context) {
                             fileSize = size,
                             downloadedAt = dateAdded * 1000,
                             source = MediaSource.UNKNOWN,
-                            isImage = true
+                            isImage = true,
+                            fromAnyDrop = isAnyDropPath(storedAt)
                         )
                     )
                 }
@@ -349,9 +363,11 @@ class LibraryRepository(private val context: Context) {
             val storeItem = imageItems[i]
             val match = privateImages.firstOrNull { it.nameWithoutExtension == File(storeItem.title).nameWithoutExtension }
             if (match != null) {
+                imageItems[i] = storeItem.copy(fromAnyDrop = true)
                 val meta = readMetadata(match.absolutePath)
                 if (meta != null) {
                     imageItems[i] = storeItem.copy(
+                        fromAnyDrop = true,
                         url = meta.optString("url", storeItem.url),
                         creator = meta.optString("creator", storeItem.creator),
                         creatorUrl = meta.optString("creatorUrl", storeItem.creatorUrl)
@@ -373,7 +389,8 @@ class LibraryRepository(private val context: Context) {
                         fileSize = file.length(),
                         downloadedAt = file.lastModified(),
                         source = MediaSource.UNKNOWN,
-                        isImage = true
+                        isImage = true,
+                        fromAnyDrop = true
                     ).withMetadata()
                 )
             }

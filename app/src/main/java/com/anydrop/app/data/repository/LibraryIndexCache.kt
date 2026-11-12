@@ -82,6 +82,7 @@ class LibraryIndexCache(private val context: Context) {
         put("isImage", isImage)
         put("creator", creator)
         put("creatorUrl", creatorUrl)
+        put("fromAnyDrop", fromAnyDrop)
     }
 
     private fun JSONArray.toMediaItems(): List<MediaItem> = buildList {
@@ -107,7 +108,8 @@ class LibraryIndexCache(private val context: Context) {
                     isAudio = o.optBoolean("isAudio"),
                     isImage = o.optBoolean("isImage"),
                     creator = o.optString("creator"),
-                    creatorUrl = o.optString("creatorUrl")
+                    creatorUrl = o.optString("creatorUrl"),
+                    fromAnyDrop = o.optBoolean("fromAnyDrop")
                 )
             )
         }

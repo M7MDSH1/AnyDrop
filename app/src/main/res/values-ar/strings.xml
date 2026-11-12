@@ -440,4 +440,13 @@
     <string name="update_button_update">التحديث إلى %1$s</string>
     <string name="update_button_check">التحقق من التحديثات</string>
     <string name="update_button_checking">جارٍ التحقق…</string>
+    <string name="scope_anydrop">تنزيلات AnyDrop فقط</string>
+    <string name="settings_group_browser">المتصفح</string>
+    <string name="settings_block_ads">حظر الإعلانات</string>
+    <string name="block_ads_on">تُحظر الإعلانات والنوافذ المنبثقة في المتصفح. يمكنك السماح بها لموقع معيّن من قائمة المتصفح.</string>
+    <string name="block_ads_off">تُحمَّل الصفحات مع إعلاناتها ونوافذها المنبثقة</string>
+    <string name="browser_block_ads">حظر الإعلانات هنا</string>
+    <string name="browser_block_ads_count">حظر الإعلانات هنا (%1$d)</string>
+    <string name="browser_popup_blocked">حُظرت نافذة منبثقة</string>
+    <string name="browser_popup_open">فتح</string>
 </resources>
