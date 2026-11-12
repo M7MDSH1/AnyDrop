@@ -1,5 +1,20 @@
 package com.anydrop.app
 
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.Role
+import com.anydrop.app.ui.components.AppMark
+import com.anydrop.app.ui.components.PillButton
+import com.anydrop.app.ui.theme.AccentSoft
+import com.anydrop.app.ui.theme.NumberFont
+import com.anydrop.app.ui.theme.TextFaint
+import com.anydrop.app.ui.theme.TextMuted
+
 import com.anydrop.app.ui.theme.AccentText
 import com.anydrop.app.ui.theme.AppFont
 import android.Manifest
@@ -229,8 +244,8 @@ private fun ShareSheet(
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheetState,
-        containerColor = DarkGray,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        containerColor = Black,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         val images = formats.filter { it.isImage && it.imageUrl.isNotBlank() }
@@ -247,20 +262,15 @@ private fun ShareSheet(
                 .padding(bottom = 28.dp)
         ) {
             // Header
-            Text(
-                stringResource(R.string.brand_wordmark),
-                color = AccentText,
-                fontFamily = AppFont,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = tracked(3f)
-            )
-            Text(
-                stringResource(R.string.share_select_what),
-                color = White.copy(alpha = 0.5f),
-                fontFamily = AppFont,
-                fontSize = 11.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppMark(36.dp)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    stringResource(R.string.share_select_what),
+                    color = White,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
             if (!isTorrent && !LinkList.isList(sharedUrl)) {
                 Spacer(Modifier.height(12.dp))
                 FetchModeToggle(wholePage = fetchWholePage, onChange = viewModel::setFetchWholePage)
@@ -270,7 +280,7 @@ private fun ShareSheet(
                 Text(
                     stringResource(R.string.found_on_page),
                     color = StatusGreen,
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     fontFamily = AppFont,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
@@ -303,9 +313,9 @@ private fun ShareSheet(
                                         else -> R.string.share_fetching
                                     }
                                 ),
-                                color = White.copy(alpha = 0.6f),
+                                color = TextMuted,
                                 fontFamily = AppFont,
-                                fontSize = 12.sp
+                                fontSize = 13.sp
                             )
                         }
                     }
@@ -317,8 +327,8 @@ private fun ShareSheet(
                         error.message,
                         color = StatusRed,
                         fontFamily = AppFont,
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
                     )
                     if (error.detail.isNotBlank()) {
                         Spacer(Modifier.height(10.dp))
@@ -426,21 +436,16 @@ private fun ShareQualityList(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(formats) { fmt ->
-                val icon = when {
-                    fmt.isImage -> "▣"
-                    fmt.isAudioOnly -> "♪"
-                    else -> "●"
-                }
                 val isSel = fmt.uniqueKey() == selectedId
+                val shape = RoundedCornerShape(16.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Black)
-                        .then(if (isSel) Modifier.border(2.dp, Amber, RoundedCornerShape(8.dp)) else Modifier)
-                        .clickable { selectedId = fmt.uniqueKey() }
+                        .clip(shape)
+                        .background(if (isSel) AccentSoft else MediumGray)
+                        .then(if (isSel) Modifier.border(1.5.dp, Amber, shape) else Modifier)
+                        .selectable(selected = isSel, role = Role.RadioButton, onClick = { selectedId = fmt.uniqueKey() })
                         .padding(horizontal = if (showCovers) 8.dp else 16.dp, vertical = if (showCovers) 8.dp else 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (showCovers && !fmt.isImage && !fmt.isAudioOnly) {
@@ -451,43 +456,41 @@ private fun ShareQualityList(
                             modifier = Modifier.width(78.dp).aspectRatio(16f / 9f)
                         )
                         Spacer(Modifier.width(10.dp))
+                    } else {
+                        Icon(
+                            if (isSel) Icons.Filled.RadioButtonChecked else Icons.Filled.RadioButtonUnchecked,
+                            contentDescription = null,
+                            tint = if (isSel) AccentText else TextFaint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
                     }
                     Text(
-                        "$icon  ${fmt.resolution}",
-                        color = if (isSel) Amber else White,
+                        fmt.resolution,
+                        color = White,
                         fontFamily = AppFont,
-                        fontSize = 14.sp,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
                         fmt.extension.uppercase(),
-                        color = AccentText.copy(alpha = 0.8f),
-                        fontFamily = AppFont,
-                        fontSize = 11.sp
+                        color = TextFaint,
+                        fontFamily = NumberFont,
+                        fontSize = 12.sp
                     )
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (selected == null) MediumGray else Amber)
-                .clickable(enabled = selected != null) { selected?.let(onRecord) }
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                stringResource(R.string.share_record),
-                color = if (selected == null) White.copy(alpha = 0.4f) else Black,
-                fontFamily = AppFont,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = tracked(3f)
-            )
-        }
+        PillButton(
+            text = stringResource(R.string.share_record),
+            onClick = { selected?.let(onRecord) },
+            enabled = selected != null,
+            icon = Icons.Filled.Download,
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        )
     }
 }
 

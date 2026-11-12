@@ -150,6 +150,11 @@
 
     <!-- Settings -->
     <string name="settings_title">الإعدادات</string>
+    <string name="settings_group_downloads">التنزيلات</string>
+    <string name="settings_group_media">الوسائط</string>
+    <string name="settings_group_app">التطبيق</string>
+    <string name="appearance_light">فاتح</string>
+    <string name="appearance_dark">داكن</string>
     <string name="settings_session_signal">إشارة الجلسة</string>
     <string name="settings_session_signal_sub">اختياري — للمحتوى الخاص فقط. المنشورات العامة لا تحتاج تسجيل دخول.</string>
     <string name="settings_appearance">المظهر</string>

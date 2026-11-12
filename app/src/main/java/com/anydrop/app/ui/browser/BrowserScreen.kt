@@ -148,6 +148,7 @@ import com.anydrop.app.engine.PageScan
 import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.toFormatInfos
 import com.anydrop.app.ui.components.MediaThumb
+import com.anydrop.app.ui.theme.TextMuted
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -753,11 +754,11 @@ private fun BrowserBar(state: BrowserState, address: AddressBarState, onHistory:
         Row(
             Modifier
                 .weight(1f)
-                .height(42.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(DarkGray)
-                .border(1.dp, if (editing) Amber else Hairline, RoundedCornerShape(10.dp))
-                .padding(horizontal = 12.dp),
+                .height(48.dp)
+                .clip(CircleShape)
+                .background(MediumGray)
+                .border(1.5.dp, if (editing) Amber else Color.Transparent, CircleShape)
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -1029,19 +1030,18 @@ private fun SiteTile(
             val color = Color(site.argb)
             Box(
                 Modifier
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.16f))
-                    .border(1.dp, color.copy(alpha = 0.5f), CircleShape),
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Black),
                 contentAlignment = Alignment.Center
             ) {
-                Text(site.initial(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = AppFont)
+                Text(site.initial(), color = TextMuted, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(6.dp))
             Text(
                 site.name,
-                color = White.copy(alpha = 0.85f),
-                fontSize = 11.sp,
+                color = TextMuted,
+                fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 2.dp)
@@ -1080,15 +1080,15 @@ private fun AddSiteTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         Box(
             Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .border(1.dp, LightGray, CircleShape),
+                .size(60.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .border(1.5.dp, Hairline, RoundedCornerShape(18.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Filled.Add, null, tint = AccentText)
+            Icon(Icons.Filled.Add, null, tint = TextMuted)
         }
         Spacer(Modifier.height(6.dp))
-        Text(stringResource(R.string.browser_add_site), color = AccentText, fontSize = 11.sp, maxLines = 1)
+        Text(stringResource(R.string.browser_add_site), color = TextMuted, fontSize = 12.sp, maxLines = 1)
     }
 }
 
@@ -1210,22 +1210,19 @@ private fun DownloadFab(count: Int, onClick: () -> Unit, modifier: Modifier = Mo
     Row(
         modifier
             .scale(scale.value)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (found) Amber else Black)
-            .border(1.dp, if (found) Amber else MediumGray, RoundedCornerShape(16.dp))
+            .clip(CircleShape)
+            .background(if (found) Amber else MediumGray)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 22.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Filled.Download, null, tint = if (found) OnAccent else Amber, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(8.dp))
+        Icon(Icons.Filled.Download, null, tint = if (found) OnAccent else TextMuted, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
         Text(
             if (found) stringResource(R.string.browser_download_count, count) else stringResource(R.string.browser_find_video),
             color = if (found) OnAccent else White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 13.sp,
-            fontFamily = AppFont,
-            letterSpacing = tracked(1f)
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp
         )
     }
 }
