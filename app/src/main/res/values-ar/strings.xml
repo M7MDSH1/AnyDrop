@@ -449,4 +449,15 @@
     <string name="browser_block_ads_count">حظر الإعلانات هنا (%1$d)</string>
     <string name="browser_popup_blocked">حُظرت نافذة منبثقة</string>
     <string name="browser_popup_open">فتح</string>
+    <string name="progress_retrying">مشكلة في الاتصال، جارٍ إعادة المحاولة…</string>
+    <string name="progress_waiting_connection">في انتظار الاتصال…</string>
+    <string name="error_not_enough_space">المساحة غير كافية: يحتاج هذا إلى %1$s والمتاح في الهاتف %2$s.</string>
+    <string name="settings_storage">التخزين</string>
+    <string name="storage_value">التنزيلات تشغل %1$s · المتاح %2$s</string>
+    <string name="settings_engine">محرّك التنزيل</string>
+    <string name="engine_idle">%1$s. اضغط للبحث عن إصدار أحدث.</string>
+    <string name="engine_checking">جارٍ البحث عن إصدار أحدث…</string>
+    <string name="engine_updated">تم التحديث إلى %1$s</string>
+    <string name="engine_current">%1$s هو الأحدث</string>
+    <string name="engine_failed">تعذّر التحقق. هل أنت متصل بالإنترنت؟</string>
 </resources>

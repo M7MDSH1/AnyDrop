@@ -40,11 +40,29 @@ class DownloadGate @Inject constructor(
     /** The phone is on Wi-Fi or Ethernet (not mobile data). */
     val onWifi: StateFlow<Boolean> = _onWifi.asStateFlow()
 
+    // Assumed connected when it can't be told, so nothing waits forever for a network.
+    private val _online = MutableStateFlow(runCatching { connectivity?.activeNetwork != null }.getOrDefault(true))
+    /** The phone has a connection of any kind. */
+    val online: StateFlow<Boolean> = _online.asStateFlow()
+
+    /** Returns once the phone has a connection (at once when it has one). */
+    suspend fun awaitOnline() {
+        online.first { it }
+    }
+
     init {
         runCatching {
             connectivity?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = networkChanged(caps.isWifi())
-                override fun onLost(network: Network) = networkChanged(currentlyOnWifi())
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                    _online.value = true
+                    networkChanged(caps.isWifi())
+                }
+
+                // Only called when no other network took over.
+                override fun onLost(network: Network) {
+                    _online.value = false
+                    networkChanged(currentlyOnWifi())
+                }
             })
         }
     }

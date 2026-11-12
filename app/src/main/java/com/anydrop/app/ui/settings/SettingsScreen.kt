@@ -1,6 +1,9 @@
 package com.anydrop.app.ui.settings
 
 import androidx.compose.foundation.layout.ColumnScope
+import android.text.format.Formatter
+import androidx.compose.material.icons.filled.SystemUpdateAlt
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.ContentPasteSearch
@@ -105,13 +108,17 @@ fun SettingsScreen(
     val audioLanguages by viewModel.audioLanguages.collectAsState()
     val subtitles by viewModel.subtitles.collectAsState()
     val blockAds by viewModel.blockAds.collectAsState()
+    val storage by viewModel.storage.collectAsState()
+    val engineVersion by viewModel.engineVersion.collectAsState()
+    val engineState by viewModel.engineState.collectAsState()
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { viewModel.refreshStorage() }
     val maxParallel by viewModel.maxParallel.collectAsState()
 
     var showQualityDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showParallelDialog by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // The activity's instance, so "check now" opens the same dialog as the automatic check.
     val updateViewModel: UpdateViewModel = hiltViewModel(context.findActivity())
@@ -167,6 +174,35 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_download_path_sub),
                     onClick = null
                 ) {}
+                SettingsRow(
+                    icon = Icons.Filled.Storage,
+                    title = stringResource(R.string.settings_storage),
+                    subtitle = storage?.let { (used, free) ->
+                        stringResource(
+                            R.string.storage_value,
+                            Formatter.formatShortFileSize(context, used), Formatter.formatShortFileSize(context, free)
+                        )
+                    } ?: "",
+                    onClick = null
+                ) {}
+                SettingsRow(
+                    icon = Icons.Filled.SystemUpdateAlt,
+                    title = stringResource(R.string.settings_engine),
+                    subtitle = when (engineState) {
+                        SettingsViewModel.EngineState.CHECKING -> stringResource(R.string.engine_checking)
+                        SettingsViewModel.EngineState.UPDATED -> stringResource(R.string.engine_updated, engineVersion)
+                        SettingsViewModel.EngineState.CURRENT -> stringResource(R.string.engine_current, engineVersion)
+                        SettingsViewModel.EngineState.FAILED -> stringResource(R.string.engine_failed)
+                        SettingsViewModel.EngineState.IDLE -> stringResource(R.string.engine_idle, engineVersion)
+                    },
+                    onClick = { viewModel.updateEngine() }
+                ) {
+                    if (engineState == SettingsViewModel.EngineState.CHECKING) {
+                        CircularProgressIndicator(color = AccentText, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    } else {
+                        Chevron()
+                    }
+                }
             }
 
             SettingsGroup(stringResource(R.string.settings_group_media)) {

@@ -118,6 +118,11 @@ class SettingsRepository @Inject constructor(
     /** Last time (epoch millis) a yt-dlp update check was attempted, to throttle it. */
     fun lastYtDlpUpdateCheck(): Long = prefs.getLong(KEY_YTDLP_LAST_UPDATE, 0L)
 
+    /** The YouTube player client that worked last, tried first next time (null = none yet). */
+    var youtubeClient: String?
+        get() = prefs.getString(KEY_YOUTUBE_CLIENT, null)
+        set(value) = prefs.edit().putString(KEY_YOUTUBE_CLIENT, value).apply()
+
     fun markYtDlpUpdateCheck() {
         prefs.edit().putLong(KEY_YTDLP_LAST_UPDATE, System.currentTimeMillis()).apply()
     }
@@ -128,6 +133,7 @@ class SettingsRepository @Inject constructor(
         private const val KEY_AUDIO_LANGUAGES = "offer_audio_languages"
         private const val KEY_SUBTITLES = "offer_subtitles"
         private const val KEY_BLOCK_ADS = "block_ads"
+        private const val KEY_YOUTUBE_CLIENT = "youtube_client"
 
         /** [blockAds] for code built outside Hilt (the browser's state holder). */
         fun blockAds(context: Context): Boolean =

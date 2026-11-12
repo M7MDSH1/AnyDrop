@@ -24,6 +24,9 @@ object Constants {
     const val ACTION_DOWNLOAD_FAILED = "com.anydrop.app.DOWNLOAD_FAILED"
     const val ACTION_DOWNLOAD_PROGRESS = "com.anydrop.app.DOWNLOAD_PROGRESS"
     const val ACTION_DOWNLOAD_WAITING = "com.anydrop.app.DOWNLOAD_WAITING"
+    // The notification's own buttons.
+    const val ACTION_DOWNLOAD_PAUSE_REQUEST = "com.anydrop.app.DOWNLOAD_PAUSE_REQUEST"
+    const val ACTION_DOWNLOAD_REMOVE_REQUEST = "com.anydrop.app.DOWNLOAD_REMOVE_REQUEST"
 
     val SUPPORTED_DOMAINS = listOf(
         "instagram.com", "tiktok.com", "youtube.com",
