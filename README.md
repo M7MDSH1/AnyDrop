@@ -4,20 +4,22 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v1.6.1**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.0.0**
 
 ---
 
 ## Features
 
+- **A new look** (v2.0) — a calmer, modern design: Geist type, graphite surfaces with one
+  tangerine accent, pill buttons and a new icon, in light and dark.
 - **Download videos** in any available quality (picks video + audio and merges them).
 - **No login needed** for public posts — Instagram reels, posts and carousels (and any
   site yt-dlp can't handle) are read straight from the web page, like a browser would.
 - **Audio-only** extraction (.m4a) at selectable bitrates.
-- **Audio language** — videos with several voices (YouTube's other languages and
-  automatic dubbing) let you pick which one to save, with the video or alone.
-- **Subtitles** — save a video's subtitles (the creator's own or the site's automatic
-  ones) next to it; the player shows them, with a CC button to turn them off.
+- **Audio language** (Settings, off by default) — videos with several voices (YouTube's
+  other languages and automatic dubbing) let you pick which one to save, with the video or alone.
+- **Subtitles** (Settings, off by default) — save a video's subtitles (the creator's own or
+  the site's automatic ones) next to it; the player shows them, with a CC button to turn them off.
 - **Images** — single photos and photo posts.
 - **Whole posts** — share a carousel that mixes photos and videos and AnyDrop fetches
   every item, shows them in a grid (videos marked ▶) and downloads the ones you pick,

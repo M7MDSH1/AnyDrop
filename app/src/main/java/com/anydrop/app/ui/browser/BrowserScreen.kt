@@ -149,6 +149,8 @@ import com.anydrop.app.engine.YtDlpEngine.FormatInfo
 import com.anydrop.app.engine.toFormatInfos
 import com.anydrop.app.ui.components.MediaThumb
 import com.anydrop.app.ui.theme.TextMuted
+import com.anydrop.app.ui.components.AppMark
+import com.anydrop.app.ui.theme.TextFaint
 import com.anydrop.app.ui.theme.Amber
 import com.anydrop.app.ui.theme.Black
 import com.anydrop.app.ui.theme.DarkGray
@@ -896,37 +898,27 @@ private fun StartPage(
             .padding(horizontal = 16.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            stringResource(R.string.brand_wordmark),
-            style = MaterialTheme.typography.displayLarge,
-            color = AccentText
-        )
-        Spacer(Modifier.height(6.dp))
+        AppMark(56.dp)
+        Spacer(Modifier.height(14.dp))
         Text(
             stringResource(R.string.browser_title),
             color = White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = AppFont,
-            letterSpacing = tracked(2f)
+            style = MaterialTheme.typography.titleLarge
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             stringResource(R.string.browser_subtitle),
-            color = White.copy(alpha = 0.6f),
-            fontSize = 12.sp,
-            lineHeight = 18.sp,
+            color = TextMuted,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(24.dp))
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(Black)
-                .border(1.dp, Hairline, RoundedCornerShape(14.dp))
-                .padding(vertical = 14.dp, horizontal = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // null stands for the trailing "add site" tile.
             (sites + listOf<BrowserSite?>(null)).chunked(4).forEach { row ->
@@ -953,8 +945,8 @@ private fun StartPage(
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.browser_sites_hint),
-            color = White.copy(alpha = 0.4f),
-            fontSize = 11.sp,
+            color = TextFaint,
+            fontSize = 12.sp,
             textAlign = TextAlign.Center
         )
         if (showRestore) {
@@ -970,17 +962,15 @@ private fun StartPage(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.browser_recent),
-                    color = White.copy(alpha = 0.6f),
-                    fontSize = 11.sp,
-                    fontFamily = AppFont,
-                    letterSpacing = tracked(2f),
+                    color = White,
+                    style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     stringResource(R.string.browser_see_all),
                     color = AccentText,
-                    fontSize = 11.sp,
-                    fontFamily = AppFont,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onOpenHistory).padding(horizontal = 8.dp, vertical = 6.dp)
                 )
             }
@@ -988,9 +978,8 @@ private fun StartPage(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(Black)
-                    .border(1.dp, Hairline, RoundedCornerShape(14.dp))
                     .padding(vertical = 4.dp)
             ) {
                 recent.forEach { entry -> HistoryRow(entry, onOpen = { onOpen(entry.url) }) }

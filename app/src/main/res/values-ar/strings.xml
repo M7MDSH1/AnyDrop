@@ -121,7 +121,7 @@
 
     <!-- Audio -->
     <string name="audio_title">الصوتيات</string>
-    <string name="tracks_count">المقاطع: %1$d</string>
+    <string name="tracks_count">%1$d مقطع</string>
     <string name="audio_empty">لا توجد مقاطع صوتية بعد.\nفعّل \"صوت فقط\" في الديك لاستخراج الصوت!</string>
 
     <!-- Media item actions -->
@@ -177,8 +177,8 @@
     <string name="subtitles_setting_off">معطّل</string>
     <string name="settings_download_path">موقع التنزيل</string>
     <string name="settings_download_path_sub">فيديو → Movies/AnyDrop · صور → Pictures/AnyDrop · صوت → Music/AnyDrop</string>
-    <string name="settings_version">ANYDROP v%1$s</string>
-    <string name="settings_tagline">⚡ ناسخ الوسائط العالمي المستوحى من الأشرطة التناظرية</string>
+    <string name="settings_version">AnyDrop v%1$s</string>
+    <string name="settings_tagline">نزّل وانسخ وشغّل الوسائط من أي مكان</string>
     <string name="settings_creator">صُنع بواسطة M7MDSH · © 2026</string>
     <string name="settings_language">اللغة</string>
     <string name="language_system">لغة النظام</string>
