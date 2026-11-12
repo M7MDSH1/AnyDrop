@@ -456,4 +456,15 @@
     <string name="engine_updated">Updated to %1$s</string>
     <string name="engine_current">%1$s is the newest</string>
     <string name="engine_failed">Couldn\'t check. Are you online?</string>
+    <string name="settings_quick_share">Download shared links right away</string>
+    <string name="quick_share_on">A shared video is saved in the best quality allowed, without asking</string>
+    <string name="quick_share_off">A shared link asks what to save</string>
+    <string name="copy_media_info">Copy media info</string>
+    <string name="media_info_copied">Media info copied</string>
+    <string name="clip_part">Only a part</string>
+    <string name="clip_from">From</string>
+    <string name="clip_to">To</string>
+    <string name="clip_invalid">Pick times between 0:00 and %1$s</string>
+    <string name="btn_download_clip">Download clip</string>
+    <string name="progress_clip">Downloading the clip…</string>
 </resources>

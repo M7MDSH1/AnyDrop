@@ -706,7 +706,7 @@ private fun LibraryCard(
                 .joinToString(" · ")
         }
         if (details.isNotBlank()) {
-            Text(details, color = TextFaint, fontSize = 12.sp, fontFamily = NumberFont, maxLines = 1)
+            Text(details, color = TextFaint, fontSize = 12.sp, maxLines = 1)
         }
     }
 }

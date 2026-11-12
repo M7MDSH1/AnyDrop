@@ -460,4 +460,15 @@
     <string name="engine_updated">تم التحديث إلى %1$s</string>
     <string name="engine_current">%1$s هو الأحدث</string>
     <string name="engine_failed">تعذّر التحقق. هل أنت متصل بالإنترنت؟</string>
+    <string name="settings_quick_share">تنزيل الروابط المشاركة مباشرة</string>
+    <string name="quick_share_on">يُحفظ الفيديو المشارك بأفضل جودة مسموحة دون سؤال</string>
+    <string name="quick_share_off">الرابط المشارك يسألك ماذا تحفظ</string>
+    <string name="copy_media_info">نسخ معلومات الوسائط</string>
+    <string name="media_info_copied">تم نسخ معلومات الوسائط</string>
+    <string name="clip_part">جزء فقط</string>
+    <string name="clip_from">من</string>
+    <string name="clip_to">إلى</string>
+    <string name="clip_invalid">اختر وقتين بين 0:00 و %1$s</string>
+    <string name="btn_download_clip">تنزيل المقطع</string>
+    <string name="progress_clip">جارٍ تنزيل المقطع…</string>
 </resources>

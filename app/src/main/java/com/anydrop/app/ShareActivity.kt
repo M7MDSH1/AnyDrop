@@ -1,6 +1,7 @@
 package com.anydrop.app
 
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.RadioButtonChecked
@@ -231,6 +232,18 @@ private fun ShareSheet(
     // Kick off the fetch in the background as soon as the sheet appears.
     androidx.compose.runtime.LaunchedEffect(sharedUrl) {
         viewModel.handleSharedUrl(sharedUrl)
+    }
+
+    // "Download right away": a plain video goes straight to the best quality the settings
+    // allow. Whatever needs a choice (a page, a post with several items, photos) still asks.
+    val preselected by viewModel.selectedFormat.collectAsState()
+    var quickStarted by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(isLoading, preselected) {
+        val pick = preselected
+        if (quickStarted || !viewModel.quickShare || isLoading || pick == null || pick.isImage) return@LaunchedEffect
+        if (formats.isWholePage || formats.isLinkList || formats.postItems().size > 1) return@LaunchedEffect
+        quickStarted = true
+        ensureNotificationPermission { viewModel.startDownload() }
     }
 
     // Close shortly after a download starts.
