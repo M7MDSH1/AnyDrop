@@ -334,7 +334,9 @@ fun AnyDropMainScreen(
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
-                                if (selected) {
+                                if (selected && item.route == Routes.BROWSER && !browserState.showingStart) {
+                                    browserState.goHome()
+                                } else if (selected) {
                                     scrollToTopFlow.tryEmit(item.route)
                                 } else {
                                     navController.navigate(item.route) {
