@@ -2,9 +2,9 @@
 
 **AnyDrop** is an Android media downloader for videos, audio, and images from
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
-built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired UI.
+built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.0.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.1.0**
 
 ---
 
@@ -12,10 +12,13 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 
 - **A new look** (v2.0) — a calmer, modern design: Geist type, graphite surfaces with one
   tangerine accent, pill buttons and a new icon, in light and dark.
-- **Download videos** in any available quality (picks video + audio and merges them).
+- **Download videos** in any available quality (picks video + audio and merges them). The
+  title and cover show up first while the qualities load, and every quality shows its size.
+- **Only a part** — save just a stretch of a video (from 1:05 to 2:10, say) instead of all of it.
 - **No login needed** for public posts — Instagram reels, posts and carousels (and any
   site yt-dlp can't handle) are read straight from the web page, like a browser would.
-- **Audio-only** extraction (.m4a) at selectable bitrates.
+- **Audio-only** extraction (.m4a) at selectable bitrates. Songs are saved with their title,
+  artist and cover picture, so music apps show them properly.
 - **Audio language** (Settings, off by default) — videos with several voices (YouTube's
   other languages and automatic dubbing) let you pick which one to save, with the video or alone.
 - **Subtitles** (Settings, off by default) — save a video's subtitles (the creator's own or
@@ -41,21 +44,29 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
 - **Download tracker** — follow each download's real progress, speed and time left,
   with PAUSE / RESUME / RETRY / OPEN (and PAUSE ALL / RESUME ALL). The list stays after
   the app is closed, and an interrupted download carries on where it stopped. A failed
-  one has **COPY ERROR DETAILS** for bug reports.
+  one has **COPY ERROR DETAILS** for bug reports. When the connection drops, a download waits
+  and carries on by itself; the download notification has **Pause** and **Cancel** buttons;
+  a download that won't fit on the phone says so before it starts.
 - **Download settings** — **Wi-Fi only** (downloads wait for Wi-Fi, or use mobile data for
   one) and **how many downloads run at once** (the rest wait their turn).
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
   sheet fetches the formats, you pick quality/images and hit **RECORD**, and it
-  downloads in the background without leaving the app you were in.
+  downloads in the background without leaving the app you were in. Or turn on **Download
+  shared links right away** and a shared video is saved in your Maximum quality, no questions.
 - **Built-in browser** — browse any site and download the videos it plays. The start
   page is yours: add, edit, reorder or remove sites. Desktop mode is remembered per
   site and fits desktop pages to the screen; TikTok opens as its desktop site so its
   feed scrolls without the app. Tap the address bar to open a link you just copied or
   a page from your **history** (by day, removable, kept on the device only).
+- **Ad blocker** — the browser blocks ads and pop-ups, YouTube's video ads included, without
+  changing the page, so most "turn off your ad blocker" checks don't notice. On by default;
+  turn it off in Settings, or for one site from the browser menu.
 - **Library** — browse all device videos & images, **search** (title, creator, site,
   file name — Arabic spelling variants included), filter (All / Videos / Images), sort
   by date or length, multi-select delete, and a per-item menu (Share / Add to collection /
   **Rename** / Delete / Info). Files other apps made ask for Android's permission first.
+  **AnyDrop only** shows just what you downloaded with AnyDrop; each card shows the quality
+  and size.
 - **Favorites & collections** — tap ♡ on any photo or video (in the library or the
   player) to keep it in **Favorites**, and make your own collections (e.g. "Family"):
   select items, tap the folder button, and the collection shows only what you added.
@@ -80,6 +91,9 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with an analog-tape-inspired
   service) and tells you when a new version is out, then downloads and installs it in one tap.
   Said "later" or "skip"? **Settings → Updates** keeps an **Update** button until you
   install it, and a **Check for updates** button once you're on the latest version.
+- **Download engine updates** — yt-dlp updates itself daily, and **Settings → Download engine**
+  shows its version and looks for a newer one on demand. **Settings → Storage** shows how much
+  space your downloads take.
 - **English & Arabic**, with a **dark ↔ light** theme, both switchable from Settings.
 - **Optional login (cookies)** — only for private content: sign in inside the app, and
   disconnect or remove a site's session any time.
