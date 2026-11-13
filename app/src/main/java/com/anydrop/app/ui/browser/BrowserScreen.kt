@@ -1,6 +1,8 @@
 package com.anydrop.app.ui.browser
 
 import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.engine.YouTubeAds
+import androidx.webkit.ScriptHandler
 import com.anydrop.app.ui.components.PillStyle
 import com.anydrop.app.ui.components.PillButton
 import com.anydrop.app.data.repository.SettingsRepository
@@ -242,6 +244,25 @@ class BrowserState(private val appContext: Context) {
     // Set by "Open" on a refused page: its redirects may pass through ad servers once.
     private var adPassOnce = false
 
+    // YouTube's video ads need a script on its pages (see [YouTubeAds]); it's there only
+    // while ads are blocked on YouTube.
+    private var youTubeScript: ScriptHandler? = null
+
+    private fun youTubeAdsBlocked(): Boolean = blocksAds("https://www.youtube.com/")
+
+    /** Adds or removes the YouTube script to match the settings; pages loaded afterwards follow. */
+    private fun syncYouTubeScript() {
+        val wv = webView ?: return
+        if (!MediaSniffer.documentStartSupported) return
+        val wanted = youTubeAdsBlocked()
+        if (wanted && youTubeScript == null) {
+            youTubeScript = runCatching { WebViewCompat.addDocumentStartJavaScript(wv, YouTubeAds.JS, YouTubeAds.ORIGINS) }.getOrNull()
+        } else if (!wanted) {
+            youTubeScript?.let { runCatching { it.remove() } }
+            youTubeScript = null
+        }
+    }
+
     /** Called when a page starts a file download itself (e.g. a "download video" link). */
     var onPageDownload: ((url: String, mime: String?, contentDisposition: String?) -> Unit)? = null
 
@@ -336,6 +357,10 @@ class BrowserState(private val appContext: Context) {
                 if (!MediaSniffer.documentStartSupported) {
                     view.evaluateJavascript(MediaSniffer.CORE_JS, null)
                     view.evaluateJavascript(PageTweaks.JS, null)
+                    // Older WebViews: later than the page's first scripts, so only the skipping works.
+                    if (YouTubeAds.appliesTo(Uri.parse(url).host) && youTubeAdsBlocked()) {
+                        view.evaluateJavascript(YouTubeAds.JS, null)
+                    }
                 }
             }
 
@@ -396,6 +421,7 @@ class BrowserState(private val appContext: Context) {
             onPageDownload?.invoke(url, mimeType, contentDisposition)
         }
         webView = wv
+        syncYouTubeScript()
         pendingUrl?.let {
             pendingUrl = null
             wv.loadUrl(it)
@@ -424,6 +450,7 @@ class BrowserState(private val appContext: Context) {
         val key = siteKey(url) ?: return
         adsAllowedPrefs.edit().putBoolean(key, blocksAds(url)).apply()
         adPrefsVersion++
+        syncYouTubeScript()
         webView?.reload()
     }
 
@@ -531,7 +558,10 @@ class BrowserState(private val appContext: Context) {
     }
 
     fun pause() = webView?.onPause()
-    fun resume() = webView?.onResume()
+    fun resume() {
+        webView?.onResume()
+        syncYouTubeScript()
+    }
 
     /** Reads the page for media. Cheap enough to run every couple of seconds. */
     fun rescan() {
