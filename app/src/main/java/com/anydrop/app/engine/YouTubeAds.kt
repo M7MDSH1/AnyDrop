@@ -27,7 +27,7 @@ object YouTubeAds {
         return listOf("youtube.com", "youtube-nocookie.com").any { h == it || h.endsWith(".$it") }
     }
 
-    // test: scratchpad testsrv/yttest.py serves a page that runs this script against a stand-in player.
+    // test: tools/yttest.py serves a page that runs this script against a stand-in player.
     val JS = """
 (() => {
   if (window.__ytq) return;
