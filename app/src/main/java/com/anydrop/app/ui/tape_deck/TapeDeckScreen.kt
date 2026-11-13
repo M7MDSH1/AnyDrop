@@ -220,7 +220,9 @@ fun TapeDeckScreen(
         )
     }
 
-    val clipFormat = selectedFormat?.takeIf { viewModel.clipAllowed(it) }
+    // Read here so the chip shows up once the background check is done.
+    val clipSupported by viewModel.clipSupported.collectAsState()
+    val clipFormat = selectedFormat?.takeIf { clipSupported && viewModel.clipAllowed(it) }
     val clipping = clipOn && clipFormat != null
     val clipValid = !clipping ||
         ClipRange.isValid(ClipRange.parse(clipFrom), ClipRange.parse(clipTo), clipFormat?.durationSec ?: 0)

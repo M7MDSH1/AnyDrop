@@ -120,12 +120,17 @@ class TapeDeckViewModel @Inject constructor(
     private val _clipTo = MutableStateFlow("")
     val clipTo: StateFlow<String> = _clipTo.asStateFlow()
 
-    private val clipSupported: Boolean by lazy { downloadRepository.clipSupported }
+    /**
+     * Whether this phone can cut clips (a quick ffmpeg test). Found out in the background; the
+     * "Only a part" chip appears once it's known.
+     */
+    private val _clipSupported = MutableStateFlow(false)
+    val clipSupported: StateFlow<Boolean> = _clipSupported.asStateFlow()
 
     /** A part can be cut from videos yt-dlp reads itself and whose length is known. */
     fun clipAllowed(format: FormatInfo): Boolean =
         format.durationSec > 0 && !format.isImage && !format.isFromPage && !format.isTorrent && !format.isLink &&
-            format.slide < 0 && clipSupported
+            format.slide < 0 && _clipSupported.value
 
     fun setClipOn(on: Boolean) {
         _clipOn.value = on
@@ -214,6 +219,7 @@ class TapeDeckViewModel @Inject constructor(
     // Keep every property above this block: init may handle a pending share,
     // which writes these fields, and Kotlin initializes in declaration order.
     init {
+        viewModelScope.launch(Dispatchers.IO) { _clipSupported.value = downloadRepository.clipSupported }
         if (pendingSharedUrl == null) {
             restoreSession()
         } else {
