@@ -595,7 +595,7 @@ class LibraryRepository(private val context: Context) {
     fun deleteExternal(target: Uri, displayName: String): DeletionResult {
         if (target.scheme == "file") {
             val file = File(target.path ?: return DeletionResult())
-            deleteGalleryTwin(file.name)
+            deleteGalleryTwin(file.name, file.length())
             return deleteItems(
                 listOf(MediaItem(id = file.nameWithoutExtension, title = file.nameWithoutExtension, localFilePath = file.absolutePath))
             )
@@ -631,9 +631,11 @@ class LibraryRepository(private val context: Context) {
     /**
      * Deletes AnyDrop's gallery copies of [fileName] (Movies/Music/Pictures → AnyDrop): the one
      * with its name, and the "Name (1).ext" Android makes when that name was taken (the same
-     * file downloaded twice). Each goes on its own, so one AnyDrop can't delete doesn't keep the rest.
+     * file downloaded twice). A numbered one goes only when it's [size] bytes too: "Trip (2)"
+     * can also be another download the user renamed. Each goes on its own, so one AnyDrop
+     * can't delete doesn't keep the rest.
      */
-    private fun deleteGalleryTwin(fileName: String) {
+    private fun deleteGalleryTwin(fileName: String, size: Long) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         val stem = fileName.substringBeforeLast('.')
         listOf(
@@ -645,13 +647,15 @@ class LibraryRepository(private val context: Context) {
                 // A wide match first (LIKE also treats "_" as a wildcard), then the exact rule.
                 context.contentResolver.query(
                     collection,
-                    arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                    arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE),
                     "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
                     arrayOf("$stem%", "%AnyDrop%"),
                     null
                 )?.use { c ->
                     while (c.moveToNext()) {
-                        if (!FileNameHelper.isGalleryCopyOf(c.getString(1).orEmpty(), fileName)) continue
+                        val name = c.getString(1).orEmpty()
+                        if (!FileNameHelper.isGalleryCopyOf(name, fileName)) continue
+                        if (name != fileName && c.getLong(2) != size) continue
                         runCatching { context.contentResolver.delete(ContentUris.withAppendedId(collection, c.getLong(0)), null, null) }
                     }
                 }
@@ -680,10 +684,14 @@ class LibraryRepository(private val context: Context) {
             val baseName = (if (item.localFilePath.startsWith("content://")) "" else File(item.localFilePath).nameWithoutExtension)
                 .ifBlank { File(item.title).nameWithoutExtension }
             if (baseName.isNotBlank()) {
-                val names = setOf(baseName, FileNameHelper.withoutCopyNumber(baseName))
+                // A gallery copy Android numbered ("Song (1)") also takes AnyDrop's "Song", but only
+                // when it's the same file: "Trip (2)" can be another download the user renamed.
+                val unnumbered = FileNameHelper.withoutCopyNumber(baseName)
                 listOf(getVideoDir(), getAudioDir(), getImageDir(), getDownloadDir()).forEach { dir ->
                     dir.listFiles()?.forEach { f ->
-                        if (f.isFile && f.nameWithoutExtension in names) {
+                        val ours = f.nameWithoutExtension == baseName ||
+                            (unnumbered != baseName && f.nameWithoutExtension == unnumbered && item.fileSize > 0 && f.length() == item.fileSize)
+                        if (f.isFile && ours) {
                             f.delete()
                             File("${f.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
                         }
