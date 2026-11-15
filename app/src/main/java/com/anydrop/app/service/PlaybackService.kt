@@ -1,6 +1,10 @@
 package com.anydrop.app.service
 
 import android.content.Context
+import androidx.media3.session.SessionToken
+import androidx.media3.session.MediaController
+import androidx.core.content.ContextCompat
+import android.content.ComponentName
 import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -102,7 +106,25 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    private companion object {
-        const val FADE_MS = 10_000L
+    companion object {
+        private const val FADE_MS = 10_000L
+
+        /**
+         * A song was deleted: it leaves the queue, and playback stops when nothing is left.
+         * The player would otherwise go on with what it had already loaded of the file.
+         */
+        fun forget(context: Context, mediaId: String) {
+            val app = context.applicationContext
+            val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
+            val future = MediaController.Builder(app, token).buildAsync()
+            future.addListener({
+                val controller = runCatching { future.get() }.getOrNull() ?: return@addListener
+                for (i in controller.mediaItemCount - 1 downTo 0) {
+                    if (controller.getMediaItemAt(i).mediaId == mediaId) controller.removeMediaItem(i)
+                }
+                if (controller.mediaItemCount == 0) controller.stop()
+                controller.release()
+            }, ContextCompat.getMainExecutor(app))
+        }
     }
 }

@@ -121,4 +121,17 @@ class PageScanTest {
         assertEquals(listOf("https://cdn/slide1.mp4"), scan.videos.map { it.url })
         assertEquals(listOf("https://cdn/a_n.jpg?stp=s1080", "https://cdn/c_n.jpg"), scan.images.map { it.url })
     }
+
+    @Test
+    fun aPostsVideoUnderTwoAddresses_isListedOnce() {
+        val raw = igPage(
+            "https://www.threads.com/@someone/post/THR1",
+            hits = """[{"url":"https://cdn/o1/v/AQO_video.mp4?efg=a&oh=1","score":100,"src":"ig","code":"THR1","w":1280,"h":720},""" +
+                """{"url":"https://cdn/o1/v/AQO_video.mp4?efg=b&oh=2","score":100,"src":"ig","code":"THR1","w":1280,"h":720},""" +
+                """{"url":"https://cdn/o1/v/OTHER.mp4","score":100,"src":"ig","code":"OTHER2"}]""",
+            imgs = "[]"
+        )
+        val scan = MediaSniffer.parse(raw, emptyList(), "https://www.threads.com/@someone/post/THR1", "UA")
+        assertEquals(listOf("https://cdn/o1/v/AQO_video.mp4?efg=a&oh=1"), scan.videos.map { it.url })
+    }
 }
