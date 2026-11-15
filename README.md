@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.1.0**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.1.1**
 
 ## What it looks like
 
@@ -62,8 +62,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 - **Download settings** — **Wi-Fi only** (downloads wait for Wi-Fi, or use mobile data for
   one) and **how many downloads run at once** (the rest wait their turn).
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
-  sheet fetches the formats, you pick quality/images and hit **RECORD**, and it
-  downloads in the background without leaving the app you were in. Or turn on **Download
+  sheet fetches the formats, you pick quality/images (a photo shows big before you save it)
+  and hit **Download**, and it downloads in the background without leaving the app you were in. Or turn on **Download
   shared links right away** and a shared video is saved in your Maximum quality, no questions.
 - **Built-in browser** — browse any site and download the videos it plays. The start
   page is yours: add, edit, reorder or remove sites. Desktop mode is remembered per
@@ -85,7 +85,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
   Rename or delete a collection with a long-press — the files themselves stay put.
 - **Audio tab** — plays device audio in the background with a media notification, one
   song after another (also with the screen off), with shuffle, repeat, an **Up next**
-  list and a **sleep timer** (15–60 minutes or the end of the song). Rename or delete
+  list and a **sleep timer** (15–60 minutes or the end of the song). Tapping the music
+  notification brings you back to the player. Rename or delete
   songs from their menu.
 - **Built-in player** — tap the video to show or hide the controls; a smooth seek bar
   with live frame preview while you drag, stacking double-tap seek, gestures (volume,
@@ -96,9 +97,9 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 - **Movie mode** — one tap on the 🎬 icon in the player: swiping left/right moves through
   the video instead of switching videos, previous/next disappear, and Back leaves the
   player. It stays on until you turn it off.
-- **Default video player** — AnyDrop appears in "Open with" and can be set as the
-  phone's video player for files from any app; those videos can be deleted from the
-  player too (Android asks first when another app made them).
+- **Default player** — AnyDrop appears in "Open with" for videos, photos and songs, and can
+  be set as the phone's player for files from any app ("Always"); those files can be deleted
+  from the player too (Android asks first when another app made them).
 - **Update notifications** — AnyDrop checks this repo's releases (no account, no paid
   service) and tells you when a new version is out, then downloads and installs it in one tap.
   Said "later" or "skip"? **Settings → Updates** keeps an **Update** button until you
