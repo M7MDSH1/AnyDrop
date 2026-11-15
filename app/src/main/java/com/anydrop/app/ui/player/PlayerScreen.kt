@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.player
 
 import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.service.PlaybackService
 import com.anydrop.app.ui.theme.AppFont
 import androidx.activity.ComponentActivity
 import android.app.Activity
@@ -183,7 +184,12 @@ fun PlayerScreen(
     val canDeleteExternal by viewModel.canDeleteExternal.collectAsState()
     val deleteRequest: (() -> Unit)? = if (externalFile && !canDeleteExternal) null else ({ showDeleteConfirm = true })
 
+    // A song (or a video played as sound) being deleted: it stops playing once it's gone.
+    var pendingForget by rememberSaveable { mutableStateOf<String?>(null) }
+
     fun advanceAfterDelete() {
+        pendingForget?.let { PlaybackService.forget(context, it) }
+        pendingForget = null
         val target = pendingDeleteTarget
         pendingDeleteTarget = null
         if (target != null) onNavigateToMedia(target) else onExit()
@@ -197,12 +203,14 @@ fun PlayerScreen(
         } else {
             // User declined the OS dialog — the row stays, remain on this item.
             pendingDeleteTarget = null
+            pendingForget = null
         }
     }
 
     fun performDelete() {
         val media = currentMedia ?: return
         showDeleteConfirm = false
+        pendingForget = media.id.takeIf { media.isAudio || asAudioFrom != null }
         val result = viewModel.deleteCurrent()
         // Prefer the atomically-captured neighbour from the queue; fall back to
         // the live nav state, and exit only when the item was genuinely last.

@@ -526,6 +526,8 @@ object MediaSniffer {
         }
         // Among equally likely files the longer one wins: an ad or a preview is a short clip.
         list = list.sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.duration }.thenByDescending { it.pixels })
+        // A post's video listed twice under two addresses of the same file (Threads does this).
+        list = list.distinctBy { c -> if (c.code != null) c.code + "/" + c.url.substringBefore('?').substringAfterLast('/') else c.url }
         val top = list.firstOrNull()?.score ?: return emptyList()
         if (top >= 85) list = list.filter { it.score >= 70 }
         // Every slide of a carousel stays; other guesses are capped.
