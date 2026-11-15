@@ -462,8 +462,12 @@ object MediaSniffer {
         }
         videos += network
         val (cleanTitle, uploader) = cleanTitle(title, url)
-        val ranked = if (wholePage) rankAll(videos) else rank(url, videos)
-        return PageScan(url, cleanTitle, uploader, thumb, ranked, rankImages(url, images), userAgent, links)
+        val postImages = rankImages(url, images)
+        var ranked = if (wholePage) rankAll(videos) else rank(url, videos)
+        // A photo post: any video found belongs to the other posts the page shows.
+        val code = shortcodeOf(url)
+        if (!wholePage && code != null && postImages.isNotEmpty() && ranked.none { it.code == code }) ranked = emptyList()
+        return PageScan(url, cleanTitle, uploader, thumb, ranked, postImages, userAgent, links)
     }
 
     private fun JSONArray.toLinks(): List<PageLink> = (0 until length()).mapNotNull { i ->
@@ -515,9 +519,10 @@ object MediaSniffer {
             .map { (_, same) -> same.maxBy { it.score } }
         val code = shortcodeOf(pageUrl)
         if (code != null) {
-            // Instagram pages also carry "more reels" data; keep only this post's media.
+            // Instagram pages also carry "more reels" data; keep only this post's media. When none
+            // carries the post's code, other posts' media still goes (unlabelled files may be it).
             val matched = list.filter { it.code == code }
-            if (matched.isNotEmpty()) list = matched
+            list = matched.ifEmpty { list.filter { it.code == null } }
         }
         // Among equally likely files the longer one wins: an ad or a preview is a short clip.
         list = list.sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.duration }.thenByDescending { it.pixels })
@@ -529,7 +534,11 @@ object MediaSniffer {
 
     private fun rankImages(pageUrl: String, all: List<MediaCandidate>): List<MediaCandidate> {
         val code = shortcodeOf(pageUrl) ?: return emptyList() // only trust images on post pages
-        return all.filter { it.code == code }.distinctBy { it.url }.take(20)
+        val own = all.filter { it.code == code }
+        // One picture per slide (a plain photo post is one "slide" -1): the page lists the same
+        // photo at several sizes and addresses, the biggest is kept.
+        val slides = if (own.any { it.slide >= 0 }) own.filter { it.slide >= 0 } else own
+        return slides.groupBy { it.slide }.map { (_, same) -> same.maxBy { it.pixels } }.take(20)
     }
 
     /** Returns (title, uploader). */

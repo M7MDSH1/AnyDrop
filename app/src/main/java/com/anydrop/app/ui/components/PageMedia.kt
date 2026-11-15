@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.components
 
 import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.engine.YtDlpEngine
 import com.anydrop.app.ui.theme.AppFont
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -74,6 +75,36 @@ import com.anydrop.app.ui.theme.White
 import com.anydrop.app.ui.theme.tracked
 
 /** A cover with the video's length on it; a plain sign stands in when there's no cover. */
+/** A big look at the picked photo before it's downloaded (nothing for other formats). */
+@Composable
+fun ImagePreview(format: YtDlpEngine.FormatInfo?, maxHeight: Dp = 240.dp) {
+    val url = format?.takeIf { it.isImage }?.imageUrl?.takeIf { it.isNotBlank() } ?: return
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = maxHeight)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Black),
+        contentAlignment = Alignment.Center
+    ) {
+        AsyncImage(
+            model = url,
+            contentDescription = stringResource(R.string.preview_image_desc),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth().heightIn(max = maxHeight)
+        )
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        stringResource(R.string.preview_label),
+        color = AccentText.copy(alpha = 0.7f),
+        fontSize = 9.sp,
+        fontFamily = AppFont,
+        letterSpacing = tracked(3f)
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+}
+
 @Composable
 fun MediaThumb(cover: String, durationSec: Int, isVideo: Boolean, modifier: Modifier = Modifier) {
     Box(modifier.clip(RoundedCornerShape(12.dp)).background(MediumGray)) {

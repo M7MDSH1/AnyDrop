@@ -144,9 +144,12 @@ class PlayerViewModel @Inject constructor(
      * previous, but watch progress is kept under its URI: reopening the same file
      * resumes where the user stopped.
      */
-    fun openExternal(uri: Uri, title: String) {
+    fun openExternal(uri: Uri, title: String, isImage: Boolean = false, isAudio: Boolean = false) {
         if (_currentMedia.value?.localUri == uri) return
-        startSession(MediaItem(id = uri.toString(), title = title, localUri = uri), fromLibrary = false)
+        startSession(
+            MediaItem(id = uri.toString(), title = title, localUri = uri, isImage = isImage, isAudio = isAudio),
+            fromLibrary = false
+        )
         // Whether (and how) Android lets AnyDrop delete it: the player shows delete when so.
         viewModelScope.launch {
             _externalDeleteTarget.value = withContext(Dispatchers.IO) { libraryRepository.deletableUriFor(uri) }
