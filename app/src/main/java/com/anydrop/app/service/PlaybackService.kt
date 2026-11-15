@@ -1,6 +1,12 @@
 package com.anydrop.app.service
 
 import android.content.Context
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
+import com.anydrop.app.util.Constants
+import com.anydrop.app.MainActivity
+import android.content.Intent
+import android.app.PendingIntent
 import androidx.media3.session.SessionToken
 import androidx.media3.session.MediaController
 import androidx.core.content.ContextCompat
@@ -51,7 +57,16 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        mediaSession = MediaSession.Builder(this, player).build()
+        // A tap on the music notification opens the player for what's playing.
+        val openPlayer = PendingIntent.getActivity(
+            this,
+            REQUEST_OPEN_PLAYER,
+            Intent(this, MainActivity::class.java)
+                .putExtra(Constants.EXTRA_OPEN_NOW_PLAYING, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        mediaSession = MediaSession.Builder(this, player).setSessionActivity(openPlayer).build()
         runSleepTimer(player)
     }
 
@@ -108,6 +123,21 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val FADE_MS = 10_000L
+        // Own request code: the update (0) and downloads (1) notifications open MainActivity too.
+        private const val REQUEST_OPEN_PLAYER = 2
+
+        /** The id of what's playing (or paused), null when nothing is loaded. */
+        suspend fun currentMediaId(context: Context): String? = suspendCancellableCoroutine { cont ->
+            val app = context.applicationContext
+            val future = MediaController.Builder(app, SessionToken(app, ComponentName(app, PlaybackService::class.java))).buildAsync()
+            future.addListener({
+                val controller = runCatching { future.get() }.getOrNull()
+                val id = controller?.currentMediaItem?.mediaId
+                controller?.release()
+                if (cont.isActive) cont.resume(id)
+            }, ContextCompat.getMainExecutor(app))
+            cont.invokeOnCancellation { MediaController.releaseFuture(future) }
+        }
 
         /**
          * A song was deleted: it leaves the queue, and playback stops when nothing is left.

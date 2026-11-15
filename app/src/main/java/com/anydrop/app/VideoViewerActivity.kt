@@ -1,6 +1,7 @@
 package com.anydrop.app
 
 import android.content.Context
+import com.anydrop.app.util.Constants
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -55,7 +56,8 @@ class VideoViewerActivity : ComponentActivity() {
                 PlayerScreen(
                     viewModel = playerViewModel,
                     onExit = ::finish,
-                    externalFile = true
+                    externalFile = true,
+                    fromNotification = intent.getBooleanExtra(Constants.EXTRA_OPEN_NOW_PLAYING, false)
                 )
             }
         }

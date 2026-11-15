@@ -8,6 +8,8 @@ object Constants {
     const val DOWNLOAD_CHANNEL_ID = "anydrop_downloads"
     // Opens the deck's downloads list (from any download notification).
     const val EXTRA_SHOW_DOWNLOADS = "com.anydrop.app.SHOW_DOWNLOADS"
+    /** The music notification was tapped: open the player for what's playing. */
+    const val EXTRA_OPEN_NOW_PLAYING = "com.anydrop.app.OPEN_NOW_PLAYING"
 
     // In-app updates from the project's GitHub releases.
     const val GITHUB_REPO = "M7MDSH1/AnyDrop"
