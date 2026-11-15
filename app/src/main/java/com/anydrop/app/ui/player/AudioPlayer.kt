@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.player
 
 import com.anydrop.app.ui.theme.AccentText
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.anydrop.app.ui.theme.AppFont
 import android.net.Uri
 import android.os.SystemClock
@@ -151,13 +152,18 @@ internal fun AudioPlayerContent(
         }
     }
 
+    // Survives Android rebuilding the screen, which shouldn't count as a new "play this".
+    var started by rememberSaveable { mutableStateOf(false) }
+
     // Play [current]: just a jump when the service already has this queue, else load it.
     LaunchedEffect(controller, current.id, queue.map { it.id }) {
         val c = controller ?: return@LaunchedEffect
         if (c.currentMediaItem?.mediaId == current.id && (c.mediaItemCount == queue.size || !takeOver)) {
-            if (!c.isPlaying && takeOver) c.play()
+            if (!c.isPlaying && takeOver && !started) c.play()
+            started = true
             return@LaunchedEffect
         }
+        started = true
         val index = queue.indexOfFirst { it.id == current.id }.coerceAtLeast(0)
         val sameQueue = c.mediaItemCount == queue.size &&
             (0 until c.mediaItemCount).all { c.getMediaItemAt(it).mediaId == queue[it].id }
