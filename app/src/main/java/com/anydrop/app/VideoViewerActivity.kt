@@ -41,13 +41,17 @@ class VideoViewerActivity : ComponentActivity() {
             return
         }
         val title = displayNameOf(uri)
+        // What kind of file it is decides the viewer: photo, song or video.
+        val type = (intent.type?.takeIf { it.contains('/') } ?: runCatching { contentResolver.getType(uri) }.getOrNull()).orEmpty()
 
         setContent {
             val appearanceViewModel: AppearanceViewModel = hiltViewModel()
             val darkMode by appearanceViewModel.darkMode.collectAsState()
             AnyDropTheme(darkTheme = darkMode) {
                 val playerViewModel: PlayerViewModel = hiltViewModel()
-                LaunchedEffect(uri) { playerViewModel.openExternal(uri, title) }
+                LaunchedEffect(uri) {
+                    playerViewModel.openExternal(uri, title, isImage = type.startsWith("image/"), isAudio = type.startsWith("audio/"))
+                }
                 PlayerScreen(
                     viewModel = playerViewModel,
                     onExit = ::finish,

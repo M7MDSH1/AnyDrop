@@ -251,7 +251,7 @@ fun PlayerScreen(
             hasPrevious = previousMediaId != null,
             onNext = { nextMediaId?.let(onNavigateToMedia) },
             onPrevious = { previousMediaId?.let(onNavigateToMedia) },
-            onDeleteRequest = { showDeleteConfirm = true },
+            onDeleteRequest = deleteRequest,
             favorite = favorite,
             onToggleFavorite = viewModel::toggleFavorite
         )
@@ -265,7 +265,8 @@ fun PlayerScreen(
         val videoAsAudio = !currentMedia!!.isAudio
         // Songs: the Audio tab's list is the queue. A video played as sound: just itself.
         val queue = remember(allMedia, currentMedia, videoAsAudio) {
-            if (videoAsAudio) listOf(currentMedia!!) else allMedia.filter { it.isAudio }.ifEmpty { listOf(currentMedia!!) }
+            if (videoAsAudio || externalFile) listOf(currentMedia!!)
+            else allMedia.filter { it.isAudio }.ifEmpty { listOf(currentMedia!!) }
         }
         SwipeableContent(
             hasNext = nextMediaId != null,
@@ -322,7 +323,7 @@ private fun ImageViewerContent(
     hasPrevious: Boolean = false,
     onNext: () -> Unit = {},
     onPrevious: () -> Unit = {},
-    onDeleteRequest: () -> Unit = {},
+    onDeleteRequest: (() -> Unit)? = null,
     favorite: Boolean? = null,
     onToggleFavorite: () -> Unit = {}
 ) {
@@ -392,12 +393,15 @@ private fun ImageViewerContent(
                 .padding(16.dp)
         ) {
             if (favorite != null) FavoriteButton(favorite, onToggleFavorite, idleTint = White)
-            IconButton(onClick = onDeleteRequest) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.menu_delete),
-                    tint = LedRed
-                )
+            // No delete for a photo inside another app that Android won't let AnyDrop remove.
+            onDeleteRequest?.let { requestDelete ->
+                IconButton(onClick = requestDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.menu_delete),
+                        tint = LedRed
+                    )
+                }
             }
         }
 

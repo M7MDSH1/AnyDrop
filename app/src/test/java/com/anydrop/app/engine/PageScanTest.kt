@@ -61,4 +61,64 @@ class PageScanTest {
         val video = MediaCandidate("https://cdn.site.com/main.mp4", 78, "video", 854, 480, duration = 52)
         assertEquals(listOf(video.url, ad.url), MediaSniffer.rank("https://site.com/v/1", listOf(ad, video)).map { it.url })
     }
+
+    // An Instagram page carries other posts too (suggested reels, "more posts"), and the same
+    // photo under several addresses (sizes). Seen as: a stranger's video, its sound, the photo twice.
+    private fun igPage(postUrl: String, hits: String, imgs: String) =
+        JSONObject("""{"title":"Someone on Instagram: \"hi\"","url":"$postUrl","hits":$hits,"imgs":$imgs,"links":[]}""").toString()
+
+    private val photo1080 = """{"url":"https://scontent.cdninstagram.com/v/t51/111_n.jpg?stp=s1080x1350","code":"PHOTO1","w":1080,"h":1350}"""
+    private val photo640 = """{"url":"https://scontent.cdninstagram.com/v/t51/111_n.jpg?stp=s640x800","code":"PHOTO1","w":640,"h":800}"""
+
+    @Test
+    fun photoPost_listsOnlyItsPhoto_once() {
+        val raw = igPage(
+            "https://www.instagram.com/p/PHOTO1/",
+            hits = """[{"url":"https://scontent.cdninstagram.com/o1/other.mp4","score":100,"src":"ig","code":"OTHER1","w":720,"h":1280}]""",
+            imgs = "[$photo640,$photo1080," +
+                """{"url":"https://scontent.cdninstagram.com/v/t51/999_n.jpg","code":"OTHER1","w":1080,"h":1080}]"""
+        )
+        val network = listOf(MediaCandidate("https://scontent.cdninstagram.com/o1/autoplay.mp4", 62, "net"))
+        val formats = MediaSniffer.parse(raw, network, "https://www.instagram.com/p/PHOTO1/", "UA").toFormatInfos()
+        assertEquals(listOf("https://scontent.cdninstagram.com/v/t51/111_n.jpg?stp=s1080x1350"), formats.map { it.imageUrl })
+        assertEquals(1, formats.size) // no video, no "Audio"
+    }
+
+    @Test
+    fun reel_keepsItsOwnVideo_only() {
+        val raw = igPage(
+            "https://www.instagram.com/reel/REEL1/",
+            hits = """[{"url":"https://cdn/other.mp4","score":100,"src":"ig","code":"OTHER1"},""" +
+                """{"url":"https://cdn/reel.mp4","score":100,"src":"ig","code":"REEL1","w":720,"h":1280}]""",
+            imgs = "[]"
+        )
+        val scan = MediaSniffer.parse(raw, emptyList(), "https://www.instagram.com/reel/REEL1/", "UA")
+        assertEquals(listOf("https://cdn/reel.mp4"), scan.videos.map { it.url })
+    }
+
+    @Test
+    fun reelWhoseVideoCameWithoutItsCode_isStillFound_otherPostsAreNot() {
+        val raw = igPage(
+            "https://www.instagram.com/reel/REEL2/",
+            hits = """[{"url":"https://cdn/other.mp4","score":100,"src":"ig","code":"OTHER1"}]""",
+            imgs = "[]"
+        )
+        val network = listOf(MediaCandidate("https://cdn/reel2.mp4", 62, "net"))
+        val scan = MediaSniffer.parse(raw, network, "https://www.instagram.com/reel/REEL2/", "UA")
+        assertEquals(listOf("https://cdn/reel2.mp4"), scan.videos.map { it.url })
+    }
+
+    @Test
+    fun carousel_keepsEverySlide_onceEach() {
+        val raw = igPage(
+            "https://www.instagram.com/p/CARO1/",
+            hits = """[{"url":"https://cdn/slide1.mp4","score":100,"src":"ig","code":"CARO1","slide":1}]""",
+            imgs = """[{"url":"https://cdn/a_n.jpg?stp=s640","code":"CARO1","slide":0,"w":640,"h":640},""" +
+                """{"url":"https://cdn/a_n.jpg?stp=s1080","code":"CARO1","slide":0,"w":1080,"h":1080},""" +
+                """{"url":"https://cdn/c_n.jpg","code":"CARO1","slide":2,"w":1080,"h":1080}]"""
+        )
+        val scan = MediaSniffer.parse(raw, emptyList(), "https://www.instagram.com/p/CARO1/", "UA")
+        assertEquals(listOf("https://cdn/slide1.mp4"), scan.videos.map { it.url })
+        assertEquals(listOf("https://cdn/a_n.jpg?stp=s1080", "https://cdn/c_n.jpg"), scan.images.map { it.url })
+    }
 }

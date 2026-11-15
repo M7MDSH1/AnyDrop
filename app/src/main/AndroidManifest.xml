@@ -66,6 +66,15 @@
                 <data android:scheme="https" />
                 <data android:mimeType="video/*" />
             </intent-filter>
+            <!-- Photos and songs on the phone (not web links, which stay with the browser). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
         </activity>
 
         <!-- New bottom-sheet overlay activity specifically for holding incoming shares

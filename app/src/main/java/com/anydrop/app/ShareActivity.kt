@@ -1,6 +1,7 @@
 package com.anydrop.app
 
 import androidx.compose.foundation.selection.selectable
+import com.anydrop.app.ui.components.ImagePreview
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
@@ -497,6 +498,8 @@ private fun ShareQualityList(
         }
 
         Spacer(Modifier.height(16.dp))
+        // A photo picked here shows big, so it's clear which one gets saved.
+        ImagePreview(selected, maxHeight = 200.dp)
         PillButton(
             text = stringResource(R.string.share_record),
             onClick = { selected?.let(onRecord) },

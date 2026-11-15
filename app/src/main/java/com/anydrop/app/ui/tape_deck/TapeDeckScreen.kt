@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.tape_deck
 
 import androidx.compose.foundation.selection.selectable
+import com.anydrop.app.ui.components.ImagePreview
 import com.anydrop.app.ui.theme.StatusRed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Color
@@ -453,39 +454,7 @@ fun TapeDeckScreen(
         }
 
         // Preview the image before downloading (when an image format is selected).
-        val previewFormat = selectedFormat
-        if (previewFormat != null && previewFormat.isImage) {
-            val previewModel: Any? = when {
-                previewFormat.imageUrl.isNotBlank() -> previewFormat.imageUrl
-                else -> null
-            }
-            if (previewModel != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 240.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Black),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = previewModel,
-                        contentDescription = stringResource(R.string.preview_image_desc),
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.preview_label),
-                    color = AccentText.copy(alpha = 0.7f),
-                    fontSize = 9.sp,
-                    fontFamily = AppFont,
-                    letterSpacing = tracked(3f)
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
+        ImagePreview(selectedFormat)
 
         (downloadState as? DownloadState.Error)?.let { error ->
             DeckError(error.message, detail = error.detail, link = url)
