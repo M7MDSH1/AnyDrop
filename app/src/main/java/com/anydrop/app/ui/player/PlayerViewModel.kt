@@ -91,6 +91,8 @@ class PlayerViewModel @Inject constructor(
 
     init {
         val mediaId = savedStateHandle.get<String>("mediaId")
+        // From the music notification: a video playing as sound comes back as sound.
+        val nowPlaying = savedStateHandle.get<Boolean>("nowPlaying") == true
         viewModelScope.launch {
             // The player navigation order mirrors the library's current view:
             // all / favorites / a collection, media type filter (ALL / VIDEOS / IMAGES),
@@ -120,6 +122,7 @@ class PlayerViewModel @Inject constructor(
                         val resolved = items.find { it.id == mediaId }
                         if (resolved != null && resolved.id != _currentMedia.value?.id) {
                             startSession(resolved)
+                            if (nowPlaying && !resolved.isAudio && !resolved.isImage) _asAudioFrom.value = 0L
                         } else if (resolved == null && !fallbackAttempted && items.isNotEmpty()) {
                             // The requested media no longer resolves (e.g. deleted or the
                             // scan is empty) — fall back to the last played media instead

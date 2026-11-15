@@ -67,4 +67,18 @@ class FileNameHelperTest {
         assertEquals(null, FileNameHelper.cleanName("..."))
         assertEquals(120, FileNameHelper.cleanName("x".repeat(300))!!.length)
     }
+
+    @Test
+    fun galleryCopies_withAndWithoutAndroidsNumber() {
+        assertEquals("Song [48kbps].m4a", FileNameHelper.withoutCopyNumber("Song [48kbps] (1).m4a"))
+        assertEquals("Song [48kbps]", FileNameHelper.withoutCopyNumber("Song [48kbps] (12)"))
+        assertEquals("Movie (2010) [720p].mp4", FileNameHelper.withoutCopyNumber("Movie (2010) [720p].mp4"))
+        assertTrue(FileNameHelper.isGalleryCopyOf("Song [48kbps].m4a", "Song [48kbps].m4a"))
+        assertTrue(FileNameHelper.isGalleryCopyOf("Song [48kbps] (1).m4a", "Song [48kbps].m4a"))
+        assertTrue(FileNameHelper.isGalleryCopyOf("Song [48kbps] (2).m4a", "Song [48kbps].m4a"))
+        assertFalse(FileNameHelper.isGalleryCopyOf("Song [48kbps]_1.m4a", "Song [48kbps].m4a"))
+        assertFalse(FileNameHelper.isGalleryCopyOf("Song [48kbps] (1).mp4", "Song [48kbps].m4a"))
+        assertFalse(FileNameHelper.isGalleryCopyOf("Song [48kbps] extra (1).m4a", "Song [48kbps].m4a"))
+        assertFalse(FileNameHelper.isGalleryCopyOf("Song [48kbps].m4a", "Song [48kbps] (1).m4a"))
+    }
 }

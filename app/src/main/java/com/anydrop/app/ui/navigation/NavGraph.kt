@@ -29,7 +29,8 @@ object Routes {
     const val BROWSER = "browser"
     const val LIBRARY = "library"
     const val AUDIO = "audio"
-    const val PLAYER = "player/{mediaId}"
+    /** [nowPlaying]: opened from the music notification (see [PlayerScreen]'s fromNotification). */
+    const val PLAYER = "player/{mediaId}?nowPlaying={nowPlaying}"
     const val SETTINGS = "settings"
     const val COOKIE_IMPORT = "cookie_import"
 }
@@ -99,12 +100,16 @@ fun AnyDropNavGraph(
 
         composable(
             route = Routes.PLAYER,
-            arguments = listOf(navArgument("mediaId") { type = NavType.StringType })
-        ) {
+            arguments = listOf(
+                navArgument("mediaId") { type = NavType.StringType },
+                navArgument("nowPlaying") { type = NavType.BoolType; defaultValue = false }
+            )
+        ) { entry ->
             PlayerScreen(
+                fromNotification = entry.arguments?.getBoolean("nowPlaying") == true,
                 onNavigateToMedia = { targetId ->
                     navController.navigate("player/$targetId") {
-                        popUpTo("player/{mediaId}") { inclusive = true }
+                        popUpTo(Routes.PLAYER) { inclusive = true }
                     }
                 },
                 onExit = { navController.popBackStack() }

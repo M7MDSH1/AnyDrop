@@ -1,6 +1,7 @@
 package com.anydrop.app
 
 import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.service.PlaybackService
 import com.anydrop.app.ui.theme.AppFont
 import android.content.Intent
 import android.net.Uri
@@ -126,10 +127,17 @@ class MainActivity : ComponentActivity() {
     // Set when the "update available" notification opened (or re-opened) the app.
     private var showUpdateRequested by mutableStateOf(false)
 
+    // Set when the music notification opened the app: its player shows.
+    private var nowPlayingRequested by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         extractUrlFromIntent(intent)?.let { pendingSharedUrl = it }
         showUpdateRequested = intent?.getBooleanExtra(Constants.EXTRA_SHOW_UPDATE, false) == true
+        if (intent?.getBooleanExtra(Constants.EXTRA_OPEN_NOW_PLAYING, false) == true) {
+            intent.removeExtra(Constants.EXTRA_OPEN_NOW_PLAYING)
+            nowPlayingRequested = true
+        }
         // A tapped download notification opens the deck's downloads list. The extra is dropped
         // once read, so a rotation doesn't open the list again.
         if (intent?.getBooleanExtra(Constants.EXTRA_SHOW_DOWNLOADS, false) == true) {
@@ -150,6 +158,25 @@ class MainActivity : ComponentActivity() {
                 if (showUpdateRequested) {
                     showUpdateRequested = false
                     updateViewModel.showUpdate()
+                }
+            }
+            LaunchedEffect(nowPlayingRequested, navController) {
+                val nav = navController ?: return@LaunchedEffect
+                if (!nowPlayingRequested) return@LaunchedEffect
+                // Cleared only after the answer: clearing restarts this effect, which would cancel the wait.
+                val id = PlaybackService.currentMediaId(this@MainActivity)
+                nowPlayingRequested = false
+                if (id == null) return@LaunchedEffect
+                when {
+                    // A song opened from another app plays in the viewer AnyDrop opened it in.
+                    id.startsWith("content://") || id.startsWith("file://") -> startActivity(
+                        Intent(this@MainActivity, VideoViewerActivity::class.java)
+                            .setDataAndType(Uri.parse(id), "audio/*")
+                            .putExtra(Constants.EXTRA_OPEN_NOW_PLAYING, true)
+                    )
+                    // Already on screen (the app was left from the player).
+                    nav.currentBackStackEntry?.arguments?.getString("mediaId") == id -> Unit
+                    else -> nav.navigate("player/$id?nowPlaying=true")
                 }
             }
             LaunchedEffect(deckRequested, navController) {
@@ -184,6 +211,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra(Constants.EXTRA_SHOW_UPDATE, false)) showUpdateRequested = true
+        if (intent.getBooleanExtra(Constants.EXTRA_OPEN_NOW_PLAYING, false)) nowPlayingRequested = true
         if (intent.getBooleanExtra(Constants.EXTRA_SHOW_DOWNLOADS, false)) {
             showDownloadsRequest.value = true
             deckRequested = true

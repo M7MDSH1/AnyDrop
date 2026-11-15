@@ -6,6 +6,20 @@ package com.anydrop.app.data.repository
  */
 object FileNameHelper {
 
+    /**
+     * The name before Android numbered it: the gallery saves a second "Song.m4a" as
+     * "Song (1).m4a". Works on names with or without their extension.
+     */
+    fun withoutCopyNumber(name: String): String {
+        val dot = name.lastIndexOf('.')
+        val ext = if (dot > 0 && name.length - dot <= 6 && name.substring(dot + 1).all { it.isLetterOrDigit() }) name.substring(dot) else ""
+        return name.removeSuffix(ext).replace(Regex(""" \(\d+\)$"""), "") + ext
+    }
+
+    /** True when gallery entry [displayName] is [fileName] itself or Android's numbered copy of it. */
+    fun isGalleryCopyOf(displayName: String, fileName: String): Boolean =
+        displayName == fileName || (displayName != withoutCopyNumber(displayName) && withoutCopyNumber(displayName) == fileName)
+
     /** True when a file's name (without extension) is exactly `base` or `base_N`. */
     fun matchesCopyBase(nameWithoutExtension: String, base: String): Boolean {
         if (nameWithoutExtension == base) return true

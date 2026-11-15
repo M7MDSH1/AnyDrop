@@ -158,7 +158,9 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
     onNavigateToMedia: (String) -> Unit = {},
     onExit: () -> Unit = {},
-    externalFile: Boolean = false
+    externalFile: Boolean = false,
+    /** Opened from the music notification: what's playing is shown as it is, not restarted or unpaused. */
+    fromNotification: Boolean = false
 ) {
     val context = LocalContext.current
     val activity = context as ComponentActivity
@@ -289,7 +291,8 @@ fun PlayerScreen(
                 onCurrentChange = onNavigateToMedia,
                 onDeleteRequest = deleteRequest,
                 videoAsAudio = videoAsAudio,
-                startPositionMs = listenFrom ?: 0L
+                startPositionMs = listenFrom ?: 0L,
+                takeOver = !fromNotification
             )
         }
         return

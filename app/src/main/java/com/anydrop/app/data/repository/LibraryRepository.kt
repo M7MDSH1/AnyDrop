@@ -628,20 +628,33 @@ class LibraryRepository(private val context: Context) {
         }.getOrDefault(false)
     }
 
-    /** Deletes AnyDrop's gallery copy of [fileName] (Movies/Music/Pictures → AnyDrop), if there is one. */
+    /**
+     * Deletes AnyDrop's gallery copies of [fileName] (Movies/Music/Pictures → AnyDrop): the one
+     * with its name, and the "Name (1).ext" Android makes when that name was taken (the same
+     * file downloaded twice). Each goes on its own, so one AnyDrop can't delete doesn't keep the rest.
+     */
     private fun deleteGalleryTwin(fileName: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val stem = fileName.substringBeforeLast('.')
         listOf(
             MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
             MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         ).forEach { collection ->
             runCatching {
-                context.contentResolver.delete(
+                // A wide match first (LIKE also treats "_" as a wildcard), then the exact rule.
+                context.contentResolver.query(
                     collection,
-                    "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
-                    arrayOf(fileName, "%AnyDrop%")
-                )
+                    arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                    arrayOf("$stem%", "%AnyDrop%"),
+                    null
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        if (!FileNameHelper.isGalleryCopyOf(c.getString(1).orEmpty(), fileName)) continue
+                        runCatching { context.contentResolver.delete(ContentUris.withAppendedId(collection, c.getLong(0)), null, null) }
+                    }
+                }
             }
         }
     }
@@ -662,13 +675,15 @@ class LibraryRepository(private val context: Context) {
         } catch (_: Exception) {}
 
         try {
-            val baseName = File(item.title).nameWithoutExtension.ifBlank {
-                File(item.localFilePath).nameWithoutExtension
-            }
+            // The file's own name when known: a song's title is its tag (since songs carry their
+            // real title), which isn't the file's name.
+            val baseName = (if (item.localFilePath.startsWith("content://")) "" else File(item.localFilePath).nameWithoutExtension)
+                .ifBlank { File(item.title).nameWithoutExtension }
             if (baseName.isNotBlank()) {
+                val names = setOf(baseName, FileNameHelper.withoutCopyNumber(baseName))
                 listOf(getVideoDir(), getAudioDir(), getImageDir(), getDownloadDir()).forEach { dir ->
                     dir.listFiles()?.forEach { f ->
-                        if (f.isFile && f.nameWithoutExtension == baseName) {
+                        if (f.isFile && f.nameWithoutExtension in names) {
                             f.delete()
                             File("${f.absolutePath}.meta.json").takeIf { it.exists() }?.delete()
                         }

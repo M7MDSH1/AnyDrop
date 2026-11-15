@@ -105,7 +105,12 @@ internal fun AudioPlayerContent(
     /** Null hides delete (a file inside another app). */
     onDeleteRequest: (() -> Unit)? = null,
     videoAsAudio: Boolean = false,
-    startPositionMs: Long = 0L
+    startPositionMs: Long = 0L,
+    /**
+     * False when only showing what the service already plays (opened from its notification):
+     * the song isn't restarted with a new queue, and stays paused if it was.
+     */
+    takeOver: Boolean = true
 ) {
     val context = LocalContext.current
     var controller by remember { mutableStateOf<MediaController?>(null) }
@@ -149,8 +154,8 @@ internal fun AudioPlayerContent(
     // Play [current]: just a jump when the service already has this queue, else load it.
     LaunchedEffect(controller, current.id, queue.map { it.id }) {
         val c = controller ?: return@LaunchedEffect
-        if (c.currentMediaItem?.mediaId == current.id && c.mediaItemCount == queue.size) {
-            if (!c.isPlaying) c.play()
+        if (c.currentMediaItem?.mediaId == current.id && (c.mediaItemCount == queue.size || !takeOver)) {
+            if (!c.isPlaying && takeOver) c.play()
             return@LaunchedEffect
         }
         val index = queue.indexOfFirst { it.id == current.id }.coerceAtLeast(0)
