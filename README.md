@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.1.1**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.2.0**
 
 ## What it looks like
 
@@ -63,7 +63,8 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
   one) and **how many downloads run at once** (the rest wait their turn).
 - **Share to download** — share a link from any app into AnyDrop; a compact bottom
   sheet fetches the formats, you pick quality/images (a photo shows big before you save it)
-  and hit **Download**, and it downloads in the background without leaving the app you were in. Or turn on **Download
+  and hit **Download**, and it downloads in the background without leaving the app you were in. Pick a
+  **collection** in the sheet (or make a new one there) and the file is added to it when it's done. Or turn on **Download
   shared links right away** and a shared video is saved in your Maximum quality, no questions.
 - **Built-in browser** — browse any site and download the videos it plays. The start
   page is yours: add, edit, reorder or remove sites. Desktop mode is remembered per
@@ -71,7 +72,9 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
   feed scrolls without the app. Tap the address bar to open a link you just copied or
   a page from your **history** (by day, removable, kept on the device only).
 - **Ad blocker** — the browser blocks ads and pop-ups, YouTube's video ads included, without
-  changing the page, so most "turn off your ad blocker" checks don't notice. On by default;
+  changing the page, so most "turn off your ad blocker" checks don't notice. It also stops
+  **pop-under redirects**: a tap that suddenly sends the page to another site (not the link
+  you tapped) is refused, and **Open** lets it through if you wanted it. On by default;
   turn it off in Settings, or for one site from the browser menu.
 - **Library** — browse all device videos & images, **search** (title, creator, site,
   file name — Arabic spelling variants included), filter (All / Videos / Images), sort
