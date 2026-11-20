@@ -308,7 +308,7 @@ class BrowserState(private val appContext: Context) {
                     adsBlocked.incrementAndGet()
                     return AdBlocker.blockedResponse(request)
                 }
-                MediaSniffer.classifyNetworkUrl(uri.toString())?.let { network.add(it) }
+                MediaSniffer.classifyNetworkUrl(uri.toString(), request.requestHeaders)?.let { network.add(it) }
                 return null
             }
 

@@ -21,6 +21,8 @@ internal object FormatJson {
         // Media found on a web page: without these a restored entry couldn't download it.
         put("directUrl", f.directUrl)
         put("userAgent", f.userAgent)
+        put("referer", f.referer)
+        put("origin", f.origin)
         // Carousel slides, so a restored deck still offers the whole post.
         put("slide", f.slide)
         put("previewUrl", f.previewUrl)
@@ -47,6 +49,8 @@ internal object FormatJson {
         imageUrl = o.optString("imageUrl"),
         directUrl = o.optString("directUrl"),
         userAgent = o.optString("userAgent"),
+        referer = o.optString("referer"),
+        origin = o.optString("origin"),
         slide = o.optInt("slide", -1),
         previewUrl = o.optString("previewUrl"),
         durationSec = o.optInt("durationSec"),

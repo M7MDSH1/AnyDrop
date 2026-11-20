@@ -108,7 +108,10 @@ class YtDlpEngine(
         /** Audio entries: the track's language (BCP-47, e.g. "es-US") when the video has several. */
         val language: String = "",
         /** Audio entries: the video's own voice, or a translation (see [AudioTracks.Role]). */
-        val audioRole: AudioTracks.Role = AudioTracks.Role.OTHER
+        val audioRole: AudioTracks.Role = AudioTracks.Role.OTHER,
+        /** Actual browser media-request context (may belong to an embedded player). */
+        val referer: String = "",
+        val origin: String = ""
     ) {
         val isFromPage: Boolean get() = directUrl.isNotBlank()
 
@@ -1541,8 +1544,9 @@ class YtDlpEngine(
             } else {
                 addOption("--merge-output-format", "mp4")
             }
-            if (format.userAgent.isNotBlank()) addOption("--user-agent", format.userAgent)
-            addOption("--referer", pageUrl)
+            format.directRequestHeaders(pageUrl).forEach { (name, value) ->
+                addOption("--add-header", "$name:$value")
+            }
             cookieHeader?.takeIf { it.isNotBlank() }?.let { addOption("--add-header", "Cookie:$it") }
         }
 
