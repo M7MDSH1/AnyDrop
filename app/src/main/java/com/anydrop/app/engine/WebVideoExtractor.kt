@@ -43,6 +43,8 @@ data class MediaCandidate(
     val duration: Int = 0,
     /** The video's own title, when the page names it. */
     val title: String? = null,
+    val referer: String = "",
+    val origin: String = "",
 ) {
     val pixels: Int get() = width * height
     val isHls: Boolean get() = url.substringBefore('?').lowercase().endsWith(".m3u8")
@@ -235,7 +237,9 @@ object MediaSniffer {
         }
       }
     }
-    var re = /https?:(?:\\?\/){2}[^"'\s<>]+?\.(?:mp4|m3u8|webm|mov|m4v)(?:[?#][^"'\s<>]*)?/gi, m, n = 0;
+    // Raw text may contain BBCode: [url=page]filename.mp4[/url]. Brackets delimit
+    // markup here; structured JSON and DOM media URLs are collected separately.
+    var re = /https?:(?:\\?\/){2}[^"'\s<>\[\]]+?\.(?:mp4|m3u8|webm|mov|m4v)(?:[?#][^"'\s<>\[\]]*)?/gi, m, n = 0;
     while ((m = re.exec(s)) && n++ < 150) add(m[0], 40, src);
   }
   function meta(p) {
@@ -412,7 +416,7 @@ object MediaSniffer {
     fun shortcodeOf(url: String): String? = IG_CODE.find(url)?.groupValues?.get(1)
 
     /** Media requests seen on the wire (from WebViewClient.shouldInterceptRequest). */
-    fun classifyNetworkUrl(url: String): MediaCandidate? {
+    fun classifyNetworkUrl(url: String, requestHeaders: Map<String, String> = emptyMap()): MediaCandidate? {
         if (!url.startsWith("http")) return null
         val lower = url.lowercase()
         if (JUNK.containsMatchIn(lower)) return null
@@ -423,7 +427,10 @@ object MediaSniffer {
             path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".mov") || path.endsWith(".m4v") ->
                 MediaCandidate(url, 62, "net")
             else -> null
-        }
+        }?.copy(
+            referer = browserRequestHeader(requestHeaders, "Referer"),
+            origin = browserRequestHeader(requestHeaders, "Origin")
+        )
     }
 
     /**
@@ -505,18 +512,26 @@ object MediaSniffer {
     fun rankAll(all: List<MediaCandidate>): List<MediaCandidate> {
         var list = all.filter { it.url.startsWith("http") }
             .groupBy { it.url }
-            .map { (_, same) -> same.maxBy { it.score } }
+            .map { (_, same) -> mergeRequestContext(same) }
             .sortedWith(compareByDescending<MediaCandidate> { it.score }.thenByDescending { it.duration }.thenByDescending { it.pixels })
         val strong = list.filter { it.score >= 60 }
         if (strong.isNotEmpty()) list = strong
         return list.take(30)
     }
 
+    // DOM/JSON can rank above the network hit for the same URL. Keep the richer metadata
+    // without discarding the headers observed on the actual browser request.
+    private fun mergeRequestContext(same: List<MediaCandidate>): MediaCandidate {
+        val best = same.maxBy { it.score }
+        val context = same.lastOrNull { it.referer.isNotBlank() || it.origin.isNotBlank() }
+        return if (context == null) best else best.copy(referer = context.referer, origin = context.origin)
+    }
+
     /** Best candidates first; drops weak guesses when a strong match exists. */
     fun rank(pageUrl: String, all: List<MediaCandidate>): List<MediaCandidate> {
         var list = all.filter { it.url.startsWith("http") }
             .groupBy { it.url }
-            .map { (_, same) -> same.maxBy { it.score } }
+            .map { (_, same) -> mergeRequestContext(same) }
         val code = shortcodeOf(pageUrl)
         if (code != null) {
             // Instagram pages also carry "more reels" data; keep only this post's media. When none
@@ -638,6 +653,8 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
             vcodec = "page",
             acodec = "page",
             directUrl = c.url,
+            referer = c.referer,
+            origin = c.origin,
             userAgent = userAgent,
             slide = if (c.score >= 95) c.slide else -1,
             previewUrl = c.cover ?: pageCover,
@@ -655,6 +672,8 @@ fun PageScan.toFormatInfos(): List<YtDlpEngine.FormatInfo> {
             acodec = "page",
             isAudioOnly = true,
             directUrl = first.url,
+            referer = first.referer,
+            origin = first.origin,
             userAgent = userAgent
         )
     }
@@ -729,7 +748,7 @@ private class HeadlessSession(
         MediaSniffer.configure(wv, userAgent)
         wv.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                MediaSniffer.classifyNetworkUrl(request.url.toString())?.let { network.add(it) }
+                MediaSniffer.classifyNetworkUrl(request.url.toString(), request.requestHeaders)?.let { network.add(it) }
                 return null
             }
 

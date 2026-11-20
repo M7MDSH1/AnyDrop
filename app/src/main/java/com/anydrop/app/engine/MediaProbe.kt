@@ -51,7 +51,7 @@ object MediaProbe {
                 val wantFrame = formats.any { it.directUrl == url && it.previewUrl.isBlank() }
                 parallel.withPermit {
                     withTimeoutOrNull(PER_ITEM_TIMEOUT_MS) {
-                        runInterruptible(Dispatchers.IO) { probe(context, url, headersFor(url, sample.userAgent, pageUrl), wantFrame) }
+                        runInterruptible(Dispatchers.IO) { probe(context, url, headersFor(sample, pageUrl), wantFrame) }
                     }
                 }
             }
@@ -70,10 +70,9 @@ object MediaProbe {
         )
     }
 
-    private fun headersFor(url: String, userAgent: String, pageUrl: String): Map<String, String> = buildMap {
-        if (userAgent.isNotBlank()) put("User-Agent", userAgent)
-        if (pageUrl.startsWith("http")) put("Referer", pageUrl)
-        MediaSniffer.cookieHeaderFor(url)?.let { put("Cookie", it) }
+    private fun headersFor(format: FormatInfo, pageUrl: String): Map<String, String> = buildMap {
+        putAll(format.directRequestHeaders(pageUrl))
+        MediaSniffer.cookieHeaderFor(format.directUrl)?.let { put("Cookie", it) }
     }
 
     private fun probe(context: Context, url: String, headers: Map<String, String>, wantFrame: Boolean): Info? {
