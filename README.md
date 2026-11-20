@@ -12,9 +12,9 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 |:---:|:---:|:---:|:---:|
 | <img src="docs/screenshots/deck.png" width="200" alt="Paste a link"> | <img src="docs/screenshots/downloads.png" width="200" alt="Follow your downloads"> | <img src="docs/screenshots/library.png" width="200" alt="Keep them in your library"> | <img src="docs/screenshots/player.png" width="200" alt="Watch them"> |
 
-| **Browse any site, save its videos** | **Share a link from any app** | **Listen in the background** | **Make it yours** |
+| **Browse any site, save its videos** | **Share a link, save it to a collection** | **Listen in the background** | **Make it yours** |
 |:---:|:---:|:---:|:---:|
-| <img src="docs/screenshots/browser.png" width="200" alt="Browse any site, save its videos"> | <img src="docs/screenshots/share.png" width="200" alt="Share a link from any app"> | <img src="docs/screenshots/audio.png" width="200" alt="Listen in the background"> | <img src="docs/screenshots/settings.png" width="200" alt="Make it yours"> |
+| <img src="docs/screenshots/browser.png" width="200" alt="Browse any site, save its videos"> | <img src="docs/screenshots/share.png" width="200" alt="Share a link, save it to a collection"> | <img src="docs/screenshots/audio.png" width="200" alt="Listen in the background"> | <img src="docs/screenshots/settings.png" width="200" alt="Make it yours"> |
 
 <sub>The screenshots show Blender's open movies (CC BY, Blender Foundation and Blender Studio).</sub>
 
