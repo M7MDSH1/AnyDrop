@@ -1,6 +1,8 @@
 package com.anydrop.app
 
 import androidx.compose.foundation.selection.selectable
+import com.anydrop.app.ui.library.CollectionNameDialog
+import com.anydrop.app.ui.library.SaveToCollectionChips
 import com.anydrop.app.ui.components.ImagePreview
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.Icons
@@ -225,6 +227,9 @@ private fun ShareSheet(
     val resolving by viewModel.resolving.collectAsState()
     val playlistOffer by viewModel.playlistOffer.collectAsState()
     val fetchingPlaylist by viewModel.fetchingPlaylist.collectAsState()
+    val collections by viewModel.collections.collectAsState()
+    val saveTo by viewModel.saveTo.collectAsState()
+    var naming by remember { mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -300,6 +305,16 @@ private fun ShareSheet(
                         .clip(RoundedCornerShape(50))
                         .background(StatusGreen.copy(alpha = 0.12f))
                         .padding(horizontal = 12.dp, vertical = 5.dp)
+                )
+            }
+            // Where it's listed besides All media and AnyDrop only; picked while it fetches.
+            if (downloadState !is DownloadState.Error) {
+                Spacer(Modifier.height(14.dp))
+                SaveToCollectionChips(
+                    collections = collections,
+                    selected = saveTo,
+                    onSelect = viewModel::setSaveTo,
+                    onNewCollection = { naming = true }
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -415,6 +430,16 @@ private fun ShareSheet(
                 }
             }
         }
+    }
+
+    if (naming) {
+        CollectionNameDialog(
+            title = stringResource(R.string.new_collection_title),
+            initial = "",
+            confirmLabel = stringResource(R.string.btn_create),
+            onConfirm = { name -> viewModel.saveToNewCollection(name); naming = false },
+            onDismiss = { naming = false }
+        )
     }
 
     // Same-video duplicate prompt, rendered over the sheet (the sheet previously

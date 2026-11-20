@@ -159,6 +159,49 @@ fun ScopeChips(
     }
 }
 
+/**
+ * Share sheet: the collection the download also goes into ([selected] null = none), or a
+ * new one. It's in All media and AnyDrop only either way.
+ */
+@Composable
+fun SaveToCollectionChips(
+    collections: List<MediaCollection>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    onNewCollection: () -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.add_to_collection), color = TextMuted, fontFamily = AppFont, fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            item {
+                ScopeChip(label = stringResource(R.string.collection_none), selected = selected == null, onClick = { onSelect(null) })
+            }
+            items(collections, key = { it.id }) { collection ->
+                ScopeChip(
+                    label = collection.name,
+                    icon = Icons.Filled.FolderOpen,
+                    selected = selected == collection.id,
+                    onClick = { onSelect(collection.id) }
+                )
+            }
+            item {
+                ScopeChip(
+                    label = stringResource(R.string.new_collection),
+                    icon = Icons.Filled.Add,
+                    selected = false,
+                    accentOutline = true,
+                    onClick = onNewCollection
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ScopeChip(
