@@ -12,6 +12,12 @@ PAGE = '''<!doctype html><html><head><meta charset="utf-8"><title>Ad test</title
 <button id="popad">POPUP-AD-HOST</button>
 <a id="blank" target="_blank" href="https://example.org/">LINK-NEW-TAB</a>
 <a id="adlink" href="https://ad.doubleclick.net/ddm/clk/1">LINK-AD-CLICK</a>
+<a id="same" href="/page2">LINK-SAME-SITE</a>
+<a id="other" href="https://example.org/">LINK-OTHER-SITE</a>
+<a id="poster" href="/poster"><img alt="POSTER" width="160" height="90" style="background:#c33"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="></a>
+<a id="bounce" href="/out?bounce=1">LINK-BOUNCE</a>
+<button id="jsgo">BUTTON-GO-OTHER-SITE</button>
 <script>
 var out = document.getElementById('out');
 function say(k, v) { var li = document.createElement('li'); li.textContent = k + '=' + v; out.appendChild(li); }
@@ -51,6 +57,23 @@ fetch('https://ib.adnxs.com/ut/v3', { credentials: 'include' }).then(function (r
 var img = new Image(); img.onload = function () { say('pixel', 'LOADED-' + img.width + 'x' + img.height); }; img.onerror = function () { say('pixel', 'FAILED'); };
 img.src = 'https://ad.doubleclick.net/pixel.gif';
 say('injected', Object.keys(window).filter(function (k) { return /anydrop|adblock/i.test(k); }).join(',') || 'none');
+// 6. a link-out page (?bounce=1) that sends you on by itself, like a social site's.
+if (/bounce=1/.test(location.search)) setTimeout(function () { location.replace('https://example.org/?bounced'); }, 300);
+say('loads', sessionStorage.n = (+sessionStorage.n || 0) + 1);
+// 5. pop-under (?popunder=1): the page opens itself in a new tab and sends this one to the ad.
+if (/popunder=1/.test(location.search)) {
+  var fired = false;
+  document.addEventListener('click', function () {
+    if (fired) return;
+    fired = true;
+    var w = window.open(location.href, '_blank');
+    say('popunder', w ? 'WINDOW' : 'NULL');
+    // A moment later, so the new tab is open first.
+    var go = function () { location.href = 'https://example.com/?popunder-ad'; };
+    if (/sync=1/.test(location.search)) go(); else setTimeout(go, 400);
+  }, true);
+}
+document.getElementById('jsgo').onclick = function () { location.href = 'https://example.org/?js'; };
 // 4. windows
 document.getElementById('pop').onclick = function () { var w = window.open('https://example.org/?popup'); say('open-other', w ? 'WINDOW' : 'NULL'); };
 document.getElementById('popad').onclick = function () { var w = window.open('https://www.popads.net/'); say('open-ad', w ? 'WINDOW' : 'NULL'); };
