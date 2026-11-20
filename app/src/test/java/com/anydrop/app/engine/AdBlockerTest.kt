@@ -46,6 +46,18 @@ class AdBlockerTest {
     }
 
     @Test
+    fun aTapThatLeavesTheSiteOnlyCountsWhenItIsNotTheLinkTapped() {
+        // A pop-under's redirect: the tap was on nothing, or on a link to somewhere else.
+        assertTrue(AdBlocker.leavesSite("web6.topcinema.fan", "ad.randomhost.com", null))
+        assertTrue(AdBlocker.leavesSite("web6.topcinema.fan", "ad.randomhost.com", "web6.topcinema.fan"))
+        // The link tapped, another page of the same site, or nothing known to compare.
+        assertFalse(AdBlocker.leavesSite("news.example.com", "www.wikipedia.org", "en.wikipedia.org"))
+        assertFalse(AdBlocker.leavesSite("web6.topcinema.fan", "www.topcinema.fan", null))
+        assertFalse(AdBlocker.leavesSite(null, "ad.randomhost.com", null))
+        assertFalse(AdBlocker.leavesSite("example.com", null, null))
+    }
+
+    @Test
     fun siteOfKeepsTwoPartEndingsTogether() {
         assertEquals("example.com", AdBlocker.siteOf("a.b.example.com"))
         assertEquals("example.co.uk", AdBlocker.siteOf("www.example.co.uk"))

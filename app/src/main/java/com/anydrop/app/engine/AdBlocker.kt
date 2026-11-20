@@ -32,6 +32,19 @@ object AdBlocker {
         return h.count { it == '.' } >= 2 && first in AD_LABELS
     }
 
+    /**
+     * A tap sent the page to [targetHost]. True when that's another site and not the site of
+     * the link tapped ([linkHost] null = the tap wasn't on a text link): how a pop-under ad's
+     * redirect looks. On phones those open the page again in a new tab and send the old tab
+     * to the ad; with one tab, the ad would take the page's place.
+     */
+    fun leavesSite(pageHost: String?, targetHost: String?, linkHost: String?): Boolean {
+        val page = pageHost?.lowercase() ?: return false
+        val target = targetHost?.lowercase()?.takeIf { it.isNotEmpty() } ?: return false
+        if (siteOf(page) == siteOf(target)) return false
+        return linkHost == null || siteOf(linkHost.lowercase()) != siteOf(target)
+    }
+
     private fun matchesList(host: String): Boolean {
         var domain = host
         while (true) {
@@ -285,7 +298,7 @@ object AdBlocker {
         onetag-sys.com e-planning.net adkernel.com adhese.com 360yield.com improvedigital.com smartclip.net
         stickyadstv.com fwmrm.net adswizz.com tapad.com rlcdn.com crwdcntrl.net krxd.net agkn.com
         mathtag.com turn.com simpli.fi eyeota.net adsymptotic.com zemanta.com admixer.net adriver.ru
-        yandexadexchange.net adfox.ru an.yandex.ru revenuehits.com adcash.com galaksion.com monetag.com
+        yandexadexchange.net adfox.ru an.yandex.ru revenuehits.com adcash.com galaksion.com monetag.com llvpn.com luugy.com
         propu.sh highperformanceformat.com highrevenuegate.com profitablegatecpm.com effectivegatecpm.com
         creativecdn.com adskeeper.com adskeeper.co.uk adnow.com engageya.com content.ad zergnet.com
         dianomi.com lockerdome.com sonobi.com districtm.io adyoulike.com omnitagjs.com seedtag.com ogury.com

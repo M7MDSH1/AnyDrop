@@ -1,6 +1,10 @@
 package com.anydrop.app.ui.browser
 
 import com.anydrop.app.ui.theme.AccentText
+import android.os.Looper
+import android.os.Handler
+import android.view.MotionEvent
+import android.os.SystemClock
 import com.anydrop.app.engine.YouTubeAds
 import androidx.webkit.ScriptHandler
 import com.anydrop.app.ui.components.PillStyle
@@ -319,6 +323,15 @@ class BrowserState(private val appContext: Context) {
                             if (request.hasGesture()) blockedPage = uri.toString()
                             true
                         }
+                        // Just after a tap, the page goes to another site, but not by the link tapped:
+                        // a pop-under ad's redirect, from ad servers no list knows yet.
+                        request.isForMainFrame && blockingAds && !adPassOnce && tappedRecently() &&
+                            !request.isRedirect && AdBlocker.leavesSite(pageHost, uri.host, tappedLinkHost(view)) -> {
+                            adsBlocked.incrementAndGet()
+                            blockedPage = uri.toString()
+                            followTappedLink(view)
+                            true
+                        }
                         // Moving to a site shown the other way (desktop/mobile): reload it with
                         // the matching browser identity.
                         request.isForMainFrame && applyUserAgent(view, uri.toString()) -> {
@@ -342,6 +355,8 @@ class BrowserState(private val appContext: Context) {
             }
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                // A new page: taps on the one before can't explain where this one goes.
+                lastTapAt = 0L
                 if (url == null || url == "about:blank") return
                 // Back/forward into a site shown the other way: fetch it again as that.
                 if (applyUserAgent(view, url)) {
@@ -417,6 +432,11 @@ class BrowserState(private val appContext: Context) {
                 return true
             }
         }
+        @Suppress("ClickableViewAccessibility") // only notes the time; the tap goes on to the page
+        wv.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP) lastTapAt = SystemClock.uptimeMillis()
+            false
+        }
         wv.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
             onPageDownload?.invoke(url, mimeType, contentDisposition)
         }
@@ -465,10 +485,60 @@ class BrowserState(private val appContext: Context) {
         }
     }
 
+    // When the page on screen was last tapped (0 = not since it loaded).
+    @Volatile private var lastTapAt = 0L
+
+    /**
+     * The page was tapped in the last few seconds. Pop-unders redirect a moment after the
+     * tap, which WebView no longer counts as the tap's doing (hasGesture is false then).
+     */
+    private fun tappedRecently(): Boolean =
+        lastTapAt > 0 && SystemClock.uptimeMillis() - lastTapAt < TAP_WINDOW_MS
+
+    /**
+     * A pop-under's redirect was refused: if the tap was on a link, go there. The redirect
+     * replaced that link's page while it was still loading, so it would otherwise be lost.
+     */
+    private fun followTappedLink(view: WebView) {
+        val hit = view.hitTestResult
+        when (hit.type) {
+            WebView.HitTestResult.SRC_ANCHOR_TYPE -> hit.extra?.let { openTapped(view, it) }
+            // A picture link reports its picture; the link's own address comes separately.
+            WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> view.requestFocusNodeHref(
+                Handler(Looper.getMainLooper()) { msg ->
+                    msg.data.getString("url")?.let { openTapped(view, it) }
+                    true
+                }.obtainMessage()
+            )
+        }
+    }
+
+    private fun openTapped(view: WebView, url: String) {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return
+        // "#" links and the like: there's nowhere to go.
+        if (url.substringBefore('#') == currentUrl?.substringBefore('#')) return
+        applyUserAgent(view, url)
+        view.loadUrl(url)
+    }
+
+    /** The host of the text link the last tap was on (null: it wasn't on one). */
+    private fun tappedLinkHost(view: WebView): String? {
+        val hit = view.hitTestResult
+        // A picture link only gives its picture's address, which can't vouch for where it leads.
+        if (hit.type != WebView.HitTestResult.SRC_ANCHOR_TYPE) return null
+        return hit.extra?.let { runCatching { Uri.parse(it).host }.getOrNull() }
+    }
+
     /** The page opened a window to [uri]. The browser has one tab, so it either loads here or is refused. */
     private fun openedWindow(view: WebView, uri: Uri, tappedLink: String?) {
         val url = uri.toString()
         if (uri.scheme != "http" && uri.scheme != "https") return
+        // The page opening itself again: the "new tab" half of a pop-under. Loading it here
+        // would only cut off where the tap was going.
+        if (blockingAds && url.substringBefore('#') == currentUrl?.substringBefore('#')) {
+            adsBlocked.incrementAndGet()
+            return
+        }
         val host = uri.host?.lowercase().orEmpty()
         val page = pageHost
         val wanted = !blockingAds ||
@@ -581,6 +651,9 @@ class BrowserState(private val appContext: Context) {
          * to the Play Store; its desktop site scrolls freely.
          */
         private val DESKTOP_BY_DEFAULT = setOf("tiktok.com")
+
+        /** How long after a tap a jump to another site is taken as the tap's (like a browser's user activation). */
+        private const val TAP_WINDOW_MS = 5_000L
 
         private fun siteKey(url: String?): String? =
             url?.let { runCatching { Uri.parse(it).host }.getOrNull() }
