@@ -368,6 +368,9 @@ class BrowserState(private val appContext: Context) {
                     pageTitle = ""
                 }
                 currentUrl = url
+                // Judged by where it landed: a redirect may have taken it to another site.
+                pageHost = runCatching { Uri.parse(url).host }.getOrNull()?.lowercase()
+                blockingAds = blocksAds(url)
                 isLoading = true
                 if (!MediaSniffer.documentStartSupported) {
                     view.evaluateJavascript(MediaSniffer.CORE_JS, null)
