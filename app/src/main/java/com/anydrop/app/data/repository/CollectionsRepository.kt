@@ -98,6 +98,16 @@ class CollectionsRepository @Inject constructor(
         return added
     }
 
+    /**
+     * Adds a file AnyDrop just downloaded, by its name without the extension ("Clip [720p]"):
+     * the gallery lists it under that name with an id of its own.
+     */
+    fun addFile(id: String, name: String) {
+        if (name.isBlank()) return
+        val ref = MediaRef(name, name)
+        saveCollections(_collections.value.map { if (it.id == id && ref !in it.items) it.copy(items = it.items + ref) else it })
+    }
+
     fun removeFromCollection(id: String, items: List<MediaItem>) =
         saveCollections(_collections.value.map { collection ->
             if (collection.id != id) collection

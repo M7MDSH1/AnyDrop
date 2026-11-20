@@ -53,7 +53,9 @@ data class DownloadRequest(
     val subtitleLanguage: String = "",
     /** Save only this stretch of the video, in seconds (both 0 = all of it). */
     val clipStart: Int = 0,
-    val clipEnd: Int = 0
+    val clipEnd: Int = 0,
+    /** The library collection the finished file goes into (blank = none). */
+    val collectionId: String = ""
 ) {
     val isClip: Boolean get() = clipEnd > clipStart
     val clip: IntRange? get() = if (isClip) clipStart..clipEnd else null
@@ -101,7 +103,8 @@ class DownloadQueue @Inject constructor(
     private val cookieRepository: CookieRepository,
     private val settingsRepository: SettingsRepository,
     private val store: DownloadListStore,
-    private val gate: DownloadGate
+    private val gate: DownloadGate,
+    private val collections: CollectionsRepository
 ) {
     private val _tasks = MutableStateFlow(restore(store.load()))
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
@@ -128,6 +131,7 @@ class DownloadQueue @Inject constructor(
         val out = File(task.tag)
         val complete = out.isFile && out.length() > 0L && !File(task.tag + ".part").exists()
         if (complete) {
+            addToCollection(task.request, out.nameWithoutExtension)
             task.copy(status = TaskStatus.DONE, percent = 100, filePath = out.absolutePath, sizeText = sizeLabel(out.length()))
         } else {
             task.copy(status = TaskStatus.FAILED, error = context.getString(R.string.download_interrupted_retry))
@@ -459,6 +463,8 @@ class DownloadQueue @Inject constructor(
                                 ?.let(::sizeLabel) ?: it.sizeText
                         )
                     }
+                    // A finished download's title is its file's name without the extension.
+                    addToCollection(request, state.mediaItem.title)
                     DownloadService.finishDownload(context, tag, request.title.ifBlank { context.getString(R.string.download_complete) })
                     libraryRepository.refreshLibrary()
                 }
@@ -468,6 +474,11 @@ class DownloadQueue @Inject constructor(
             }
         }
         return failure
+    }
+
+    /** A finished download goes into the collection picked for it (if that still exists). */
+    private fun addToCollection(request: DownloadRequest, fileName: String) {
+        if (request.collectionId.isNotBlank()) collections.addFile(request.collectionId, fileName)
     }
 
     private companion object {

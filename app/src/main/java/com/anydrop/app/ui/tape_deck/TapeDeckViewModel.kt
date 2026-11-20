@@ -1,6 +1,8 @@
 package com.anydrop.app.ui.tape_deck
 
 import android.app.Application
+import com.anydrop.app.data.repository.MediaCollection
+import com.anydrop.app.data.repository.CollectionsRepository
 import com.anydrop.app.engine.ClipRange
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -72,8 +74,27 @@ class TapeDeckViewModel @Inject constructor(
     private val cookieRepository: CookieRepository,
     private val settingsRepository: SettingsRepository,
     private val deckSessionRepository: DeckSessionRepository,
-    private val downloadQueue: DownloadQueue
+    private val downloadQueue: DownloadQueue,
+    private val collectionsRepository: CollectionsRepository
 ) : AndroidViewModel(application) {
+
+    /** The library's collections, to pick where a download also goes. */
+    val collections: StateFlow<List<MediaCollection>> = collectionsRepository.collections
+
+    /** The collection the next download goes into (null = none). */
+    private val _saveTo = MutableStateFlow<String?>(null)
+    val saveTo: StateFlow<String?> = _saveTo.asStateFlow()
+
+    fun setSaveTo(collectionId: String?) {
+        _saveTo.value = collectionId
+    }
+
+    /** Makes a collection and picks it for the download. */
+    fun saveToNewCollection(name: String) {
+        _saveTo.value = collectionsRepository.createCollection(name).id
+    }
+
+    private fun DownloadRequest.withCollection() = copy(collectionId = _saveTo.value.orEmpty())
 
     /** Every download (running, finished, failed) — the deck's tracker list. */
     val tasks: StateFlow<List<DownloadTask>> = downloadQueue.tasks
@@ -438,7 +459,7 @@ class TapeDeckViewModel @Inject constructor(
     private fun launch(request: DownloadRequest, outputPath: String) {
         currentNotificationTag = outputPath
         _downloadState.value = DownloadState.Progress(0)
-        downloadQueue.launch(request, outputPath)
+        downloadQueue.launch(request.withCollection(), outputPath)
     }
 
     fun startDownload() {
@@ -521,7 +542,7 @@ class TapeDeckViewModel @Inject constructor(
         }
         currentNotificationTag = batch.last().second
         _downloadState.value = DownloadState.Progress(0)
-        downloadQueue.launchBatch(batch)
+        downloadQueue.launchBatch(batch.map { (request, path) -> request.withCollection() to path })
     }
 
     /**
@@ -561,7 +582,7 @@ class TapeDeckViewModel @Inject constructor(
         }
         currentNotificationTag = batch.last().second
         _downloadState.value = DownloadState.Progress(0)
-        downloadQueue.launchBatch(batch)
+        downloadQueue.launchBatch(batch.map { (request, path) -> request.withCollection() to path })
     }
 
     /**

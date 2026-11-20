@@ -24,7 +24,8 @@ class DownloadListStoreTest {
             title = "Clip",
             creator = "someone",
             webpageUrl = "https://example.com/watch/1",
-            cookieHeader = "session=secret"
+            cookieHeader = "session=secret",
+            collectionId = "c1"
         ),
         status = status,
         percent = 42,
@@ -48,6 +49,8 @@ class DownloadListStoreTest {
         // The request (with the page video's direct link) is kept so RETRY works...
         assertEquals(saved.request.format, back.request.format)
         assertEquals(saved.request.webpageUrl, back.request.webpageUrl)
+        // A download picked for a collection still goes into it after a restart.
+        assertEquals("c1", back.request.collectionId)
         // ...but session cookies and live progress are not.
         assertNull(back.request.cookieHeader)
         assertEquals("", back.speed)

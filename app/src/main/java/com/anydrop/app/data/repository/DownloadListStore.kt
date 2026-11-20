@@ -57,6 +57,7 @@ class DownloadListStore @Inject constructor(
                     put("subtitleLanguage", t.request.subtitleLanguage)
                     put("clipStart", t.request.clipStart)
                     put("clipEnd", t.request.clipEnd)
+                    put("collectionId", t.request.collectionId)
                     put("format", FormatJson.toJson(t.request.format))
                 })
             }
@@ -82,7 +83,8 @@ class DownloadListStore @Inject constructor(
                             audioLanguage = o.optString("audioLanguage"),
                             subtitleLanguage = o.optString("subtitleLanguage"),
                             clipStart = o.optInt("clipStart"),
-                            clipEnd = o.optInt("clipEnd")
+                            clipEnd = o.optInt("clipEnd"),
+                            collectionId = o.optString("collectionId")
                         ),
                         status = runCatching { TaskStatus.valueOf(o.optString("status")) }.getOrDefault(TaskStatus.FAILED),
                         percent = o.optInt("percent"),

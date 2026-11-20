@@ -467,4 +467,5 @@
     <string name="clip_invalid">Pick times between 0:00 and %1$s</string>
     <string name="btn_download_clip">Download clip</string>
     <string name="progress_clip">Downloading the clip…</string>
+    <string name="collection_none">None</string>
 </resources>

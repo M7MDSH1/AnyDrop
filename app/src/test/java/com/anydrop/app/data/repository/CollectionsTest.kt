@@ -19,6 +19,14 @@ class CollectionsTest {
     }
 
     @Test
+    fun aDottedFileName_matchesItsGalleryRow() {
+        // What CollectionsRepository.addFile saves for "media.w3.org [480p].mp4".
+        val index = MediaRefIndex(listOf(MediaRef("media.w3.org [480p]", "media.w3.org [480p]")))
+        assertTrue(MediaItem(id = "vid_5", title = "media.w3.org [480p].mp4") in index)
+        assertFalse(MediaItem(id = "vid_6", title = "media.w3.mp4") in index)
+    }
+
+    @Test
     fun blankNames_neverMatchEverything() {
         val index = MediaRefIndex(listOf(MediaRef("img_1", "")))
         assertFalse(MediaItem(id = "img_2", title = "") in index)
