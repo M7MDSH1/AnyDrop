@@ -1,6 +1,10 @@
 package com.anydrop.app.ui.browser
 
 import com.anydrop.app.ui.theme.AccentText
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
+import android.os.Parcel
+import android.os.Bundle
 import android.os.Looper
 import android.os.Handler
 import android.view.MotionEvent
@@ -445,11 +449,51 @@ class BrowserState(private val appContext: Context) {
         }
         webView = wv
         syncYouTubeScript()
+        restoreFrom?.let { saved ->
+            restoreFrom = null
+            val url = saved.getString(KEY_URL)
+            applyUserAgent(wv, url)
+            // Its history too, so Back still walks the pages; just the page when that wasn't kept.
+            if (wv.restoreState(saved) == null) url?.let(wv::loadUrl)
+        }
         pendingUrl?.let {
             pendingUrl = null
             wv.loadUrl(it)
         }
         return wv
+    }
+
+    // The page to bring back once the new screen's WebView exists (see [restore]).
+    private var restoreFrom: Bundle? = null
+
+    /**
+     * The page on screen and its history, for when Android rebuilds the screen (a dark-mode
+     * switch, the app reclaimed in the background). Null on the start page: nothing to bring back.
+     */
+    fun saveState(): Bundle? {
+        val url = currentUrl ?: return null
+        val state = Bundle()
+        webView?.saveState(state)
+        // shortcut: a history too big for Android's saved state brings back only the page; fine
+        // unless hundreds of pages were open, upgrade to a file if that ever matters.
+        if (sizeOf(state) > MAX_SAVED_STATE) state.clear()
+        return state.apply { putString(KEY_URL, url) }
+    }
+
+    /** A rebuilt screen starts on the page [saveState] kept instead of the start page. */
+    fun restore(state: Bundle) {
+        currentUrl = state.getString(KEY_URL) ?: return
+        restoreFrom = state
+    }
+
+    private fun sizeOf(bundle: Bundle): Int {
+        val parcel = Parcel.obtain()
+        return try {
+            parcel.writeBundle(bundle)
+            parcel.dataSize()
+        } finally {
+            parcel.recycle()
+        }
     }
 
     private fun resetFindings() {
@@ -658,6 +702,10 @@ class BrowserState(private val appContext: Context) {
         /** How long after a tap a jump to another site is taken as the tap's (like a browser's user activation). */
         private const val TAP_WINDOW_MS = 5_000L
 
+        private const val KEY_URL = "anydrop.browser.url"
+        // Well under Android's limit for everything an app saves when it goes to the background.
+        private const val MAX_SAVED_STATE = 200_000
+
         private fun siteKey(url: String?): String? =
             url?.let { runCatching { Uri.parse(it).host }.getOrNull() }
                 ?.lowercase()?.removePrefix("www.")?.removePrefix("m.")?.takeIf { it.isNotEmpty() }
@@ -674,8 +722,11 @@ class BrowserState(private val appContext: Context) {
 
 @Composable
 fun rememberBrowserState(): BrowserState {
-    val context = LocalContext.current
-    return remember { BrowserState(context.applicationContext) }
+    val context = LocalContext.current.applicationContext
+    // Saved with the screen, so the page and its history survive Android rebuilding it.
+    return rememberSaveable(
+        saver = Saver(save = { it.saveState() }, restore = { saved -> BrowserState(context).apply { restore(saved) } })
+    ) { BrowserState(context) }
 }
 
 @HiltViewModel
