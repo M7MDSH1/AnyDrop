@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.2.2**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.2.3**
 
 ## What it looks like
 

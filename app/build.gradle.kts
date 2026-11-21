@@ -14,8 +14,8 @@ android {
         applicationId = "com.anydrop.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 16
-        versionName = "2.2.2"
+        versionCode = 17
+        versionName = "2.2.3"
 
         vectorDrawables {
             useSupportLibrary = true
