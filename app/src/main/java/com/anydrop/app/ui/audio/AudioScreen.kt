@@ -135,20 +135,24 @@ fun AudioScreen(
     MediaRenameHost(target = renameTarget, onDismiss = { renameTarget = null }, rename = viewModel::rename)
 
     // Request audio-read permission so we can list all device audio, then refresh.
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.READ_MEDIA_AUDIO
-    } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
+    val permissions = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+        // Android 10 and older: changing the gallery too, so deleting other apps' songs takes
+        // one confirmation instead of one per file.
+        Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q ->
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
     val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) viewModel.refresh()
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        if (result.values.any { it }) viewModel.refresh()
     }
     LaunchedEffect(Unit) {
-        val alreadyGranted = ContextCompat.checkSelfPermission(context, permission) ==
-            PackageManager.PERMISSION_GRANTED
-        if (alreadyGranted) viewModel.refresh() else permLauncher.launch(permission)
+        val alreadyGranted = permissions.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (alreadyGranted) viewModel.refresh() else permLauncher.launch(permissions)
     }
 
     LaunchedEffect(scrollToTopFlow) {
