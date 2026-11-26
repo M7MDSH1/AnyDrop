@@ -1,6 +1,9 @@
 package com.anydrop.app.ui.player
 
 import com.anydrop.app.ui.theme.AccentText
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 import com.anydrop.app.ui.library.CollectionNameDialog
 import com.anydrop.app.ui.library.AddToCollectionDialog
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -469,6 +472,7 @@ private fun VideoPlayerContent(
     subtitles: Map<String, File> = emptyMap()
 ) {
     val context: Context = activity
+    FullScreen(activity)
     // Movie mode keeps the viewer on this video: no previous/next (buttons, PiP actions,
     // auto-advance at the end).
     val canPrevious = hasPrevious && !movieMode
@@ -1433,6 +1437,27 @@ private fun VideoPlayerContent(
 private val OnVideo = Color.White
 private val VideoAccent = DarkPalette.accent
 private val VideoMenu = DarkPalette.surface
+
+// Video players on screen. Moving to the next video shows two for a moment (the new one
+// arrives before the old one leaves), so the phone's bars come back only with the last.
+private var fullScreenPlayers = 0
+
+/**
+ * A video takes the whole screen: the phone's status bar (time, notifications) and navigation
+ * bar are hidden while it's open, and a swipe from the edge shows them for a moment.
+ */
+@Composable
+private fun FullScreen(activity: Activity) {
+    DisposableEffect(activity) {
+        val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        bars.hide(WindowInsetsCompat.Type.systemBars())
+        fullScreenPlayers++
+        onDispose {
+            if (--fullScreenPlayers == 0) bars.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
 
 /** A top-bar button of the video player, shown as an icon or as a line of the ⋮ menu. */
 private class ChromeAction(val icon: ImageVector, val label: String, val onClick: () -> Unit)
