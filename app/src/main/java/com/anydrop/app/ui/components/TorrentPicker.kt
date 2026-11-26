@@ -71,6 +71,7 @@ fun TorrentPicker(
     files: List<TorrentFile>,
     onDownload: (List<TorrentFile>) -> Unit,
     modifier: Modifier = Modifier,
+    /** Set in a sheet of limited height (give [modifier] a weight); not in a scrolling column. */
     maxListHeight: Dp = Dp.Unspecified
 ) {
     val meta = remember(files) { TorrentMeta("", name, files.sumOf { it.size }, files) }
@@ -134,7 +135,8 @@ fun TorrentPicker(
                 }
             }
             if (maxListHeight == Dp.Unspecified) list()
-            else Box(Modifier.fillMaxWidth().heightIn(max = maxListHeight).verticalScroll(rememberScrollState())) { list() }
+            // In a sheet: on a short screen the list gives up height so the button stays on it.
+            else Box(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = maxListHeight).verticalScroll(rememberScrollState())) { list() }
         }
         if (hidden > 0) {
             Spacer(Modifier.height(6.dp))

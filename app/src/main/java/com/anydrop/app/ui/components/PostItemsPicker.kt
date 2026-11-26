@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -63,12 +65,18 @@ fun PostItemsPicker(
     items: List<FormatInfo>,
     onDownload: (List<FormatInfo>) -> Unit,
     modifier: Modifier = Modifier,
-    maxRows: Int = 3
+    maxRows: Int = 3,
+    /**
+     * In a sheet whose height is limited (give [modifier] a weight): the grid gives up rows
+     * so the download button stays on screen. Not in a scrolling column.
+     */
+    fitHeight: Boolean = false
 ) {
     // Selection by position in [items]; a new post starts with everything selected.
     var selected by remember(items) { mutableStateOf(items.indices.toSet()) }
-    val videos = items.count { !it.isImage }
-    val photos = items.size - videos
+    val sound = items.any { it.isAudioOnly }
+    val videos = items.count { !it.isImage && !it.isAudioOnly }
+    val photos = items.count { it.isImage }
     val allSelected = selected.size == items.size
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -86,7 +94,8 @@ fun PostItemsPicker(
                     letterSpacing = tracked(1f)
                 )
                 Text(
-                    stringResource(R.string.post_items_mix, videos, photos),
+                    if (sound && videos == 0) stringResource(R.string.post_items_with_sound, photos)
+                    else stringResource(R.string.post_items_mix, videos, photos),
                     color = White.copy(alpha = 0.5f),
                     fontSize = 11.sp
                 )
@@ -106,7 +115,7 @@ fun PostItemsPicker(
 
         // The grid gets an exact height (it may sit in a scrolling column): up to
         // [maxRows] rows of square tiles, plus a peek of the next row when it scrolls.
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        BoxWithConstraints(if (fitHeight) Modifier.fillMaxWidth().weight(1f, fill = false) else Modifier.fillMaxWidth()) {
             val spacing = 6.dp
             val tile = (maxWidth - spacing * 2) / 3
             val rows = (items.size + 2) / 3
@@ -116,7 +125,7 @@ fun PostItemsPicker(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(gridHeight),
+                    .then(if (fitHeight) Modifier.heightIn(max = gridHeight) else Modifier.height(gridHeight)),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
                 verticalArrangement = Arrangement.spacedBy(spacing)
             ) {
@@ -178,11 +187,11 @@ private fun PostItemTile(item: FormatInfo, number: Int, selected: Boolean, onCli
         }
         if (!selected) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
 
-        // Videos are marked with a play badge (and a big play sign when there is no cover).
+        // Videos are marked with a play badge (and a big play sign when there is no cover), a sound with a note.
         if (!item.isImage) {
             Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = stringResource(R.string.post_item_video),
+                if (item.isAudioOnly) Icons.Filled.MusicNote else Icons.Filled.PlayArrow,
+                contentDescription = stringResource(if (item.isAudioOnly) R.string.post_item_sound else R.string.post_item_video),
                 tint = Color.White,
                 modifier = Modifier
                     .align(if (preview.isBlank()) Alignment.Center else Alignment.BottomStart)

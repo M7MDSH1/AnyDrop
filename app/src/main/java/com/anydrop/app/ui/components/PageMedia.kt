@@ -243,6 +243,7 @@ fun PageMediaPicker(
     onResolve: (String) -> Unit,
     onDownload: (List<FormatInfo>) -> Unit,
     modifier: Modifier = Modifier,
+    /** Set in a sheet of limited height (give [modifier] a weight); not in a scrolling column. */
     maxListHeight: Dp = Dp.Unspecified,
     /**
      * A playlist: every video starts selected and they can be saved as sound only, which
@@ -346,7 +347,8 @@ fun PageMediaPicker(
         if (maxListHeight == Dp.Unspecified) {
             list()
         } else {
-            Box(Modifier.fillMaxWidth().heightIn(max = maxListHeight).verticalScroll(rememberScrollState())) { list() }
+            // In a sheet: on a short screen the list gives up height so the button stays on it.
+            Box(Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = maxListHeight).verticalScroll(rememberScrollState())) { list() }
         }
 
         Spacer(Modifier.height(14.dp))

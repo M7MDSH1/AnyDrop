@@ -371,6 +371,7 @@ private fun ShareSheet(
                         name = pageTitle,
                         files = torrentFiles,
                         onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadTorrent(chosen) } },
+                        modifier = Modifier.weight(1f, fill = false),
                         maxListHeight = 320.dp
                     )
                 }
@@ -386,6 +387,7 @@ private fun ShareSheet(
                         resolving = resolving,
                         onResolve = viewModel::resolvePageItem,
                         onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen) } },
+                        modifier = Modifier.weight(1f, fill = false),
                         maxListHeight = 380.dp,
                         playlist = formats.isPlaylist || formats.isLinkList,
                         onDownloadAudio = { chosen -> ensureNotificationPermission { viewModel.downloadPageItems(chosen, audioOnly = true) } },
@@ -397,7 +399,9 @@ private fun ShareSheet(
                 postItems.isNotEmpty() -> {
                     PostItemsPicker(
                         items = postItems,
-                        onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPostItems(chosen) } }
+                        onDownload = { chosen -> ensureNotificationPermission { viewModel.downloadPostItems(chosen) } },
+                        modifier = Modifier.weight(1f, fill = false),
+                        fitHeight = true
                     )
                 }
 
@@ -417,6 +421,7 @@ private fun ShareSheet(
                     SubtitlePicker(captions = captions, selected = subtitleLanguage, onSelect = viewModel::selectSubtitles)
                     if (captions.isNotEmpty()) Spacer(Modifier.height(12.dp))
                     ShareQualityList(
+                        modifier = Modifier.weight(1f, fill = false),
                         showCovers = severalVideos,
                         // Mixed carousels list their photos too; otherwise just video/audio.
                         formats = if (images.size > 1) formats else videoAudio.ifEmpty { formats },
@@ -460,6 +465,7 @@ private fun ShareSheet(
 private fun ShareQualityList(
     formats: List<FormatInfo>,
     onRecord: (FormatInfo) -> Unit,
+    modifier: Modifier = Modifier,
     showCovers: Boolean = false
 ) {
     var selectedId by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
@@ -469,9 +475,10 @@ private fun ShareQualityList(
     }
     val selected = formats.firstOrNull { it.uniqueKey() == selectedId }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+            // On a short screen the list gives up height so the button stays on screen.
+            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 360.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(formats) { fmt ->
