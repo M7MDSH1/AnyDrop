@@ -1,4 +1,4 @@
-import http.server, sys
+import http.server, sys, urllib.parse
 
 PAGE = '''<!doctype html><html><head><meta charset="utf-8"><title>Ad test</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,6 +18,10 @@ PAGE = '''<!doctype html><html><head><meta charset="utf-8"><title>Ad test</title
   src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="></a>
 <a id="bounce" href="/out?bounce=1">LINK-BOUNCE</a>
 <button id="jsgo">BUTTON-GO-OTHER-SITE</button>
+<a id="goad" target="_blank" href="/go?id=7"><img alt="AD-GO-PICTURE" width="160" height="90" style="background:#36c"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="></a>
+<a id="gotext" href="/go?id=8">LINK-GO-HIDDEN</a>
+<a id="gonamed" href="/go?url=https%3A%2F%2Fexample.org%2F%3Fnamed">LINK-GO-NAMED</a>
 <script>
 var out = document.getElementById('out');
 function say(k, v) { var li = document.createElement('li'); li.textContent = k + '=' + v; out.appendChild(li); }
@@ -82,6 +86,14 @@ document.getElementById('popad').onclick = function () { var w = window.open('ht
 
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        # 7. the site's own ad links: /go?id=… forwards to the advertiser without naming it,
+        # /go?url=… names where it goes (an honest outbound link, which must still work).
+        if self.path.startswith('/go?'):
+            named = urllib.parse.parse_qs(self.path[4:]).get('url')
+            self.send_response(302)
+            self.send_header('Location', named[0] if named else 'https://example.com/?hidden-ad')
+            self.end_headers()
+            return
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Content-Length', str(len(PAGE)))

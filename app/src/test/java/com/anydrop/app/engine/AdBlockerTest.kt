@@ -58,6 +58,40 @@ class AdBlockerTest {
     }
 
     @Test
+    fun aLinkOnTheSiteThatForwardsElsewhereWithoutSayingSo_isAnAd() {
+        val page = "https://videos.example.com/watch/42"
+        // The site's own ad link: an id, and the advertiser's address as the answer.
+        assertTrue(AdBlocker.hiddenForward(page, "https://videos.example.com/api/go?t=eyJhIjo3OH0&s=ad7bbf26", "https://203.0.113.9:63776/?cid=1591905"))
+        assertTrue(AdBlocker.hiddenForward(page, "https://example.com/go/78", "https://www.casino-ad.vip/?cid=5"))
+    }
+
+    @Test
+    fun honestForwardsPass() {
+        val page = "https://www.example.com/results"
+        // It names where it goes, as search and social sites write their outbound links.
+        assertFalse(AdBlocker.hiddenForward(page, "https://www.example.com/url?q=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FCat", "https://en.wikipedia.org/wiki/Cat"))
+        assertFalse(AdBlocker.hiddenForward(page, "https://l.example.com/l.php?u=https://news.site.org/a", "https://www.site.org/a"))
+        // A sign-in: the other site is told where to come back to.
+        assertFalse(AdBlocker.hiddenForward(page, "https://www.example.com/auth/start", "https://accounts.idp.net/o/oauth2?redirect_uri=https%3A%2F%2Fwww.example.com%2Fcallback"))
+        // The same name under another ending, or as a part of the other address.
+        assertFalse(AdBlocker.hiddenForward("https://www.bbc.com/news", "https://www.bbc.com/go/1", "https://www.bbc.co.uk/news"))
+        assertFalse(AdBlocker.hiddenForward("https://www.google.com/", "https://www.google.com/x", "https://www.google.com.sa/"))
+        assertFalse(AdBlocker.hiddenForward(page, "https://www.example.com/blog", "https://example.substack.com/"))
+    }
+
+    @Test
+    fun forwardsThatAreNotTheSitesOwnDoing_areNotJudged() {
+        val page = "https://www.example.com/post"
+        // Still on the site.
+        assertFalse(AdBlocker.hiddenForward(page, "https://www.example.com/a", "https://m.example.com/a"))
+        // A link to another site that forwards on (a short link): leaving was the tap's choice.
+        assertFalse(AdBlocker.hiddenForward(page, "https://sho.rt/abc", "https://www.wikipedia.org/"))
+        // No link the page started (an address typed, Back, a form): nothing to compare.
+        assertFalse(AdBlocker.hiddenForward(page, null, "https://www.wikipedia.org/"))
+        assertFalse(AdBlocker.hiddenForward(null, "https://www.example.com/go/1", "https://www.wikipedia.org/"))
+    }
+
+    @Test
     fun siteOfKeepsTwoPartEndingsTogether() {
         assertEquals("example.com", AdBlocker.siteOf("a.b.example.com"))
         assertEquals("example.co.uk", AdBlocker.siteOf("www.example.co.uk"))

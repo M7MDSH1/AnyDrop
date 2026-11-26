@@ -45,6 +45,36 @@ object AdBlocker {
         return linkHost == null || siteOf(linkHost.lowercase()) != siteOf(target)
     }
 
+    /**
+     * A link on the page's own site ([start]) forwarded the page to another site ([target])
+     * without either address saying so: how sites serve their own ads ("/go?id=7" answers
+     * with the advertiser's address). A forward is taken as honest when it names where it goes
+     * ("/out?url=https://example.org/…", as search and social sites write theirs), when the
+     * other site is told where to come back to (a sign-in), or when both carry the same name
+     * (example.com → example.co.uk).
+     */
+    fun hiddenForward(pageUrl: String?, start: String?, target: String): Boolean {
+        val page = hostOf(pageUrl) ?: return false
+        val from = hostOf(start) ?: return false
+        val to = hostOf(target) ?: return false
+        val pageSite = siteOf(page)
+        val targetSite = siteOf(to)
+        if (siteOf(from) != pageSite || targetSite == pageSite) return false
+        if (pageSite.substringBefore('.') in to.split('.') || targetSite.substringBefore('.') in page.split('.')) return false
+        return !names(start, targetSite) && !names(target, pageSite)
+    }
+
+    private fun hostOf(url: String?): String? =
+        url?.substringAfter("://", "")?.substringBefore('/')?.substringBefore('?')?.substringBefore('#')
+            ?.substringAfterLast('@')?.substringBefore(':')?.lowercase()?.trimEnd('.')?.takeIf { it.isNotEmpty() }
+
+    /** [url] spells out [site] somewhere, encoded or not. */
+    private fun names(url: String?, site: String): Boolean {
+        url ?: return false
+        val plain = runCatching { java.net.URLDecoder.decode(url, "UTF-8") }.getOrDefault(url)
+        return plain.contains(site, ignoreCase = true)
+    }
+
     private fun matchesList(host: String): Boolean {
         var domain = host
         while (true) {
