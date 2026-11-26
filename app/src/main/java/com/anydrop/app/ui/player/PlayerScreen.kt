@@ -1,6 +1,9 @@
 package com.anydrop.app.ui.player
 
 import com.anydrop.app.ui.theme.AccentText
+import com.anydrop.app.ui.library.CollectionNameDialog
+import com.anydrop.app.ui.library.AddToCollectionDialog
+import androidx.compose.material.icons.filled.CreateNewFolder
 import com.anydrop.app.service.PlaybackService
 import com.anydrop.app.ui.theme.AppFont
 import androidx.activity.ComponentActivity
@@ -526,6 +529,41 @@ private fun VideoPlayerContent(
     var showSpeedMenu by remember { mutableStateOf(false) }
     var shareMenuOpen by remember { mutableStateOf(false) }
     var moreMenuOpen by remember { mutableStateOf(false) }
+    // "Add to collection" (⋮): the video it was asked for, while a collection is picked or a
+    // new one is named. The video goes on playing behind the dialog, so until it's answered
+    // the end of the video doesn't move on to the next one (this screen would go with it).
+    var collectTarget by remember { mutableStateOf<com.anydrop.app.data.model.MediaItem?>(null) }
+    var collectIntoNew by remember { mutableStateOf<com.anydrop.app.data.model.MediaItem?>(null) }
+    val collecting = collectTarget != null || collectIntoNew != null
+    val holdAdvance by rememberUpdatedState(collecting)
+    val collections by viewModel.collections.collectAsState()
+    fun added(collection: String) =
+        Toast.makeText(context, context.getString(R.string.added_to_collection, collection), Toast.LENGTH_SHORT).show()
+    collectTarget?.let { item ->
+        AddToCollectionDialog(
+            collections = collections,
+            counts = emptyMap(),
+            onPick = { collection ->
+                collectTarget = null
+                viewModel.addToCollection(collection, item)
+                added(collection.name)
+            },
+            onNew = { collectTarget = null; collectIntoNew = item },
+            onDismiss = { collectTarget = null }
+        )
+    }
+    collectIntoNew?.let { item ->
+        CollectionNameDialog(
+            title = stringResource(R.string.new_collection_title),
+            initial = "",
+            confirmLabel = stringResource(R.string.btn_create),
+            onConfirm = { name ->
+                collectIntoNew = null
+                added(viewModel.createCollection(name, item).name)
+            },
+            onDismiss = { collectIntoNew = null }
+        )
+    }
     var showSeekFeedback by remember { mutableStateOf<String?>(null) }
     // Which side the feedback shows on: -1 left (rewind), 1 right (forward), 0 centre.
     var seekFeedbackSide by remember { mutableIntStateOf(0) }
@@ -644,6 +682,11 @@ private fun VideoPlayerContent(
         }
     }
 
+    // The video ended while a collection was being picked: move on now that it's answered.
+    LaunchedEffect(collecting) {
+        if (!collecting && player.playbackState == Player.STATE_ENDED && autoAdvance) currentOnNext()
+    }
+
     // Listen for buffering, playback errors, and end-of-video so we can show a
     // spinner / error message and auto-advance to the next item. Also drives
     // watch-progress: restore on first READY, save immediately on seek, and
@@ -663,7 +706,7 @@ private fun VideoPlayerContent(
                     }
                     Player.STATE_ENDED -> {
                         viewModel.complete()
-                        if (autoAdvance) currentOnNext()
+                        if (autoAdvance && !holdAdvance) currentOnNext()
                     }
                 }
             }
@@ -1077,6 +1120,14 @@ private fun VideoPlayerContent(
                 // show while they fit (a long name only gets shortened); on a narrow screen, or
                 // next to a file name, the last of them move under ⋮ instead of being squeezed out.
                 val more = buildList {
+                    // Like the heart: only for what's in the library (not a file another app opened).
+                    if (favorite != null && shareItem != null) {
+                        add(
+                            ChromeAction(Icons.Filled.CreateNewFolder, stringResource(R.string.add_to_collection)) {
+                                collectTarget = shareItem
+                            }
+                        )
+                    }
                     add(
                         ChromeAction(Icons.Default.AspectRatio, stringResource(R.string.player_aspect_ratio)) {
                             resizeModeIndex = (resizeModeIndex + 1) % resizeModes.size

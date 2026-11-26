@@ -1,6 +1,7 @@
 package com.anydrop.app.ui.player
 
 import android.net.Uri
+import com.anydrop.app.data.repository.MediaCollection
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -56,6 +57,15 @@ class PlayerViewModel @Inject constructor(
     fun toggleFavorite() {
         _currentMedia.value?.let { collectionsRepository.toggleFavorite(listOf(it)) }
     }
+
+    /** The user's collections, for "Add to collection" in the video player's menu. */
+    val collections: StateFlow<List<MediaCollection>> = collectionsRepository.collections
+
+    fun addToCollection(collection: MediaCollection, item: MediaItem) =
+        collectionsRepository.addToCollection(collection.id, listOf(item))
+
+    fun createCollection(name: String, item: MediaItem): MediaCollection =
+        collectionsRepository.createCollection(name, listOf(item))
 
     /** A video being listened to as sound only (from this position), or null. */
     private val _asAudioFrom = MutableStateFlow<Long?>(null)
