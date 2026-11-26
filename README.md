@@ -4,7 +4,7 @@
 platforms like YouTube, TikTok, Instagram, Facebook, X, Reddit, and more. It's
 built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 
-> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.2.3**
+> Created and maintained by **M7MDSH**. © 2026. Licensed under **GPL-3.0**. **v2.2.4**
 
 ## What it looks like
 
@@ -35,7 +35,7 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
   other languages and automatic dubbing) let you pick which one to save, with the video or alone.
 - **Subtitles** (Settings, off by default) — save a video's subtitles (the creator's own or
   the site's automatic ones) next to it; the player shows them, with a CC button to turn them off.
-- **Images** — single photos and photo posts.
+- **Images** — single photos and photo posts, TikTok photo posts with their sound included.
 - **Whole posts** — share a carousel that mixes photos and videos and AnyDrop fetches
   every item, shows them in a grid (videos marked ▶) and downloads the ones you pick,
   or all of them in one tap.
@@ -85,13 +85,15 @@ built on [yt-dlp](https://github.com/yt-dlp/yt-dlp) with a calm, modern UI.
 - **Favorites & collections** — tap ♡ on any photo or video (in the library or the
   player) to keep it in **Favorites**, and make your own collections (e.g. "Family"):
   select items, tap the folder button, and the collection shows only what you added.
-  Rename or delete a collection with a long-press — the files themselves stay put.
+  While watching a video, **⋮ → Add to collection** does the same without leaving the
+  player. Rename or delete a collection with a long-press — the files themselves stay put.
+  Removed a favorite by mistake? **Undo** stays on screen for 5 seconds.
 - **Audio tab** — plays device audio in the background with a media notification, one
   song after another (also with the screen off), with shuffle, repeat, an **Up next**
   list and a **sleep timer** (15–60 minutes or the end of the song). Tapping the music
   notification brings you back to the player. Rename or delete
   songs from their menu.
-- **Built-in player** — tap the video to show or hide the controls; a smooth seek bar
+- **Built-in player** — videos play full screen; tap the video to show or hide the controls; a smooth seek bar
   with live frame preview while you drag, stacking double-tap seek, gestures (volume,
   brightness), playback speed, PiP shaped like the video, aspect-ratio toggle, resume
   where you left off, **share the video or the link it came from**, a ♡ favorite button,
