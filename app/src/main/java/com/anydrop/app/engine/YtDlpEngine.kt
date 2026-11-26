@@ -942,6 +942,8 @@ class YtDlpEngine(
                     Log.w(TAG, "Client '$client' returned no usable formats, trying next")
                 } catch (e: Exception) {
                     Log.w(TAG, "getFormats failed with client '$client' (${index + 1}/${clients.size})", e)
+                    // yt-dlp fails TikTok photo posts in several ways ("Unsupported URL", odd webpage answers).
+                    if (isTiktok) tiktokPhotos(url, anyLink = true)?.let { return@withContext it }
                     if (e.isImpersonationUnavailable()) {
                         throw UnsupportedSiteException(context.getString(R.string.error_site_unsupported), e)
                     }
@@ -954,7 +956,6 @@ class YtDlpEngine(
                         throw UnsupportedSiteException(loginRequiredMessage, e)
                     }
                     if (e.isNoVideoFormats()) {
-                        if (isTiktok) tiktokPhotos(url, anyLink = true)?.let { return@withContext it }
                         val imgs = imageFallbackViaThumbnails(url, cookieFile, client, isTiktok)
                         if (imgs.isNotEmpty()) return@withContext FetchResult(imgs)
                     }

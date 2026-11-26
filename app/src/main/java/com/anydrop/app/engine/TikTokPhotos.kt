@@ -88,10 +88,16 @@ object TikTokPhotos {
     private val API_DATA = Regex("""<script[^>]*\bid="api-data"[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
     private val REHYDRATION = Regex("""<script[^>]*\bid="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
 
-    /** The photo post on a TikTok page (mobile `api-data`, or the desktop page's data); null when it's not one. */
+    /**
+     * The photo post on a TikTok page; null when it's not one. Three layouts seen: the mobile
+     * page's `api-data`, the mobile page a share link lands on (`/@/video/<id>`: "reflow" data)
+     * and the desktop page.
+     */
     fun parse(html: String): Post? {
+        val scope = REHYDRATION.find(html)?.let { json(it)?.optJSONObject("__DEFAULT_SCOPE__") }
         val item = API_DATA.find(html)?.let { json(it)?.path("videoDetail", "itemInfo", "itemStruct") }
-            ?: REHYDRATION.find(html)?.let { json(it)?.path("__DEFAULT_SCOPE__", "webapp.video-detail", "itemInfo", "itemStruct") }
+            ?: scope?.path("webapp.reflow.video.detail", "itemInfo", "itemStruct")
+            ?: scope?.path("webapp.video-detail", "itemInfo", "itemStruct")
             ?: return null
         val images = item.optJSONObject("imagePost")?.optJSONArray("images") ?: return null
         val photos = (0 until images.length()).mapNotNull { i ->
@@ -110,8 +116,11 @@ object TikTokPhotos {
             )
         }
         val author = item.optJSONObject("author")
+        // The caption can be thousands of characters; it names the files (yt-dlp cuts TikTok titles at 72 too).
+        val title = item.optJSONObject("imagePost")?.optString("title").orEmpty().trim()
+            .ifBlank { item.optString("desc").trim() }.replace(Regex("\\s+"), " ")
         return Post(
-            title = item.optJSONObject("imagePost")?.optString("title").orEmpty().trim().ifBlank { item.optString("desc").trim() },
+            title = if (title.length > 72) title.take(71).trimEnd() + "…" else title,
             uploader = author?.optString("nickname").orEmpty().ifBlank { author?.optString("uniqueId").orEmpty() },
             photos = photos,
             song = song

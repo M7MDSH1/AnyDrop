@@ -39,8 +39,20 @@ class TikTokPhotosTest {
     }
 
     @Test
-    fun readsTheDesktopPageToo() {
+    fun aLongCaptionWithoutTitle_isCutForFileNames() {
+        val caption = "word ".repeat(400)
+        val untitled = item(images = 2).replace("\"title\":\"ultimate motivation.\",", "").replace("#gym #mindset ", caption)
+        val title = TikTokPhotos.parse(mobilePage(untitled))!!.title
+        assertEquals(72, title.length)
+        assertTrue(title.startsWith("word word") && title.endsWith("…"))
+    }
+
+    @Test
+    fun readsTheDesktopPage_andThePageAShareLinkLandsOn() {
         assertEquals(2, TikTokPhotos.parse(desktopPage(item(images = 2)))?.photos?.size)
+        // vt.tiktok.com/… → www.tiktok.com/@/video/<id>: the mobile page without api-data.
+        val reflow = """<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">{"__DEFAULT_SCOPE__":{"webapp.reflow.video.detail":{"itemInfo":{"itemStruct":${item(images = 3)}}}}}</script>"""
+        assertEquals(3, TikTokPhotos.parse(reflow)?.photos?.size)
     }
 
     @Test
