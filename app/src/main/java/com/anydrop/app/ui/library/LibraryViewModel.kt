@@ -143,7 +143,7 @@ class LibraryViewModel @Inject constructor(
         _selectedItem.value = item
     }
 
-    fun toggleFavorite(items: List<MediaItem>) = collectionsRepository.toggleFavorite(items)
+    fun toggleFavorite(items: List<MediaItem>) = collectionsRepository.toggleFavorite(items, undoable = true)
 
     /** Creates a collection (with [items] in it, if any) and returns it. */
     fun createCollection(name: String, items: List<MediaItem> = emptyList()): MediaCollection =

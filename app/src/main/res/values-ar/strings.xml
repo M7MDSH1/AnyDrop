@@ -106,6 +106,9 @@
     <string name="favorite_add">إضافة إلى المفضلة</string>
     <string name="favorite_remove">إزالة من المفضلة</string>
     <string name="favorites_empty">لا توجد عناصر مفضلة بعد.\nاضغط ♡ على صورة أو فيديو لتحفظه هنا.</string>
+    <string name="favorite_removed">أُزيل من المفضلة</string>
+    <string name="favorites_removed">أُزيل %1$d من المفضلة</string>
+    <string name="undo">تراجع</string>
     <string name="new_collection">مجموعة جديدة</string>
     <string name="new_collection_title">مجموعة جديدة</string>
     <string name="rename_collection_title">إعادة تسمية المجموعة</string>

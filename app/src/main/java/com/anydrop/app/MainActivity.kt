@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import com.anydrop.app.data.repository.CollectionsRepository
 import com.anydrop.app.data.repository.DownloadQueue
 import com.anydrop.app.ui.browser.rememberBrowserState
 import androidx.compose.material.icons.filled.MusicNote
@@ -72,6 +73,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.anydrop.app.R
+import com.anydrop.app.ui.library.FavoriteUndoBar
 import com.anydrop.app.ui.navigation.AnyDropNavGraph
 import com.anydrop.app.ui.navigation.Routes
 import com.anydrop.app.data.repository.DeckSessionRepository
@@ -117,6 +119,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var downloadQueue: DownloadQueue
+
+    @Inject
+    lateinit var collectionsRepository: CollectionsRepository
 
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(
@@ -194,7 +199,8 @@ class MainActivity : ComponentActivity() {
                     onNavControllerReady = { navController = it },
                     startDestination = startTab,
                     deckSessionRepository = deckSessionRepository,
-                    downloadQueue = downloadQueue
+                    downloadQueue = downloadQueue,
+                    collectionsRepository = collectionsRepository
                 )
                 UpdatePrompt(updateViewModel)
             }
@@ -303,7 +309,8 @@ fun AnyDropMainScreen(
     onNavControllerReady: (NavController) -> Unit = {},
     startDestination: String = Routes.TAPE_DECK,
     deckSessionRepository: DeckSessionRepository? = null,
-    downloadQueue: DownloadQueue? = null
+    downloadQueue: DownloadQueue? = null,
+    collectionsRepository: CollectionsRepository? = null
 ) {
     // Survives tab switches so the browser keeps its page and history.
     val browserState = rememberBrowserState()
@@ -419,6 +426,11 @@ fun AnyDropMainScreen(
                 startDestination = startDestination,
                 browserState = browserState
             )
+            // Over every tab, so the undo stays while moving around; not over the player. Raised
+            // above the buttons tabs keep at the bottom (the Deck's Download, the Browser's Find video).
+            if (collectionsRepository != null && showBottomBar) {
+                FavoriteUndoBar(collectionsRepository, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
+            }
         }
     }
 }

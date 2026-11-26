@@ -106,6 +106,9 @@
     <string name="favorite_add">Add to favorites</string>
     <string name="favorite_remove">Remove from favorites</string>
     <string name="favorites_empty">No favorites yet.\nTap ♡ on a photo or video to keep it here.</string>
+    <string name="favorite_removed">Removed from favorites</string>
+    <string name="favorites_removed">%1$d removed from favorites</string>
+    <string name="undo">Undo</string>
     <string name="new_collection">New collection</string>
     <string name="new_collection_title">New collection</string>
     <string name="rename_collection_title">Rename collection</string>

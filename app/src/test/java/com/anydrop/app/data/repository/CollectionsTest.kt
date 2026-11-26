@@ -50,4 +50,18 @@ class CollectionsTest {
         assertTrue(CollectionsRepository.loadCollections(null).isEmpty())
         assertEquals(listOf(MediaRef("x", "y")), CollectionsRepository.loadRefs("""[{"id":"x","name":"y"}]"""))
     }
+
+    @Test
+    fun removedFavorites_comeBackWithUndo_forFiveSeconds() {
+        val a = MediaRef("vid_1", "Beach"); val b = MediaRef("img_2", "Dinner"); val c = MediaRef("vid_3", "Trip")
+        val first = RemovedFavorites.after(null, listOf(a), now = 1_000)
+        assertEquals(RemovedFavorites(listOf(a), until = 6_000), first)
+        // Another removed while the pill shows: one Undo covers both, counted from the last.
+        val both = RemovedFavorites.after(first, listOf(b), now = 4_000)
+        assertEquals(RemovedFavorites(listOf(a, b), until = 9_000), both)
+        // After the first one's time was up, only the new one can come back.
+        assertEquals(listOf(b), RemovedFavorites.after(first, listOf(b), now = 6_000).refs)
+        // Undo puts them back; one favorited again by hand meanwhile isn't doubled.
+        assertEquals(listOf(c, a, b), both.restoredInto(listOf(c, a)))
+    }
 }

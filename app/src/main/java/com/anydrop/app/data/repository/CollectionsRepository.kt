@@ -1,6 +1,7 @@
 package com.anydrop.app.data.repository
 
 import android.content.Context
+import android.os.SystemClock
 import com.anydrop.app.data.model.MediaItem
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +48,23 @@ class MediaRefIndex(refs: Collection<MediaRef>) {
 }
 
 /**
+ * Favorites just removed in the Library, which "Undo" brings back until [until] (a time on
+ * the phone's uptime clock). Removing more before then adds them: one Undo covers them all.
+ */
+data class RemovedFavorites(val refs: List<MediaRef>, val until: Long) {
+    /** [favorites] with these back; one favorited again meanwhile isn't doubled. */
+    fun restoredInto(favorites: List<MediaRef>): List<MediaRef> = (favorites + refs).distinct()
+
+    companion object {
+        const val UNDO_MS = 5_000L
+
+        /** [removed] at [now], with what [earlier] still offered. */
+        fun after(earlier: RemovedFavorites?, removed: List<MediaRef>, now: Long) =
+            RemovedFavorites((earlier?.takeIf { it.until > now }?.refs.orEmpty() + removed).distinct(), now + UNDO_MS)
+    }
+}
+
+/**
  * Favorites and collections, kept in SharedPreferences as JSON. Library items are
  * matched by [MediaRef]; deleting an item through AnyDrop also removes it from here.
  */
@@ -64,14 +82,37 @@ class CollectionsRepository @Inject constructor(
 
     fun isFavorite(item: MediaItem): Boolean = item in MediaRefIndex(_favorites.value)
 
-    /** Adds [items] to the favorites, or removes them when they all already are. */
-    fun toggleFavorite(items: List<MediaItem>) {
+    private val _removedFavorites = MutableStateFlow<RemovedFavorites?>(null)
+    /** What the "Undo" pill offers to bring back (null: nothing to undo). */
+    val removedFavorites: StateFlow<RemovedFavorites?> = _removedFavorites.asStateFlow()
+
+    /**
+     * Adds [items] to the favorites, or removes them when they all already are.
+     * [undoable]: a removal can be taken back for a few seconds ([undoRemovedFavorites]).
+     */
+    fun toggleFavorite(items: List<MediaItem>, undoable: Boolean = false) {
         if (items.isEmpty()) return
         val index = MediaRefIndex(_favorites.value)
-        saveFavorites(
-            if (items.all { it in index }) _favorites.value.filterNot { ref -> items.any { ref.matches(it) } }
-            else _favorites.value + items.filterNot { it in index }.map(MediaRef::of)
-        )
+        if (items.all { it in index }) {
+            val (removed, kept) = _favorites.value.partition { ref -> items.any { ref.matches(it) } }
+            saveFavorites(kept)
+            if (undoable) {
+                _removedFavorites.value = RemovedFavorites.after(_removedFavorites.value, removed, SystemClock.elapsedRealtime())
+            }
+        } else {
+            saveFavorites(_favorites.value + items.filterNot { it in index }.map(MediaRef::of))
+        }
+    }
+
+    fun undoRemovedFavorites() {
+        val removed = _removedFavorites.value ?: return
+        _removedFavorites.value = null
+        saveFavorites(removed.restoredInto(_favorites.value))
+    }
+
+    /** [shown]'s time is up; a removal made since keeps its own. */
+    fun dismissRemovedFavorites(shown: RemovedFavorites) {
+        _removedFavorites.compareAndSet(shown, null)
     }
 
     fun createCollection(name: String, items: List<MediaItem> = emptyList()): MediaCollection {
@@ -120,6 +161,8 @@ class CollectionsRepository @Inject constructor(
         fun List<MediaRef>.without() = filterNot { ref -> items.any { ref.matches(it) } }
         saveFavorites(_favorites.value.without())
         saveCollections(_collections.value.map { it.copy(items = it.items.without()) })
+        // Deleted for good: "Undo" must not bring its favorite back.
+        _removedFavorites.value = _removedFavorites.value?.let { it.copy(refs = it.refs.without()) }?.takeIf { it.refs.isNotEmpty() }
     }
 
     /** The part of [items] the [scope] shows, in the order given. */
