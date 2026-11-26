@@ -20,6 +20,8 @@ PAGE = '''<!doctype html><html><head><meta charset="utf-8"><title>Ad test</title
 <button id="jsgo">BUTTON-GO-OTHER-SITE</button>
 <a id="goad" target="_blank" href="/go?id=7"><img alt="AD-GO-PICTURE" width="160" height="90" style="background:#36c"
   src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="></a>
+<a id="gopic" href="/go?url=https%3A%2F%2Fexample.org%2F%3Fnamed-picture"><img alt="PIC-GO-NAMED" width="160" height="90" style="background:#3a6"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="></a>
 <a id="gotext" href="/go?id=8">LINK-GO-SAME-TAB</a>
 <a id="gonamed" href="/go?url=https%3A%2F%2Fexample.org%2F%3Fnamed">LINK-GO-NAMED</a>
 <script>
@@ -77,11 +79,17 @@ if (/popunder=1/.test(location.search)) {
     if (/sync=1/.test(location.search)) go(); else setTimeout(go, 400);
   }, true);
 }
+// 8. an ad script that sends the page away on any touch (?touchad=start: as the finger lands,
+// ?touchad=end: as it lifts, scrolls included). The page must stay; a tapped link still opens.
+var touchad = /touchad=(start|end)/.exec(location.search);
+if (touchad) document.addEventListener('touch' + touchad[1], function () {
+  location.href = 'https://example.com/?touch-ad';
+}, true);
 document.getElementById('jsgo').onclick = function () { location.href = 'https://example.org/?js'; };
 // 4. windows
 document.getElementById('pop').onclick = function () { var w = window.open('https://example.org/?popup'); say('open-other', w ? 'WINDOW' : 'NULL'); };
 document.getElementById('popad').onclick = function () { var w = window.open('https://www.popads.net/'); say('open-ad', w ? 'WINDOW' : 'NULL'); };
-</script></body></html>'''.encode()
+</script><div style="height:1500px"></div></body></html>'''.encode()
 
 
 class H(http.server.BaseHTTPRequestHandler):
