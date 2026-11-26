@@ -46,6 +46,8 @@ fun FavoriteUndoBar(collections: CollectionsRepository, modifier: Modifier = Mod
         delay((removed.until - SystemClock.elapsedRealtime()).coerceAtLeast(0))
         collections.dismissRemovedFavorites(removed)
     }
+    // Its time ran out while it wasn't on screen (the player was open): gone without a flash.
+    if (removed.until <= SystemClock.elapsedRealtime()) return
     Row(
         modifier
             .clip(CircleShape)
