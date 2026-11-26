@@ -38,6 +38,8 @@
     <string name="post_items_count">%1$d عناصر</string>
     <string name="post_items_mix">%1$d فيديو · %2$d صورة</string>
     <string name="post_item_video">فيديو</string>
+    <string name="post_items_with_sound">%1$d صورة · مع صوتها</string>
+    <string name="post_item_sound">صوت</string>
 
     <!-- Tape deck -->
     <string name="tape_deck_version">ديك الشريط v1.0</string>

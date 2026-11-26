@@ -532,6 +532,9 @@ class TapeDeckViewModel @Inject constructor(
             val n = (if (item.slide >= 0) item.slide else idx) + 1
             val path = if (item.isImage) {
                 libraryRepository.getImageOutputPath(urlValue, request.title, "img$n")
+            } else if (item.isAudioOnly) {
+                // A photo post's song (TikTok).
+                libraryRepository.getAudioOutputPath(urlValue, request.title, "audio")
             } else {
                 val label = "vid$n"
                 val copies = libraryRepository.findVideoCopies(urlValue, request.title, label)

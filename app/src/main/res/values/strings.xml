@@ -38,6 +38,8 @@
     <string name="post_items_count">%1$d items</string>
     <string name="post_items_mix">%1$d videos · %2$d photos</string>
     <string name="post_item_video">Video</string>
+    <string name="post_items_with_sound">%1$d photos · their sound</string>
+    <string name="post_item_sound">Sound</string>
 
     <!-- Tape deck -->
     <string name="tape_deck_version">TAPE DECK v1.0</string>

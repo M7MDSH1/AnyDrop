@@ -9,6 +9,7 @@ import com.anydrop.app.data.model.MediaItem
 import com.anydrop.app.data.model.MediaSource
 import com.anydrop.app.data.repository.SettingsRepository
 import com.anydrop.app.data.repository.readAppLanguageSync
+import com.anydrop.app.engine.TikTokPhotos.toFormats
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDL.CanceledException
@@ -807,6 +808,8 @@ class YtDlpEngine(
     private suspend fun ytdlpFormats(url: String, cookieFile: File? = null): FetchResult {
         return withContext(Dispatchers.IO) {
             val isTiktok = isTiktokUrl(url)
+            // TikTok photo posts: yt-dlp can't read them (see TikTokPhotos).
+            if (isTiktok) tiktokPhotos(url)?.let { return@withContext it }
             val clients = clientsFor(url)
 
             for ((index, client) in clients.withIndex()) {
@@ -910,6 +913,9 @@ class YtDlpEngine(
                         }
                         .sortedByDescending { YtDlpFormatParser.extractHeight(it.resolution) }
 
+                    // No video at a TikTok link: a photo post (yt-dlp gives only its song).
+                    if (isTiktok && videoFormats.isEmpty()) tiktokPhotos(url, anyLink = true)?.let { return@withContext it }
+
                     // If there were no real formats but the post has a thumbnail/image,
                     // derive an image entry from it (Instagram/TikTok photo posts often
                     // expose the picture only via `thumbnails`, not `formats`).
@@ -948,6 +954,7 @@ class YtDlpEngine(
                         throw UnsupportedSiteException(loginRequiredMessage, e)
                     }
                     if (e.isNoVideoFormats()) {
+                        if (isTiktok) tiktokPhotos(url, anyLink = true)?.let { return@withContext it }
                         val imgs = imageFallbackViaThumbnails(url, cookieFile, client, isTiktok)
                         if (imgs.isNotEmpty()) return@withContext FetchResult(imgs)
                     }
@@ -956,6 +963,14 @@ class YtDlpEngine(
             }
             FetchResult(emptyList())
         }
+    }
+
+    /** A TikTok photo post's pictures and song, read from its page; null when [url] isn't one. */
+    private fun tiktokPhotos(url: String, anyLink: Boolean = false): FetchResult? {
+        val agent = MediaSniffer.mobileUserAgent(context)
+        val (page, post) = TikTokPhotos.fetch(url, agent, anyLink) ?: return null
+        Log.i(TAG, "TikTok photo post: ${post.photos.size} photo(s), song: ${post.song != null}")
+        return FetchResult(post.toFormats(page, agent), post.title, post.uploader, page)
     }
 
     private fun Exception.isNoVideoFormats(): Boolean {
