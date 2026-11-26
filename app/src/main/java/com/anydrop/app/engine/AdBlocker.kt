@@ -46,9 +46,11 @@ object AdBlocker {
     }
 
     /**
-     * A link on the page's own site ([start]) forwarded the page to another site ([target])
-     * without either address saying so: how sites serve their own ads ("/go?id=7" answers
-     * with the advertiser's address). A forward is taken as honest when it names where it goes
+     * A window the page opened on its own site ([start]) forwarded to another site ([target])
+     * without either address saying so: how sites serve their own ads (a picture linked to
+     * "/go?id=7", which answers with the advertiser's address). Only asked about windows:
+     * links followed in place forward to other sites all the time (a download to its file
+     * server). A forward is taken as honest when it names where it goes
      * ("/out?url=https://example.org/…", as search and social sites write theirs), when the
      * other site is told where to come back to (a sign-in), or when both carry the same name
      * (example.com → example.co.uk).

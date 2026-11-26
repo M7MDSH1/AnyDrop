@@ -20,7 +20,7 @@ PAGE = '''<!doctype html><html><head><meta charset="utf-8"><title>Ad test</title
 <button id="jsgo">BUTTON-GO-OTHER-SITE</button>
 <a id="goad" target="_blank" href="/go?id=7"><img alt="AD-GO-PICTURE" width="160" height="90" style="background:#36c"
   src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=="></a>
-<a id="gotext" href="/go?id=8">LINK-GO-HIDDEN</a>
+<a id="gotext" href="/go?id=8">LINK-GO-SAME-TAB</a>
 <a id="gonamed" href="/go?url=https%3A%2F%2Fexample.org%2F%3Fnamed">LINK-GO-NAMED</a>
 <script>
 var out = document.getElementById('out');
@@ -86,8 +86,9 @@ document.getElementById('popad').onclick = function () { var w = window.open('ht
 
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        # 7. the site's own ad links: /go?id=… forwards to the advertiser without naming it,
-        # /go?url=… names where it goes (an honest outbound link, which must still work).
+        # 7. the site's own ad links: /go?id=… forwards to another site without naming it,
+        # /go?url=… names where it goes. In a new window (the ad picture) the first is refused;
+        # followed in place both must load, like a download that forwards to its file server.
         if self.path.startswith('/go?'):
             named = urllib.parse.parse_qs(self.path[4:]).get('url')
             self.send_response(302)

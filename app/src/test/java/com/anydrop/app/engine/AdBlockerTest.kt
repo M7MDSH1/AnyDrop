@@ -58,7 +58,7 @@ class AdBlockerTest {
     }
 
     @Test
-    fun aLinkOnTheSiteThatForwardsElsewhereWithoutSayingSo_isAnAd() {
+    fun aWindowOnTheSiteThatForwardsElsewhereWithoutSayingSo_isAnAd() {
         val page = "https://videos.example.com/watch/42"
         // The site's own ad link: an id, and the advertiser's address as the answer.
         assertTrue(AdBlocker.hiddenForward(page, "https://videos.example.com/api/go?t=eyJhIjo3OH0&s=ad7bbf26", "https://203.0.113.9:63776/?cid=1591905"))

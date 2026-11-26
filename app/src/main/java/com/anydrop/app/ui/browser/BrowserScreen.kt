@@ -318,10 +318,9 @@ class BrowserState(private val appContext: Context) {
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
-                // The page starts a navigation (a link, a script); a forward is the server's answer to one.
-                val starts = request.isForMainFrame && !request.isRedirect
-                if (starts) pageJump = null
-                val stays = when (uri.scheme) {
+                // The page starts another navigation: the window it opened before is out of the picture.
+                if (request.isForMainFrame && !request.isRedirect) windowJump = null
+                return when (uri.scheme) {
                     "http", "https" -> when {
                         PageTweaks.isAppInstallRedirect(uri) -> true
                         // A tap or a redirect that leads to an ad server: stay on the page.
@@ -330,13 +329,13 @@ class BrowserState(private val appContext: Context) {
                             if (request.hasGesture()) blockedPage = uri.toString()
                             true
                         }
-                        // A link on this site that forwards to another one without saying so: the
-                        // site's own ad links, which no list of ad servers can know.
+                        // A window the page opened on its own site forwards to another one without
+                        // saying so: the site's own ad links, which no list of ad servers can know.
                         request.isForMainFrame && request.isRedirect && blockingAds && !adPassOnce &&
-                            AdBlocker.hiddenForward(currentUrl, pageJump, uri.toString()) -> {
+                            AdBlocker.hiddenForward(currentUrl, windowJump, uri.toString()) -> {
                             adsBlocked.incrementAndGet()
                             blockedPage = uri.toString()
-                            pageJump = null
+                            windowJump = null
                             true
                         }
                         // Just after a tap, the page goes to another site, but not by the link tapped:
@@ -351,7 +350,6 @@ class BrowserState(private val appContext: Context) {
                         // Moving to a site shown the other way (desktop/mobile): reload it with
                         // the matching browser identity.
                         request.isForMainFrame && applyUserAgent(view, uri.toString()) -> {
-                            if (starts) pageJump = uri.toString()
                             view.loadUrl(uri.toString())
                             true
                         }
@@ -369,14 +367,12 @@ class BrowserState(private val appContext: Context) {
                     }
                     else -> true
                 }
-                if (starts && !stays) pageJump = uri.toString()
-                return stays
             }
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 // A new page: taps on the one before can't explain where this one goes.
                 lastTapAt = 0L
-                pageJump = null
+                windowJump = null
                 if (url == null || url == "about:blank") return
                 // Back/forward into a site shown the other way: fetch it again as that.
                 if (applyUserAgent(view, url)) {
@@ -461,7 +457,7 @@ class BrowserState(private val appContext: Context) {
             false
         }
         wv.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
-            pageJump = null // it became a file: no page will follow
+            windowJump = null // it became a file: no page will follow
             onPageDownload?.invoke(url, mimeType, contentDisposition)
         }
         webView = wv
@@ -543,7 +539,7 @@ class BrowserState(private val appContext: Context) {
         val url = blockedPage ?: return
         blockedPage = null
         adPassOnce = true
-        pageJump = null
+        windowJump = null
         webView?.let {
             applyUserAgent(it, url)
             it.loadUrl(url)
@@ -553,10 +549,10 @@ class BrowserState(private val appContext: Context) {
     // When the page on screen was last tapped (0 = not since it loaded).
     @Volatile private var lastTapAt = 0L
 
-    // The address the page itself asked for in the navigation under way (a tapped link, a
-    // script, a window it opened); its forwards are judged against it. Null when the user
-    // asked (an address typed, Back, reload, "Open"): those may forward anywhere.
-    private var pageJump: String? = null
+    // The address of a window the page opened, while it loads here; where it forwards to is
+    // judged against it (see AdBlocker.hiddenForward). Null for everything else: links
+    // followed in place (downloads forward to file servers that way), addresses typed, Back.
+    private var windowJump: String? = null
 
     /**
      * The page was tapped in the last few seconds. Pop-unders redirect a moment after the
@@ -588,7 +584,6 @@ class BrowserState(private val appContext: Context) {
         // "#" links and the like: there's nowhere to go.
         if (url.substringBefore('#') == currentUrl?.substringBefore('#')) return
         applyUserAgent(view, url)
-        pageJump = url
         view.loadUrl(url)
     }
 
@@ -617,7 +612,7 @@ class BrowserState(private val appContext: Context) {
                 (tappedLink == url || (page != null && AdBlocker.siteOf(host) == AdBlocker.siteOf(page))))
         if (wanted) {
             applyUserAgent(view, url)
-            pageJump = url
+            windowJump = url
             view.loadUrl(url)
         } else {
             adsBlocked.incrementAndGet()
@@ -639,7 +634,7 @@ class BrowserState(private val appContext: Context) {
         resetFindings()
         pageTitle = ""
         currentUrl = url
-        pageJump = null
+        windowJump = null
         val wv = webView
         if (wv == null) {
             pendingUrl = url
@@ -649,10 +644,10 @@ class BrowserState(private val appContext: Context) {
         }
     }
 
-    fun goBack() = webView?.also { pageJump = null }?.goBack()
-    fun goForward() = webView?.also { pageJump = null }?.goForward()
-    fun reload() = webView?.also { pageJump = null }?.reload()
-    fun stop() = webView?.also { pageJump = null }?.stopLoading()
+    fun goBack() = webView?.also { windowJump = null }?.goBack()
+    fun goForward() = webView?.also { windowJump = null }?.goForward()
+    fun reload() = webView?.also { windowJump = null }?.reload()
+    fun stop() = webView?.also { windowJump = null }?.stopLoading()
 
     fun goHome() {
         currentUrl = null
