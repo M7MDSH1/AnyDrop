@@ -1438,9 +1438,10 @@ private val OnVideo = Color.White
 private val VideoAccent = DarkPalette.accent
 private val VideoMenu = DarkPalette.surface
 
-// Video players on screen. Moving to the next video shows two for a moment (the new one
-// arrives before the old one leaves), so the phone's bars come back only with the last.
-private var fullScreenPlayers = 0
+// Video players on screen, per window (a video opened from another app has its own). Moving
+// to the next video shows two for a moment (the new one arrives before the old one leaves),
+// so the phone's bars come back only with the window's last.
+private val fullScreenPlayers = java.util.WeakHashMap<Activity, Int>()
 
 /**
  * A video takes the whole screen: the phone's status bar (time, notifications) and navigation
@@ -1452,9 +1453,11 @@ private fun FullScreen(activity: Activity) {
         val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
         bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         bars.hide(WindowInsetsCompat.Type.systemBars())
-        fullScreenPlayers++
+        fullScreenPlayers[activity] = (fullScreenPlayers[activity] ?: 0) + 1
         onDispose {
-            if (--fullScreenPlayers == 0) bars.show(WindowInsetsCompat.Type.systemBars())
+            val left = (fullScreenPlayers[activity] ?: 1) - 1
+            fullScreenPlayers[activity] = left
+            if (left == 0) bars.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 }
