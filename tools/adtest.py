@@ -80,11 +80,14 @@ if (/popunder=1/.test(location.search)) {
   }, true);
 }
 // 8. an ad script that sends the page away on any touch (?touchad=start: as the finger lands,
-// ?touchad=end: as it lifts, scrolls included). The page must stay; a tapped link still opens.
+// ?touchad=end: as it lifts, scrolls included; &nodefault=1: it also swallows the tap, so the
+// link's own click never happens). The page must stay; a tapped link still opens, but not
+// the ad picture.
 var touchad = /touchad=(start|end)/.exec(location.search);
-if (touchad) document.addEventListener('touch' + touchad[1], function () {
+if (touchad) document.addEventListener('touch' + touchad[1], function (e) {
+  if (/nodefault=1/.test(location.search)) e.preventDefault();
   location.href = 'https://example.com/?touch-ad';
-}, true);
+}, { capture: true, passive: false });
 document.getElementById('jsgo').onclick = function () { location.href = 'https://example.org/?js'; };
 // 4. windows
 document.getElementById('pop').onclick = function () { var w = window.open('https://example.org/?popup'); say('open-other', w ? 'WINDOW' : 'NULL'); };
